@@ -7,7 +7,7 @@ import { formatRegion } from "@/lib/regions";
 import { ROLE_LABEL, teamRating, type GroupKind, type Role } from "@/lib/teams-data";
 import { TeamBadge } from "@/components/TeamBadge";
 import { Badge, Card, Header, LinkButton, SectionTitle } from "@/components/ui";
-import { OvrBadge } from "@/components/PlayerCard";
+import { OvrBadge, initials } from "@/components/PlayerCard";
 import { InviteLink } from "./InviteLink";
 import { regenerateInvite } from "@/lib/actions";
 
@@ -84,9 +84,9 @@ export default async function GroupPage({ params }: { params: Promise<{ groupId:
         title=""
         back="/"
         right={
-          me ? (
-            <LinkButton href={`/g/${groupId}/players`} variant="ghost" aria-label="Ayarlar">
-              ⚙︎ {canManage ? "Yönet" : "Üyeler"}
+          canManage ? (
+            <LinkButton href={`/g/${groupId}/players`} variant="ghost" aria-label="Yönet">
+              ⚙︎ Yönet
             </LinkButton>
           ) : undefined
         }
@@ -95,10 +95,10 @@ export default async function GroupPage({ params }: { params: Promise<{ groupId:
       <div className="-mt-2 mb-5 flex items-center gap-4">
         <TeamBadge name={group.name} color={group.color} size="lg" />
         <div className="min-w-0 flex-1">
-          <div className="text-xs uppercase tracking-wide text-muted">{isTeam ? "Takım" : "Grup"}</div>
+          <div className="text-xs uppercase tracking-wide text-muted">{isTeam ? "🛡️ Takım" : "👥 Topluluk"}</div>
           <h1 className="truncate text-2xl font-black">{group.name}</h1>
           <div className="text-xs text-muted">
-            {isTeam && `${formatRegion(group.city, group.district)} · `}
+            {group.city && `${formatRegion(group.city, group.district)} · `}
             {players.length} {isTeam ? "oyuncu" : "üye"}
             {myRole && ` · Sen: ${labels[myRole]}`}
           </div>
@@ -111,6 +111,31 @@ export default async function GroupPage({ params }: { params: Promise<{ groupId:
         )}
       </div>
       {group.description && <p className="-mt-2 mb-4 text-sm text-muted">{group.description}</p>}
+
+      {!isTeam && (
+        <Link href={`/g/${groupId}/players`} className="mb-4 flex items-center gap-3">
+          <div className="flex -space-x-2">
+            {players
+              .filter((p) => p.user_id)
+              .slice(0, 8)
+              .map((p) => (
+                <span
+                  key={p.id}
+                  title={p.display_name}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-pitch-950 bg-pitch-700 text-[11px] font-bold"
+                >
+                  {initials(p.display_name)}
+                </span>
+              ))}
+          </div>
+          <span className="text-sm text-muted">
+            {players.filter((p) => p.user_id).length} üye
+            {players.length - players.filter((p) => p.user_id).length > 0 &&
+              ` · ${players.length - players.filter((p) => p.user_id).length} misafir`}{" "}
+            ›
+          </span>
+        </Link>
+      )}
 
       {isTeam && (
         <div className="mb-4 grid grid-cols-4 gap-2 text-center">
@@ -132,17 +157,22 @@ export default async function GroupPage({ params }: { params: Promise<{ groupId:
         <div className="mb-2 grid grid-cols-2 gap-2">
           <LinkButton href={`/g/${groupId}/cagri/yeni`}>📣 Maç çağrısı</LinkButton>
           <LinkButton href={`/g/${groupId}/matches/new`} variant="secondary">
-            + Doğrudan maç
+            {isTeam ? "+ Maç kur" : "+ Doğrudan maç"}
           </LinkButton>
         </div>
       )}
-      <LinkButton href={`/g/${groupId}/kadro`} variant="secondary" className="w-full">
-        🃏 Kadro ve kartlar
-      </LinkButton>
+      <div className="grid grid-cols-2 gap-2">
+        <LinkButton href={`/g/${groupId}/kadro`} variant="secondary">
+          🃏 {isTeam ? "Kadro" : "Üye kartları"}
+        </LinkButton>
+        <LinkButton href={`/g/${groupId}/players`} variant="secondary">
+          {isTeam ? "👥 Oyuncular" : "👥 Üyeler"}
+        </LinkButton>
+      </div>
 
       {(polls ?? []).length > 0 && (
         <>
-          <SectionTitle>Maç çağrıları</SectionTitle>
+          <SectionTitle>{isTeam ? "Maç çağrıları" : "Yaklaşan etkinlikler"}</SectionTitle>
           <div className="space-y-2">
             {(polls ?? []).map((poll) => {
               const yes = poll.poll_responses.filter((r) => r.answer === "yes").length;
@@ -221,10 +251,20 @@ export default async function GroupPage({ params }: { params: Promise<{ groupId:
         </>
       )}
 
-      <SectionTitle>{isTeam ? "Kadro sıralaması" : "Sıralama"}</SectionTitle>
+      <SectionTitle
+        action={
+          !isTeam && ranked.length > 5 ? (
+            <LinkButton href={`/g/${groupId}/kadro`} variant="ghost" className="min-h-8 px-2 text-accent">
+              Tümü ›
+            </LinkButton>
+          ) : undefined
+        }
+      >
+        {isTeam ? "Kadro sıralaması" : "Topluluk sıralaması"}
+      </SectionTitle>
       <Card className="p-0">
         <ol className="divide-y divide-line">
-          {ranked.map((p, i) => {
+          {(isTeam ? ranked : ranked.slice(0, 5)).map((p, i) => {
             const s = p.totals;
             return (
               <li key={p.id}>

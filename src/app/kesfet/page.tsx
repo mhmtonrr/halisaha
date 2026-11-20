@@ -1,13 +1,12 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/supabase/server";
 import { joinGroup } from "@/lib/actions";
-import { PROVINCES } from "@/lib/regions";
+import { canonicalDistrict, isProvince } from "@/lib/regions";
+import { RegionSelect } from "@/components/RegionSelect";
 import { findTeams } from "@/lib/teams-data";
 import { Button, Card, ErrorNote, Header, Input, SectionTitle, cx } from "@/components/ui";
 import { OvrBadge } from "@/components/PlayerCard";
 import { TeamBadge } from "@/components/TeamBadge";
-
-const select = "min-h-11 w-full rounded-xl border border-line bg-pitch-950 px-3 text-sm outline-none focus:border-accent";
 
 export default async function DiscoverPage({
   searchParams,
@@ -18,9 +17,10 @@ export default async function DiscoverPage({
   const { supabase, user } = await requireUser();
   const { data: profile } = await supabase.from("profiles").select("city").eq("id", user.id).single();
 
-  // İl seçilmediyse kullanıcının ili; "tum" ise Türkiye geneli
-  const city = sp.il === "tum" ? "" : (sp.il ?? profile?.city ?? "");
-  const teams = await findTeams(supabase, { city: city || undefined, district: sp.ilce, q: sp.q, limit: 100 });
+  // Filtre hiç seçilmediyse kullanıcının ili; boş seçildiyse Türkiye geneli
+  const city = sp.il === undefined ? (profile?.city ?? "") : isProvince(sp.il) ? sp.il : "";
+  const district = canonicalDistrict(city, sp.ilce) ?? undefined;
+  const teams = await findTeams(supabase, { city: city || undefined, district, q: sp.q, limit: 100 });
 
   return (
     <main>
@@ -28,15 +28,17 @@ export default async function DiscoverPage({
       <ErrorNote message={sp.error} />
 
       <form className="space-y-2" action="/kesfet">
-        <div className="grid grid-cols-2 gap-2">
-          <select name="il" defaultValue={city || "tum"} className={select}>
-            <option value="tum">Tüm Türkiye</option>
-            {PROVINCES.map((p) => (
-              <option key={p}>{p}</option>
-            ))}
-          </select>
-          <Input name="ilce" defaultValue={sp.ilce ?? ""} placeholder="İlçe" />
-        </div>
+        <RegionSelect
+          key={`${city}-${district ?? ""}`}
+          cityName="il"
+          districtName="ilce"
+          defaultCity={city}
+          defaultDistrict={district}
+          requireCity={false}
+          showLabels={false}
+          anyLabel={{ city: "Tüm Türkiye", district: "Tüm ilçeler" }}
+          onChangeSubmit
+        />
         <div className="flex gap-2">
           <Input name="q" defaultValue={sp.q ?? ""} placeholder="Takım adı ara" />
           <Button variant="secondary">Ara</Button>
@@ -44,12 +46,12 @@ export default async function DiscoverPage({
       </form>
 
       <SectionTitle>
-        {city ? `${city}${sp.ilce ? ` · ${sp.ilce}` : ""}` : "Türkiye"} takımları · {teams.length}
+        {city ? `${city}${district ? ` · ${district}` : ""}` : "Türkiye"} takımları · {teams.length}
       </SectionTitle>
       {teams.length === 0 ? (
         <Card className="text-center text-sm text-muted">
           Bu bölgede takım bulunamadı.{" "}
-          <Link href="/yeni?tur=takim" className="text-accent">
+          <Link href="/takim-kur" className="text-accent">
             İlk takımı sen kur
           </Link>
         </Card>

@@ -157,7 +157,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
         </>
       )}
 
-      <SectionTitle action={<LinkButton href="/yeni?tur=takim" variant="ghost" className="min-h-8 px-2 text-accent">+ Takım kur</LinkButton>}>
+      <SectionTitle action={<LinkButton href="/takim-kur" variant="ghost" className="min-h-8 px-2 text-accent">+ Takım kur</LinkButton>}>
         Takımlarım
       </SectionTitle>
       {teams.length === 0 ? (
@@ -168,7 +168,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
         <div className="space-y-2">{teams.map((m) => <MembershipRow key={m.playerId} m={m} />)}</div>
       )}
 
-      <SectionTitle action={<LinkButton href="/yeni?tur=grup" variant="ghost" className="min-h-8 px-2 text-accent">+ Grup kur</LinkButton>}>
+      <SectionTitle action={<LinkButton href="/grup-kur" variant="ghost" className="min-h-8 px-2 text-accent">+ Grup kur</LinkButton>}>
         Gruplarım
       </SectionTitle>
       {groups.length === 0 ? (

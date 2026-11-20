@@ -1,3 +1,5 @@
+import DISTRICTS_DATA from "@/data/districts.json";
+
 /** Türkiye'nin 81 ili, alfabetik (Türkçe sıralama). */
 export const PROVINCES = [
   "Adana", "Adıyaman", "Afyonkarahisar", "Ağrı", "Aksaray", "Amasya", "Ankara", "Antalya",
@@ -19,4 +21,18 @@ export function isProvince(v: string): boolean {
 /** "Kadıköy, İstanbul" */
 export function formatRegion(city: string | null, district: string | null) {
   return [district, city].filter(Boolean).join(", ");
+}
+
+/** İl → ilçeler (Türkçe alfabetik). Kaynak: iki bağımsız veri setinin karşılaştırılmasıyla doğrulanmış 973 ilçe. */
+export const DISTRICTS = DISTRICTS_DATA as Record<string, string[]>;
+
+export function districtsOf(city: string | null | undefined): string[] {
+  return (city && DISTRICTS[city]) || [];
+}
+
+/** Büyük/küçük harf farkını yok sayarak listedeki resmi yazımı döndürür; yoksa null */
+export function canonicalDistrict(city: string | null | undefined, district: string | null | undefined): string | null {
+  if (!city || !district) return null;
+  const want = district.trim().toLocaleLowerCase("tr");
+  return districtsOf(city).find((d) => d.toLocaleLowerCase("tr") === want) ?? null;
 }

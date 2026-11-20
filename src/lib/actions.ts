@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/supabase/server";
 import { finalizeMatch } from "@/lib/finalize";
 import { balanceTeams, pickVariant, type TeamCandidate } from "@/lib/teams";
 import { getGroupPlayers, parseLocalDateTime, POSITIONS, type Position } from "@/lib/data";
-import { isProvince } from "@/lib/regions";
+import { canonicalDistrict, isProvince } from "@/lib/regions";
 
 const VOTING_HOURS = 24;
 const asPosition = (v: string): Position | null => (POSITIONS.includes(v as Position) ? (v as Position) : null);
@@ -46,7 +46,8 @@ function profileArgs(fd: FormData) {
     p_shirt: num("shirt", 1, 99),
     p_bio: str(fd, "bio").slice(0, 160),
     p_city: isProvince(city) ? city : "",
-    p_district: str(fd, "district").slice(0, 40),
+    // Sadece seçilen ile ait bir ilçe kabul edilir
+    p_district: canonicalDistrict(city, str(fd, "district")) ?? "",
     p_birth_year: num("birthYear", 1940, new Date().getFullYear() - 8),
   };
 }
@@ -80,12 +81,22 @@ export async function completeOnboarding(fd: FormData) {
 
 export async function createGroup(fd: FormData) {
   const { supabase, user } = await requireUser();
+  const back = "/grup-kur";
   const name = str(fd, "name");
-  const back = "/yeni?tur=grup";
   if (name.length < 2) fail(back, "Grup adı en az 2 karakter olmalı");
+  const city = str(fd, "city");
+  const color = str(fd, "color");
   const { data, error } = await supabase
     .from("groups")
-    .insert({ name: name.slice(0, 60), created_by: user.id, kind: "community", description: str(fd, "description").slice(0, 200) || null })
+    .insert({
+      name: name.slice(0, 60),
+      created_by: user.id,
+      kind: "community",
+      description: str(fd, "description").slice(0, 200) || null,
+      city: isProvince(city) ? city : null,
+      district: canonicalDistrict(city, str(fd, "district")),
+      color: /^#[0-9a-fA-F]{6}$/.test(color) ? color : null,
+    })
     .select("id")
     .single();
   if (error) fail(back, "Grup oluşturulamadı");
@@ -98,7 +109,7 @@ function teamFields(fd: FormData) {
   return {
     name: str(fd, "name").slice(0, 60),
     city: isProvince(city) ? city : null,
-    district: str(fd, "district").slice(0, 40) || null,
+    district: canonicalDistrict(city, str(fd, "district")),
     color: /^#[0-9a-fA-F]{6}$/.test(color) ? color : null,
     description: str(fd, "description").slice(0, 200) || null,
   };
@@ -106,7 +117,7 @@ function teamFields(fd: FormData) {
 
 export async function createTeam(fd: FormData) {
   const { supabase, user } = await requireUser();
-  const back = "/yeni?tur=takim";
+  const back = "/takim-kur";
   const fields = teamFields(fd);
   if (fields.name.length < 2) fail(back, "Takım adı en az 2 karakter olmalı");
   if (!fields.city) fail(back, "Takımın ilini seç");

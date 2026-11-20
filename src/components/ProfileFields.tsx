@@ -1,5 +1,5 @@
 import { FOOT_NAME, POSITION_NAME, POSITIONS, type Foot, type Position } from "@/lib/data";
-import { PROVINCES } from "@/lib/regions";
+import { RegionSelect } from "./RegionSelect";
 import { Input, Label } from "./ui";
 
 export interface ProfileValues {
@@ -16,8 +16,6 @@ export interface ProfileValues {
 
 const chip =
   "flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-line px-1 text-center text-[13px] leading-tight has-checked:border-accent has-checked:bg-accent has-checked:font-semibold has-checked:text-pitch-950";
-const select =
-  "min-h-11 w-full rounded-xl border border-line bg-pitch-950 px-3 text-sm outline-none focus:border-accent";
 
 const thisYear = new Date().getFullYear();
 
@@ -38,25 +36,7 @@ export function ProfileFields({ values, full }: { values: ProfileValues; full: b
         />
       </label>
 
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block">
-          <Label>İl</Label>
-          <select name="city" defaultValue={values.city ?? ""} required className={select}>
-            <option value="" disabled>
-              Seç
-            </option>
-            {PROVINCES.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block">
-          <Label>İlçe</Label>
-          <Input name="district" defaultValue={values.district ?? ""} maxLength={40} placeholder="Örn. Kadıköy" />
-        </label>
-      </div>
+      <RegionSelect defaultCity={values.city} defaultDistrict={values.district} />
 
       <div>
         <Label>Ana mevki</Label>

@@ -1,8 +1,7 @@
-import { PROVINCES } from "@/lib/regions";
+import { RegionSelect } from "./RegionSelect";
 import { TEAM_COLORS } from "@/lib/teams-data";
 import { Input, Label } from "./ui";
 
-const select = "min-h-11 w-full rounded-xl border border-line bg-pitch-950 px-3 text-sm outline-none focus:border-accent";
 
 /** Takım kurma ve düzenleme formlarının alanları */
 export function TeamFields({
@@ -17,23 +16,7 @@ export function TeamFields({
         <Label>Takım adı</Label>
         <Input name="name" defaultValue={values?.name} required minLength={2} maxLength={60} placeholder="Örn. Kadıköy Kartalları" />
       </label>
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block">
-          <Label>İl</Label>
-          <select name="city" required defaultValue={values?.city ?? ""} className={select}>
-            <option value="" disabled>
-              Seç
-            </option>
-            {PROVINCES.map((p) => (
-              <option key={p}>{p}</option>
-            ))}
-          </select>
-        </label>
-        <label className="block">
-          <Label>İlçe</Label>
-          <Input name="district" defaultValue={values?.district ?? ""} maxLength={40} placeholder="Örn. Kadıköy" />
-        </label>
-      </div>
+      <RegionSelect defaultCity={values?.city} defaultDistrict={values?.district} />
       <div>
         <Label>Takım rengi</Label>
         <div className="flex flex-wrap gap-2">
