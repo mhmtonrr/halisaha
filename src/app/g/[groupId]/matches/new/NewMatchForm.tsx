@@ -16,11 +16,28 @@ interface P {
   guest: boolean;
 }
 
-export function NewMatchForm({ groupId, players, defaultWhen }: { groupId: string; players: P[]; defaultWhen: string }) {
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+export function NewMatchForm({
+  groupId,
+  players,
+  defaultWhen,
+  defaultKind = "internal",
+  preselected = [],
+  pollId,
+  defaultVenue,
+}: {
+  groupId: string;
+  players: P[];
+  defaultWhen: string;
+  defaultKind?: "internal" | "external";
+  /** Maç çağrısından gelindiyse onaylanan oyuncular */
+  preselected?: string[];
+  pollId?: string;
+  defaultVenue?: string;
+}) {
+  const [selected, setSelected] = useState<Set<string>>(new Set(preselected));
   const [gks, setGks] = useState<Set<string>>(new Set(players.filter((p) => p.isGoalkeeper).map((p) => p.id)));
   const [pending, setPending] = useState(false);
-  const [kind, setKind] = useState<"internal" | "external">("internal");
+  const [kind, setKind] = useState<"internal" | "external">(defaultKind);
   const external = kind === "external";
 
   const toggle = (set: Set<string>, id: string) => {
@@ -49,6 +66,7 @@ export function NewMatchForm({ groupId, players, defaultWhen }: { groupId: strin
     <form action={createMatch} onSubmit={() => setPending(true)} className="space-y-4">
       <input type="hidden" name="groupId" value={groupId} />
       <input type="hidden" name="kind" value={kind} />
+      {pollId && <input type="hidden" name="pollId" value={pollId} />}
       {chosen.map((p) => (
         <input key={p.id} type="hidden" name="players" value={p.id} />
       ))}
@@ -100,7 +118,7 @@ export function NewMatchForm({ groupId, players, defaultWhen }: { groupId: strin
         </label>
         <label className="col-span-2 sm:col-span-1">
           <Label hint="isteğe bağlı">Saha</Label>
-          <Input name="venue" placeholder="Örn. Yıldız Halısaha" />
+          <Input name="venue" placeholder="Örn. Yıldız Halısaha" defaultValue={defaultVenue} />
         </label>
       </Card>
 

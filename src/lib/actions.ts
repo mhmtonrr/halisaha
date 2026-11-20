@@ -81,14 +81,75 @@ export async function completeOnboarding(fd: FormData) {
 export async function createGroup(fd: FormData) {
   const { supabase, user } = await requireUser();
   const name = str(fd, "name");
-  if (name.length < 2) fail("/", "Grup adı en az 2 karakter olmalı");
+  const back = "/yeni?tur=grup";
+  if (name.length < 2) fail(back, "Grup adı en az 2 karakter olmalı");
   const { data, error } = await supabase
     .from("groups")
-    .insert({ name, created_by: user.id })
+    .insert({ name: name.slice(0, 60), created_by: user.id, kind: "community", description: str(fd, "description").slice(0, 200) || null })
     .select("id")
     .single();
-  if (error) fail("/", "Grup oluşturulamadı");
+  if (error) fail(back, "Grup oluşturulamadı");
   redirect(`/g/${data.id}`);
+}
+
+function teamFields(fd: FormData) {
+  const city = str(fd, "city");
+  const color = str(fd, "color");
+  return {
+    name: str(fd, "name").slice(0, 60),
+    city: isProvince(city) ? city : null,
+    district: str(fd, "district").slice(0, 40) || null,
+    color: /^#[0-9a-fA-F]{6}$/.test(color) ? color : null,
+    description: str(fd, "description").slice(0, 200) || null,
+  };
+}
+
+export async function createTeam(fd: FormData) {
+  const { supabase, user } = await requireUser();
+  const back = "/yeni?tur=takim";
+  const fields = teamFields(fd);
+  if (fields.name.length < 2) fail(back, "Takım adı en az 2 karakter olmalı");
+  if (!fields.city) fail(back, "Takımın ilini seç");
+  const { data, error } = await supabase
+    .from("groups")
+    .insert({ ...fields, kind: "team", created_by: user.id })
+    .select("id")
+    .single();
+  if (error) fail(back, "Takım oluşturulamadı");
+  redirect(`/g/${data.id}`);
+}
+
+export async function updateTeam(fd: FormData) {
+  const { supabase } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const back = `/g/${groupId}/players`;
+  const fields = teamFields(fd);
+  if (fields.name.length < 2) fail(back, "Takım adı en az 2 karakter olmalı");
+  if (!fields.city) fail(back, "Takımın ilini seç");
+  const { data, error } = await supabase.from("groups").update(fields).eq("id", groupId).select("id");
+  if (error || !data?.length) fail(back, "Takım bilgilerini sadece kaptan ve yetkililer değiştirebilir");
+  revalidatePath(`/g/${groupId}`, "layout");
+  redirect(`${back}?saved=1`);
+}
+
+export async function setMemberRole(fd: FormData) {
+  const { supabase } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const back = `/g/${groupId}/players`;
+  const { error } = await supabase.rpc("set_member_role", {
+    p_player_id: str(fd, "playerId"),
+    p_role: str(fd, "role"),
+  });
+  if (error) fail(back, error.message);
+  revalidatePath(`/g/${groupId}`, "layout");
+}
+
+export async function regenerateInvite(fd: FormData) {
+  const { supabase } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const { error } = await supabase.rpc("regenerate_invite", { p_group_id: groupId });
+  if (error) fail(`/g/${groupId}`, error.message);
+  revalidatePath(`/g/${groupId}`);
 }
 
 export async function joinGroup(fd: FormData) {
@@ -97,7 +158,7 @@ export async function joinGroup(fd: FormData) {
   // Tam link yapıştırılırsa sondaki kodu al
   code = code.split("/").filter(Boolean).pop() ?? "";
   const { data, error } = await supabase.rpc("join_group", { p_invite_code: code });
-  if (error) fail("/", "Davet kodu geçersiz");
+  if (error) fail("/kesfet", "Davet kodu geçersiz");
   redirect(`/g/${data}`);
 }
 
@@ -237,6 +298,11 @@ export async function createMatch(fd: FormData) {
   if (rosterError) {
     await supabase.from("matches").delete().eq("id", match.id);
     fail(back, "Kadro kaydedilemedi");
+  }
+  // Maç çağrısından oluşturulduysa çağrıyı maça bağla
+  const pollId = str(fd, "pollId");
+  if (pollId) {
+    await supabase.from("match_polls").update({ status: "converted", match_id: match.id }).eq("id", pollId);
   }
   redirect(`/g/${groupId}/m/${match.id}`);
 }
@@ -474,5 +540,95 @@ export async function deleteMatch(fd: FormData) {
   if (match?.status === "closed") fail(`/g/${groupId}/m/${matchId}`, "Kapanmış maç silinemez");
   const { error } = await supabase.from("matches").delete().eq("id", matchId);
   if (error) fail(`/g/${groupId}/m/${matchId}`, "Maç silinemedi");
+  redirect(`/g/${groupId}`);
+}
+
+// ---------------------------------------------------------------------------
+// Maç çağrısı (anket)
+// ---------------------------------------------------------------------------
+
+export async function createPoll(fd: FormData) {
+  const { supabase, user } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const back = `/g/${groupId}/cagri/yeni`;
+  const when = str(fd, "startsAt");
+  if (!when) fail(back, "Maç tarihini seçin");
+  const capacity = Number(str(fd, "capacity"));
+  if (!Number.isInteger(capacity) || capacity < 2 || capacity > 40) fail(back, "Kontenjan 2-40 arası olmalı");
+  const deadline = str(fd, "deadline");
+  const { data, error } = await supabase
+    .from("match_polls")
+    .insert({
+      group_id: groupId,
+      created_by: user.id,
+      starts_at: parseLocalDateTime(when),
+      venue: str(fd, "venue").slice(0, 80) || null,
+      capacity,
+      deadline: deadline ? parseLocalDateTime(deadline) : null,
+      note: str(fd, "note").slice(0, 300) || null,
+    })
+    .select("id")
+    .single();
+  if (error) fail(back, "Çağrıyı sadece yetkililer açabilir");
+  redirect(`/g/${groupId}/cagri/${data.id}`);
+}
+
+export async function respondPoll(fd: FormData) {
+  const { supabase } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const pollId = str(fd, "pollId");
+  const back = `/g/${groupId}/cagri/${pollId}`;
+  const { error } = await supabase.rpc("respond_poll", { p_poll_id: pollId, p_answer: str(fd, "answer") });
+  if (error) fail(back, error.message);
+  revalidatePath(back);
+  revalidatePath("/");
+}
+
+export async function togglePollApproval(fd: FormData) {
+  const { supabase } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const pollId = str(fd, "pollId");
+  const back = `/g/${groupId}/cagri/${pollId}`;
+  const { error } = await supabase.rpc("set_poll_approval", {
+    p_poll_id: pollId,
+    p_player_id: str(fd, "playerId"),
+    p_approved: str(fd, "approved") === "true",
+  });
+  if (error) fail(back, error.message);
+  revalidatePath(back);
+}
+
+export async function approveFirstResponders(fd: FormData) {
+  const { supabase } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const pollId = str(fd, "pollId");
+  const back = `/g/${groupId}/cagri/${pollId}`;
+  const { error } = await supabase.rpc("approve_first_responders", { p_poll_id: pollId });
+  if (error) fail(back, error.message);
+  revalidatePath(back);
+}
+
+export async function setPollStatus(fd: FormData) {
+  const { supabase } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const pollId = str(fd, "pollId");
+  const back = `/g/${groupId}/cagri/${pollId}`;
+  const status = str(fd, "status") === "open" ? "open" : "closed";
+  const { data, error } = await supabase
+    .from("match_polls")
+    .update({ status })
+    .eq("id", pollId)
+    .neq("status", "converted")
+    .select("id");
+  if (error || !data?.length) fail(back, "Çağrı güncellenemedi");
+  revalidatePath(back);
+}
+
+export async function deletePoll(fd: FormData) {
+  const { supabase } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const pollId = str(fd, "pollId");
+  const { data, error } = await supabase.from("match_polls").delete().eq("id", pollId).select("id");
+  if (error || !data?.length) fail(`/g/${groupId}/cagri/${pollId}`, "Çağrı silinemedi");
   redirect(`/g/${groupId}`);
 }

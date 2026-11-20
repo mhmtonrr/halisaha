@@ -27,7 +27,7 @@ export interface GroupPlayer {
   id: string;
   display_name: string;
   user_id: string | null;
-  role: "admin" | "member";
+  role: "captain" | "admin" | "member";
   position: Position | null;
   overall: number;
   matches_played: number;
@@ -196,4 +196,17 @@ export function formatDate(iso: string) {
 /** <input type="datetime-local"> değerini Türkiye saatiyle yorumlar (UTC+3, yaz saati yok). */
 export function parseLocalDateTime(value: string) {
   return new Date(`${value}:00+03:00`).toISOString();
+}
+
+/** Bugün (veya geçtiyse yarın) 21:00, Türkiye saati, datetime-local biçiminde */
+export function defaultKickoff() {
+  const nowTr = new Date(Date.now() + 3 * 3600 * 1000);
+  const d = new Date(Date.UTC(nowTr.getUTCFullYear(), nowTr.getUTCMonth(), nowTr.getUTCDate(), 21));
+  if (nowTr.getUTCHours() >= 21) d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 16);
+}
+
+/** ISO zamanı Türkiye saatiyle datetime-local biçimine çevirir */
+export function toLocalInput(iso: string) {
+  return new Date(new Date(iso).getTime() + 3 * 3600 * 1000).toISOString().slice(0, 16);
 }

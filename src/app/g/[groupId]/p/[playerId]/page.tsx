@@ -5,6 +5,7 @@ import { FOOT_NAME, POSITION_NAME, byRanking, formatDate, getGroupSummaries, typ
 import { Badge, Card, Header, LinkButton, SectionTitle, cx } from "@/components/ui";
 import { PlayerCard, PositionChip } from "@/components/PlayerCard";
 import { formatRegion } from "@/lib/regions";
+import { ROLE_LABEL, type GroupKind, type Role } from "@/lib/teams-data";
 
 // Özellikler 40 (hiç yok) ile 99 arasında; çubuk bu aralığa göre dolar
 const barWidth = (v: number) => Math.max(3, ((v - 40) / 59) * 100);
@@ -22,7 +23,11 @@ export default async function PlayerPage({
   const { groupId, playerId } = await params;
   const { supabase, user } = await requireUser();
 
-  const players = await getGroupSummaries(supabase, groupId);
+  const [players, { data: group }] = await Promise.all([
+    getGroupSummaries(supabase, groupId),
+    supabase.from("groups").select("kind").eq("id", groupId).maybeSingle(),
+  ]);
+  const roleLabels = ROLE_LABEL[(group?.kind ?? "community") as GroupKind];
   const player = players.find((p) => p.id === playerId);
   if (!player) notFound();
 
@@ -75,7 +80,7 @@ export default async function PlayerPage({
       <div className="mt-4 flex flex-wrap justify-center gap-2">
         {rank > 0 && <Badge tone="accent">Grupta {rank}. sırada</Badge>}
         {!player.user_id && <Badge>Misafir</Badge>}
-        {player.role === "admin" && <Badge>Yönetici</Badge>}
+        {player.role !== "member" && <Badge tone={player.role === "captain" ? "warn" : "default"}>{roleLabels[player.role as Role]}</Badge>}
       </div>
       {player.bio && <p className="mt-3 text-center text-sm italic text-muted">“{player.bio}”</p>}
 

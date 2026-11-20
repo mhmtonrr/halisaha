@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
-import { addGuest, claimGuest, removePlayer, setPosition } from "@/lib/actions";
+import { addGuest, claimGuest, removePlayer, setMemberRole, setPosition, updateTeam } from "@/lib/actions";
 import { getGroupSummaries, type Position } from "@/lib/data";
+import { ROLE_LABEL, type GroupKind, type Role } from "@/lib/teams-data";
 import { Badge, Button, Card, ErrorNote, Header, Input, SectionTitle } from "@/components/ui";
 import { OvrBadge, PositionChip } from "@/components/PlayerCard";
+import { TeamFields } from "@/components/TeamFields";
 
 const POSITION_OPTIONS: { value: Position | ""; label: string }[] = [
   { value: "", label: "Mevki yok" },
@@ -16,11 +18,7 @@ const POSITION_OPTIONS: { value: Position | ""; label: string }[] = [
 
 function PositionSelect({ name, defaultValue }: { name: string; defaultValue?: string | null }) {
   return (
-    <select
-      name={name}
-      defaultValue={defaultValue ?? ""}
-      className="min-h-11 rounded-xl border border-line bg-pitch-950 px-2 text-sm"
-    >
+    <select name={name} defaultValue={defaultValue ?? ""} className="min-h-11 rounded-xl border border-line bg-pitch-950 px-2 text-sm">
       {POSITION_OPTIONS.map((o) => (
         <option key={o.value} value={o.value}>
           {o.label}
@@ -30,32 +28,74 @@ function PositionSelect({ name, defaultValue }: { name: string; defaultValue?: s
   );
 }
 
-export default async function PlayersPage({
+function RoleButton({ groupId, playerId, role, children, danger }: { groupId: string; playerId: string; role: Role; children: React.ReactNode; danger?: boolean }) {
+  return (
+    <form action={setMemberRole}>
+      <input type="hidden" name="groupId" value={groupId} />
+      <input type="hidden" name="playerId" value={playerId} />
+      <input type="hidden" name="role" value={role} />
+      <button
+        className={
+          "rounded-lg px-2 py-1 text-xs " +
+          (danger ? "text-amber-300 hover:bg-amber-400/10" : "text-accent hover:bg-accent/10")
+        }
+      >
+        {children}
+      </button>
+    </form>
+  );
+}
+
+const ROLE_ORDER: Record<Role, number> = { captain: 0, admin: 1, member: 2 };
+
+export default async function ManagePage({
   params,
   searchParams,
 }: {
   params: Promise<{ groupId: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string }>;
 }) {
   const { groupId } = await params;
-  const { error } = await searchParams;
+  const { error, saved } = await searchParams;
   const { supabase, user } = await requireUser();
 
-  const { data: group } = await supabase.from("groups").select("id, name").eq("id", groupId).maybeSingle();
+  const { data: group } = await supabase
+    .from("groups")
+    .select("id, name, kind, city, district, color, description")
+    .eq("id", groupId)
+    .maybeSingle();
   if (!group) notFound();
+  const kind = group.kind as GroupKind;
+  const isTeam = kind === "team";
+  const labels = ROLE_LABEL[kind];
 
   const players = await getGroupSummaries(supabase, groupId);
   const me = players.find((p) => p.user_id === user.id);
-  const isAdmin = me?.role === "admin";
+  const myRole = me?.role as Role | undefined;
+  const isCaptain = myRole === "captain";
+  const canManage = isCaptain || myRole === "admin";
   const guests = players.filter((p) => !p.user_id);
   // Misafir geçmişi sadece henüz maçı olmayan üyelere aktarılabilir
   const claimable = players.filter((p) => p.user_id && p.totals.played === 0);
-  const sorted = [...players].sort((a, b) => a.display_name.localeCompare(b.display_name, "tr"));
+  const sorted = [...players].sort(
+    (a, b) => ROLE_ORDER[a.role as Role] - ROLE_ORDER[b.role as Role] || a.display_name.localeCompare(b.display_name, "tr"),
+  );
+
+  /** Bu oyuncuyu ben çıkarabilir miyim? (veritabanı kuralıyla aynı) */
+  const canRemove = (p: (typeof players)[number]) =>
+    canManage && p.id !== me?.id && p.role !== "captain" && (p.role === "member" || isCaptain) && p.totals.played === 0;
 
   return (
     <main>
-      <Header title="Oyuncular ve ayarlar" back={`/g/${groupId}`} />
+      <Header title={canManage ? (isTeam ? "Takımı yönet" : "Grubu yönet") : isTeam ? "Oyuncular" : "Üyeler"} back={`/g/${groupId}`} />
       <ErrorNote message={error} />
+      {saved && <p className="mb-4 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">Kaydedildi ✓</p>}
+
+      <Card className="mb-4 text-sm text-muted">
+        <b className="text-white">{labels.captain}</b> rolleri yönetir ve {isTeam ? "kaptanlığı" : "kuruculuğu"} devredebilir.{" "}
+        <b className="text-white">{labels.admin}</b>ler maç kurar, kadroyu ve mevkileri düzenler, misafir ekler.{" "}
+        <b className="text-white">{labels.member}</b>ler oynar ve oy verir.
+      </Card>
 
       {me && (
         <Link href="/profil">
@@ -68,37 +108,81 @@ export default async function PlayersPage({
 
       <Card className="p-0">
         <ul className="divide-y divide-line">
-          {sorted.map((p) => (
-            <li key={p.id} className="flex items-center gap-3 px-4 py-3">
-              <OvrBadge overall={p.overall} />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5 truncate font-medium">
-                  {p.display_name} <PositionChip position={p.position} />
+          {sorted.map((p) => {
+            const role = p.role as Role;
+            return (
+              <li key={p.id} className="px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <OvrBadge overall={p.overall} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 truncate font-medium">
+                      {p.display_name} <PositionChip position={p.position} />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                      {role !== "member" && <Badge tone={role === "captain" ? "warn" : "accent"}>{labels[role]}</Badge>}
+                      {!p.user_id && <Badge>Misafir</Badge>}
+                      <span className="text-xs text-muted">{p.totals.played} maç</span>
+                    </div>
+                  </div>
+                  {canRemove(p) && (
+                    <form action={removePlayer}>
+                      <input type="hidden" name="groupId" value={groupId} />
+                      <input type="hidden" name="playerId" value={p.id} />
+                      <button className="rounded-lg px-2 py-1 text-xs text-muted hover:bg-red-950 hover:text-red-300">Çıkar</button>
+                    </form>
+                  )}
                 </div>
-                <div className="flex gap-1 pt-0.5">
-                  {p.role === "admin" && <Badge tone="accent">Yönetici</Badge>}
-                  {!p.user_id && <Badge>Misafir</Badge>}
-                  <span className="text-xs text-muted">{p.totals.played} maç</span>
-                </div>
-              </div>
-              {isAdmin && p.id !== me?.id && p.totals.played === 0 && (
-                <form action={removePlayer}>
-                  <input type="hidden" name="groupId" value={groupId} />
-                  <input type="hidden" name="playerId" value={p.id} />
-                  <button
-                    className="rounded-lg px-2 py-1 text-xs text-muted hover:bg-red-950 hover:text-red-300"
-                    title="Gruptan çıkar"
-                  >
-                    Çıkar
-                  </button>
-                </form>
-              )}
-            </li>
-          ))}
+                {isCaptain && p.user_id && p.id !== me?.id && (
+                  <div className="mt-2 flex flex-wrap justify-end gap-1">
+                    {role === "member" && (
+                      <RoleButton groupId={groupId} playerId={p.id} role="admin">
+                        {labels.admin} yap
+                      </RoleButton>
+                    )}
+                    {role === "admin" && (
+                      <RoleButton groupId={groupId} playerId={p.id} role="member" danger>
+                        Yetkiyi al
+                      </RoleButton>
+                    )}
+                    {role !== "captain" && (
+                      <details className="relative">
+                        <summary className="cursor-pointer list-none rounded-lg px-2 py-1 text-xs text-muted hover:bg-pitch-800">
+                          {isTeam ? "Kaptanlığı devret" : "Kuruculuğu devret"}…
+                        </summary>
+                        <div className="absolute right-0 z-10 mt-1 w-60 rounded-xl border border-line bg-pitch-900 p-3 text-xs shadow-xl">
+                          <p className="mb-2 text-muted">
+                            {p.display_name} {labels.captain.toLocaleLowerCase("tr")} olacak, sen {labels.admin.toLocaleLowerCase("tr")} olacaksın. Geri alamazsın.
+                          </p>
+                          <RoleButton groupId={groupId} playerId={p.id} role="captain" danger>
+                            Evet, devret
+                          </RoleButton>
+                        </div>
+                      </details>
+                    )}
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       </Card>
 
-      {isAdmin && (
+      {canManage && isTeam && (
+        <>
+          <SectionTitle>Takım bilgileri</SectionTitle>
+          <form action={updateTeam} className="space-y-3">
+            <input type="hidden" name="groupId" value={groupId} />
+            <Card className="space-y-4">
+              <TeamFields values={group} />
+            </Card>
+            <Button variant="secondary" className="w-full">
+              Kaydet
+            </Button>
+          </form>
+        </>
+      )}
+
+      {canManage && (
         <>
           <SectionTitle>Misafir oyuncu ekle</SectionTitle>
           <Card>
@@ -137,7 +221,7 @@ export default async function PlayersPage({
               <SectionTitle>Misafir geçmişini aktar</SectionTitle>
               <Card>
                 <p className="mb-3 text-sm text-muted">
-                  Misafir sonradan gruba katıldıysa, misafir kaydındaki maçlarını ve puanlarını onun hesabına aktar.
+                  Misafir sonradan katıldıysa, misafir kaydındaki maçlarını ve puanlarını onun hesabına aktar.
                 </p>
                 <form action={claimGuest} className="space-y-2">
                   <input type="hidden" name="groupId" value={groupId} />

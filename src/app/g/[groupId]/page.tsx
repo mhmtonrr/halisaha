@@ -3,9 +3,13 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { finalizeExpired } from "@/lib/finalize";
 import { byRanking, formatDate, getGroupSummaries, POSITION_LABEL } from "@/lib/data";
+import { formatRegion } from "@/lib/regions";
+import { ROLE_LABEL, teamRating, type GroupKind, type Role } from "@/lib/teams-data";
+import { TeamBadge } from "@/components/TeamBadge";
 import { Badge, Card, Header, LinkButton, SectionTitle } from "@/components/ui";
 import { OvrBadge } from "@/components/PlayerCard";
 import { InviteLink } from "./InviteLink";
+import { regenerateInvite } from "@/lib/actions";
 
 const STATUS: Record<string, { label: string; tone: "default" | "accent" | "warn" }> = {
   planned: { label: "Planlandı", tone: "default" },
@@ -15,30 +19,53 @@ const STATUS: Record<string, { label: string; tone: "default" | "accent" | "warn
 
 export default async function GroupPage({ params }: { params: Promise<{ groupId: string }> }) {
   const { groupId } = await params;
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
 
   const { data: group } = await supabase
     .from("groups")
-    .select("id, name, invite_code")
+    .select("id, name, kind, city, district, color, description")
     .eq("id", groupId)
     .maybeSingle();
   if (!group) notFound();
+  const isTeam = group.kind === "team";
+  const labels = ROLE_LABEL[group.kind as GroupKind];
 
   await finalizeExpired(groupId);
 
-  const [players, { data: matches }] = await Promise.all([
+  const [players, { data: matches }, { data: inviteCode }, { data: polls }] = await Promise.all([
     getGroupSummaries(supabase, groupId),
     supabase
       .from("matches")
       .select("id, played_at, venue, status, score_a, score_b, kind, opponent_name, match_players(count)")
       .eq("group_id", groupId)
       .order("played_at", { ascending: false })
-      .limit(20),
+      .limit(50),
+    supabase.rpc("group_invite_code", { p_group_id: groupId }),
+    supabase
+      .from("match_polls")
+      .select("id, starts_at, venue, capacity, status, deadline, poll_responses(player_id, answer)")
+      .eq("group_id", groupId)
+      .eq("status", "open")
+      .order("starts_at")
+      .limit(10),
   ]);
 
+  const me = players.find((p) => p.user_id === user.id);
+  const myRole = (me?.role ?? null) as Role | null;
+  const canManage = myRole === "captain" || myRole === "admin";
   const ranked = [...players].sort(byRanking);
   const active = (matches ?? []).filter((m) => m.status !== "closed");
   const recent = (matches ?? []).filter((m) => m.status === "closed").slice(0, 8);
+  const rating = teamRating(players.map((p) => p.overall));
+
+  // Takımın rakiplere karşı karnesi
+  const ext = (matches ?? []).filter((m) => m.status === "closed" && m.kind === "external");
+  const record = {
+    w: ext.filter((m) => (m.score_a ?? 0) > (m.score_b ?? 0)).length,
+    d: ext.filter((m) => (m.score_a ?? 0) === (m.score_b ?? 0)).length,
+    l: ext.filter((m) => (m.score_a ?? 0) < (m.score_b ?? 0)).length,
+  };
+  const staff = players.filter((p) => p.role !== "member").sort((a, b) => (a.role === "captain" ? -1 : b.role === "captain" ? 1 : 0));
 
   const leader = (key: "goals" | "assists" | "mvps") =>
     players
@@ -54,21 +81,119 @@ export default async function GroupPage({ params }: { params: Promise<{ groupId:
   return (
     <main>
       <Header
-        title={group.name}
+        title=""
         back="/"
         right={
-          <LinkButton href={`/g/${groupId}/players`} variant="ghost" aria-label="Grup ayarları">
-            ⚙︎
-          </LinkButton>
+          me ? (
+            <LinkButton href={`/g/${groupId}/players`} variant="ghost" aria-label="Ayarlar">
+              ⚙︎ {canManage ? "Yönet" : "Üyeler"}
+            </LinkButton>
+          ) : undefined
         }
       />
 
-      <div className="grid grid-cols-2 gap-2">
-        <LinkButton href={`/g/${groupId}/matches/new`}>+ Yeni maç</LinkButton>
-        <LinkButton href={`/g/${groupId}/kadro`} variant="secondary">
-          🃏 Kadro
-        </LinkButton>
+      <div className="-mt-2 mb-5 flex items-center gap-4">
+        <TeamBadge name={group.name} color={group.color} size="lg" />
+        <div className="min-w-0 flex-1">
+          <div className="text-xs uppercase tracking-wide text-muted">{isTeam ? "Takım" : "Grup"}</div>
+          <h1 className="truncate text-2xl font-black">{group.name}</h1>
+          <div className="text-xs text-muted">
+            {isTeam && `${formatRegion(group.city, group.district)} · `}
+            {players.length} {isTeam ? "oyuncu" : "üye"}
+            {myRole && ` · Sen: ${labels[myRole]}`}
+          </div>
+        </div>
+        {isTeam && (
+          <div className="text-center">
+            <OvrBadge overall={rating} className="h-12 w-12 text-lg" />
+            <div className="mt-1 text-[10px] text-muted">takım</div>
+          </div>
+        )}
       </div>
+      {group.description && <p className="-mt-2 mb-4 text-sm text-muted">{group.description}</p>}
+
+      {isTeam && (
+        <div className="mb-4 grid grid-cols-4 gap-2 text-center">
+          {[
+            { v: record.w + record.d + record.l, l: "Maç" },
+            { v: record.w, l: "Galibiyet", c: "text-accent" },
+            { v: record.d, l: "Beraberlik" },
+            { v: record.l, l: "Mağlubiyet", c: "text-red-300" },
+          ].map((x) => (
+            <Card key={x.l} className="p-2">
+              <div className={"text-xl font-black " + (x.c ?? "")}>{x.v}</div>
+              <div className="text-[10px] text-muted">{x.l}</div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {canManage && (
+        <div className="mb-2 grid grid-cols-2 gap-2">
+          <LinkButton href={`/g/${groupId}/cagri/yeni`}>📣 Maç çağrısı</LinkButton>
+          <LinkButton href={`/g/${groupId}/matches/new`} variant="secondary">
+            + Doğrudan maç
+          </LinkButton>
+        </div>
+      )}
+      <LinkButton href={`/g/${groupId}/kadro`} variant="secondary" className="w-full">
+        🃏 Kadro ve kartlar
+      </LinkButton>
+
+      {(polls ?? []).length > 0 && (
+        <>
+          <SectionTitle>Maç çağrıları</SectionTitle>
+          <div className="space-y-2">
+            {(polls ?? []).map((poll) => {
+              const yes = poll.poll_responses.filter((r) => r.answer === "yes").length;
+              const mine = poll.poll_responses.find((r) => r.player_id === me?.id)?.answer;
+              return (
+                <Link key={poll.id} href={`/g/${groupId}/cagri/${poll.id}`}>
+                  <Card className="flex items-center gap-3 border-accent/30 transition hover:border-accent">
+                    <span className="text-2xl">📣</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold">{formatDate(poll.starts_at)}</div>
+                      <div className="truncate text-xs text-muted">
+                        {poll.venue ?? "Saha belirtilmedi"} · {yes}/{poll.capacity} geliyor
+                      </div>
+                    </div>
+                    {mine === "yes" ? (
+                      <Badge tone="accent">Geliyorsun</Badge>
+                    ) : mine === "maybe" ? (
+                      <Badge tone="warn">Belki</Badge>
+                    ) : mine === "no" ? (
+                      <Badge>Gelmiyorsun</Badge>
+                    ) : me ? (
+                      <Badge tone="warn">Yanıtla</Badge>
+                    ) : null}
+                  </Card>
+                </Link>
+              );
+            })}
+          </div>
+        </>
+      )}
+      {!me && isTeam && (
+        <p className="mt-3 text-center text-xs text-muted">
+          Bu takımın oyuncusu değilsin. Katılmak için kaptandan davet linki iste.
+        </p>
+      )}
+      {me && !canManage && (
+        <p className="mt-2 text-center text-xs text-muted">Maçları {isTeam ? "kaptan ve yetkililer" : "kurucu ve yetkililer"} kurar.</p>
+      )}
+
+      {staff.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {staff.map((p) => (
+            <Link key={p.id} href={`/g/${groupId}/p/${p.id}`}>
+              <Badge tone={p.role === "captain" ? "warn" : "default"}>
+                {p.role === "captain" ? (isTeam ? "© " : "★ ") : ""}
+                {labels[p.role as Role]}: {p.display_name}
+              </Badge>
+            </Link>
+          ))}
+        </div>
+      )}
 
       {active.length > 0 && (
         <>
@@ -96,7 +221,7 @@ export default async function GroupPage({ params }: { params: Promise<{ groupId:
         </>
       )}
 
-      <SectionTitle>Sıralama</SectionTitle>
+      <SectionTitle>{isTeam ? "Kadro sıralaması" : "Sıralama"}</SectionTitle>
       <Card className="p-0">
         <ol className="divide-y divide-line">
           {ranked.map((p, i) => {
@@ -190,10 +315,22 @@ export default async function GroupPage({ params }: { params: Promise<{ groupId:
         </>
       )}
 
-      <SectionTitle>Arkadaşlarını davet et</SectionTitle>
-      <Card>
-        <InviteLink code={group.invite_code} groupName={group.name} />
-      </Card>
+      {inviteCode && (
+        <>
+          <SectionTitle>{isTeam ? "Takıma oyuncu davet et" : "Arkadaşlarını davet et"}</SectionTitle>
+          <Card className="space-y-2">
+            <InviteLink code={inviteCode} groupName={group.name} />
+            {canManage && (
+              <form action={regenerateInvite} className="text-right">
+                <input type="hidden" name="groupId" value={groupId} />
+                <button className="text-xs text-muted hover:text-white" title="Eski link çalışmaz olur">
+                  Linki yenile
+                </button>
+              </form>
+            )}
+          </Card>
+        </>
+      )}
     </main>
   );
 }
