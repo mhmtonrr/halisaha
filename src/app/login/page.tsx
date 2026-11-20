@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { LoginForm } from "./LoginForm";
 
 export default async function LoginPage({
@@ -14,6 +15,13 @@ export default async function LoginPage({
         <p className="mt-2 text-muted">Maçtan sonra puanla, kartını büyüt, takımları adil kur.</p>
       </div>
       <LoginForm next={next?.startsWith("/") ? next : "/"} initialError={error} />
+      <p className="mt-6 text-center text-xs text-muted">
+        Devam ederek{" "}
+        <Link href="/privacy" className="underline">
+          gizlilik politikasını
+        </Link>{" "}
+        kabul etmiş olursun.
+      </p>
     </main>
   );
 }
