@@ -1,26 +1,38 @@
 @import "tailwindcss";
 
+@theme {
+  --color-pitch-950: #04130b;
+  --color-pitch-900: #072112;
+  --color-pitch-800: #0b2e1a;
+  --color-pitch-700: #124127;
+  --color-pitch-600: #1a5a36;
+  --color-line: #1f4d33;
+  --color-muted: #8fb39d;
+  --color-accent: #3ddc84;
+  --color-accent-strong: #22c06a;
+  --color-team-a: #f5c542;
+  --color-team-b: #5aa9ff;
+  --color-gold-1: #f9e29c;
+  --color-gold-2: #c9a13b;
+  --color-silver-1: #eef1f4;
+  --color-silver-2: #9aa4ae;
+  --color-bronze-1: #f0c29a;
+  --color-bronze-2: #a3643a;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-pitch-950);
+  background-image: radial-gradient(ellipse at top, #0d3a20 0%, transparent 60%);
+  background-attachment: fixed;
+  color: #e8f3ec;
+  min-height: 100dvh;
+}
+
+input[type="range"] {
+  accent-color: var(--color-accent);
 }
