@@ -37,6 +37,8 @@ export interface GroupPlayer {
   preferred_foot: Foot | null;
   shirt_number: number | null;
   bio: string | null;
+  city: string | null;
+  district: string | null;
 }
 
 type RatingRow = { overall: number; matches_played: number; confidence: number };
@@ -45,6 +47,8 @@ type ProfileRow = {
   preferred_foot: Foot | null;
   shirt_number: number | null;
   bio: string | null;
+  city: string | null;
+  district: string | null;
 };
 
 /** Supabase 1-1 ilişkileri bazen nesne bazen dizi döndürür. */
@@ -57,7 +61,7 @@ export async function getGroupPlayers(supabase: SupabaseClient, groupId: string)
   const { data, error } = await supabase
     .from("group_players")
     .select(
-      "id, display_name, user_id, role, position, player_ratings(overall, matches_played, confidence), profiles(secondary_positions, preferred_foot, shirt_number, bio)",
+      "id, display_name, user_id, role, position, player_ratings(overall, matches_played, confidence), profiles(secondary_positions, preferred_foot, shirt_number, bio, city, district)",
     )
     .eq("group_id", groupId);
   if (error) throw error;
@@ -77,6 +81,8 @@ export async function getGroupPlayers(supabase: SupabaseClient, groupId: string)
       preferred_foot: prof?.preferred_foot ?? null,
       shirt_number: prof?.shirt_number ?? null,
       bio: prof?.bio ?? null,
+      city: prof?.city ?? null,
+      district: prof?.district ?? null,
     };
   });
 }

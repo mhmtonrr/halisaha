@@ -1,5 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 export async function createClient() {
@@ -24,12 +24,28 @@ export async function createClient() {
   );
 }
 
-/** Giriş yapmış kullanıcıyı döndürür, yoksa giriş sayfasına yönlendirir. */
-export async function requireUser() {
+/**
+ * Giriş yapmış kullanıcıyı döndürür, yoksa giriş sayfasına yönlendirir.
+ * Karşılama ekranını (isim, il, mevki) doldurmamış kullanıcıyı oraya gönderir;
+ * karşılama ekranının kendisi { allowIncomplete: true } ile çağırır.
+ */
+export async function requireUser(opts: { allowIncomplete?: boolean } = {}) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  if (!opts.allowIncomplete) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("onboarded_at")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (!profile?.onboarded_at) {
+      const here = (await headers()).get("x-pathname") ?? "/";
+      redirect(`/hosgeldin?next=${encodeURIComponent(here)}`);
+    }
+  }
   return { supabase, user };
 }

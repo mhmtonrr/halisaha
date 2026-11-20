@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/supabase/server";
 import { finalizeMatch } from "@/lib/finalize";
 import { balanceTeams, pickVariant, type TeamCandidate } from "@/lib/teams";
 import { getGroupPlayers, parseLocalDateTime, POSITIONS, type Position } from "@/lib/data";
+import { isProvince } from "@/lib/regions";
 
 const VOTING_HOURS = 24;
 const asPosition = (v: string): Position | null => (POSITIONS.includes(v as Position) ? (v as Position) : null);
@@ -25,28 +26,52 @@ const int = (fd: FormData, key: string) => {
 // Profil
 // ---------------------------------------------------------------------------
 
-export async function updateProfile(fd: FormData) {
-  const { supabase } = await requireUser();
+function profileArgs(fd: FormData) {
   const position = asPosition(str(fd, "position"));
   const secondary = fd
     .getAll("secondary")
     .map(String)
     .filter((p) => asPosition(p) && p !== position);
   const foot = ["L", "R", "B"].includes(str(fd, "foot")) ? str(fd, "foot") : null;
-  const shirtRaw = Number(str(fd, "shirt"));
-  const shirt = Number.isInteger(shirtRaw) && shirtRaw >= 1 && shirtRaw <= 99 ? shirtRaw : null;
-
-  const { error } = await supabase.rpc("update_my_profile", {
+  const num = (key: string, lo: number, hi: number) => {
+    const n = Number(str(fd, key));
+    return str(fd, key) && Number.isInteger(n) && n >= lo && n <= hi ? n : null;
+  };
+  const city = str(fd, "city");
+  return {
     p_display_name: str(fd, "name"),
     p_position: position,
     p_secondary: secondary,
     p_foot: foot,
-    p_shirt: shirt,
+    p_shirt: num("shirt", 1, 99),
     p_bio: str(fd, "bio").slice(0, 160),
-  });
+    p_city: isProvince(city) ? city : "",
+    p_district: str(fd, "district").slice(0, 40),
+    p_birth_year: num("birthYear", 1940, new Date().getFullYear() - 8),
+  };
+}
+
+export async function updateProfile(fd: FormData) {
+  const { supabase } = await requireUser();
+  const { error } = await supabase.rpc("update_my_profile", profileArgs(fd));
   if (error) fail("/profil", error.message);
   revalidatePath("/", "layout");
   redirect("/profil?saved=1");
+}
+
+/** İlk girişteki karşılama formu */
+export async function completeOnboarding(fd: FormData) {
+  const { supabase } = await requireUser({ allowIncomplete: true });
+  const rawNext = str(fd, "next");
+  const next = rawNext.startsWith("/") && !rawNext.startsWith("//") && !rawNext.startsWith("/hosgeldin") ? rawNext : "/";
+  const args = profileArgs(fd);
+  const back = `/hosgeldin?next=${encodeURIComponent(next)}`;
+  if (!args.p_city) fail(back, "İlini seç");
+  if (!args.p_position) fail(back, "Ana mevkini seç");
+  const { error } = await supabase.rpc("update_my_profile", { ...args, p_complete_onboarding: true });
+  if (error) fail(back, error.message);
+  revalidatePath("/", "layout");
+  redirect(next);
 }
 
 // ---------------------------------------------------------------------------

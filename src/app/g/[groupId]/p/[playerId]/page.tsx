@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/supabase/server";
 import { FOOT_NAME, POSITION_NAME, byRanking, formatDate, getGroupSummaries, type Position } from "@/lib/data";
 import { Badge, Card, Header, LinkButton, SectionTitle, cx } from "@/components/ui";
 import { PlayerCard, PositionChip } from "@/components/PlayerCard";
+import { formatRegion } from "@/lib/regions";
 
 // Özellikler 40 (hiç yok) ile 99 arasında; çubuk bu aralığa göre dolar
 const barWidth = (v: number) => Math.max(3, ((v - 40) / 59) * 100);
@@ -38,6 +39,7 @@ export default async function PlayerPage({
   const mostPlayed = [...posCounts.entries()].sort((a, b) => b[1] - a[1])[0];
 
   const facts: { label: string; value: string }[] = [
+    player.city ? { label: "Bölge", value: formatRegion(player.city, player.district) } : null,
     player.position ? { label: "Ana mevki", value: POSITION_NAME[player.position] } : null,
     player.secondary_positions.length
       ? { label: "Diğer mevkiler", value: player.secondary_positions.map((p) => POSITION_NAME[p]).join(", ") }
