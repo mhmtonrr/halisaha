@@ -152,11 +152,10 @@ Port doluysa: `fuser -k 3000/tcp`. Arayüzden kayıt (signUp) test etme: onay ma
 
 ## Kullanıcıda bekleyen işler
 
-- **E-posta onayı açık + saatte 2 mail limiti**: şifreyle kayıt neredeyse imkânsız. Kullanıcıya önerildi:
-  Supabase → Authentication → Sign In / Providers → Email → "Confirm email" kapat, min şifre 8.
-  (Kapatınca başkasının e-postasıyla kayıt riski var; Resend kurulunca tekrar açılmalı.) Yapıldı mı, sor.
+- **E-posta onayı kapatıldı** (kullanıcı yaptı): şifreyle kayıt artık mail limitine takılmaz. Risk: başkasının
+  e-postasıyla kayıt olunabilir; Resend/SMTP kurulunca "Confirm email" tekrar açılmalı.
 - **Resend/SMTP**: alan adı gerekiyor (vercel.app doğrulanamaz). Kullanıcı şimdilik erteledi.
-- Google OAuth uygulaması "Testing"de kalmışsa sadece test kullanıcıları girebilir (Branding + Publish app).
+- Google OAuth uygulaması yayınlandı (Publish app yapıldı); artık sadece test kullanıcıları değil herkes girebilir.
 
 ## Yol haritası (kullanıcıyla konuşulan)
 
