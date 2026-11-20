@@ -2,6 +2,8 @@
 
 Arkadaş gruplarının halısaha maçlarında birbirini puanladığı, FIFA tarzı rating ve dengeli takım kurma uygulaması.
 
+> Geliştirici rehberi (mimari, kurallar, kurulum, test, yol haritası): **[CLAUDE.md](CLAUDE.md)**
+
 **Teknoloji:** Next.js (App Router) · Supabase (Postgres, Auth, RLS) · Tailwind · Vitest
 
 ## Yapı
