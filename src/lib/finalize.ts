@@ -43,11 +43,16 @@ export async function loadClosedMatches(
       .range(from, to),
   );
 
-  const players = await fetchAll<{ match_id: string; player_id: string; team: Team }>(
+  const players = await fetchAll<{
+    match_id: string;
+    player_id: string;
+    team: Team;
+    group_players: { user_id: string | null } | { user_id: string | null }[] | null;
+  }>(
     (from, to) =>
       admin
         .from("match_players")
-        .select("match_id, player_id, team, matches!inner(group_id, status)")
+        .select("match_id, player_id, team, group_players(user_id), matches!inner(group_id, status)")
         .eq("matches.group_id", groupId)
         .eq("matches.status", "closed")
         .order("match_id")
@@ -98,8 +103,14 @@ export async function loadClosedMatches(
       },
     ]),
   );
-  for (const p of players)
-    byMatch.get(p.match_id)?.players.push({ playerId: p.player_id, team: p.team });
+  for (const p of players) {
+    const gp = Array.isArray(p.group_players) ? p.group_players[0] : p.group_players;
+    byMatch.get(p.match_id)?.players.push({
+      playerId: p.player_id,
+      team: p.team,
+      canVote: !!gp?.user_id,
+    });
+  }
   for (const v of votes)
     byMatch.get(v.match_id)?.votes.push({
       voterId: v.voter_id,
@@ -133,44 +144,61 @@ export async function finalizeMatch(matchId: string): Promise<boolean> {
   if (!claimed) return false;
 
   try {
-    const all = await loadClosedMatches(admin, claimed.group_id);
-    const before = computeRatings(all.filter((m) => m.id !== matchId)).ratings;
-    const { ratings: after, matchResults } = computeRatings(all);
-    const result = matchResults.find((r) => r.matchId === matchId);
-
-    if (result) {
-      const { error } = await admin.from("match_results").upsert(
-        result.players.map((p) => ({
-          match_id: matchId,
-          player_id: p.playerId,
-          performance: p.performance,
-          match_score: p.matchScore,
-          votes_received: p.votesReceived,
-          weight: p.weight,
-          rating_before: before.get(p.playerId)?.overall ?? DEFAULT_OVERALL,
-          rating_after: after.get(p.playerId)?.overall ?? DEFAULT_OVERALL,
-          is_mvp: p.playerId === result.mvpId,
-        })),
-      );
-      if (error) throw error;
-    }
-
-    const rows = [...after.values()].map((r) => ({
-      player_id: r.playerId,
-      overall: r.overall,
-      raw: r.raw,
-      confidence: r.confidence,
-      matches_played: r.matchesPlayed,
-      updated_at: new Date().toISOString(),
-    }));
-    for (let i = 0; i < rows.length; i += 500) {
-      const { error } = await admin.from("player_ratings").upsert(rows.slice(i, i + 500));
-      if (error) throw error;
-    }
+    await recomputeGroup(claimed.group_id, matchId);
     return true;
   } catch (e) {
     await admin.from("matches").update({ status: "voting" }).eq("id", matchId);
     throw e;
+  }
+}
+
+/**
+ * Grubun ratinglerini baştan hesaplar ve maç sonuçlarını yazar.
+ * onlyMatchId verilirse sadece o maçın sonuç satırları yazılır (normal kapanış);
+ * verilmezse tüm kapanmış maçlarınki yeniden yazılır (formül değişikliği sonrası).
+ */
+export async function recomputeGroup(groupId: string, onlyMatchId?: string) {
+  const admin = createAdminClient();
+  const all = (await loadClosedMatches(admin, groupId)).sort((a, b) =>
+    a.playedAt.localeCompare(b.playedAt),
+  );
+  const targets = onlyMatchId ? all.filter((m) => m.id === onlyMatchId) : all;
+
+  for (const match of targets) {
+    const idx = all.findIndex((m) => m.id === match.id);
+    // Rating değişimi: bu maçtan önceki ve bu maç dahil kronolojik durum
+    const before = computeRatings(all.slice(0, idx)).ratings;
+    const { ratings: after, matchResults } = computeRatings(all.slice(0, idx + 1));
+    const result = matchResults.find((r) => r.matchId === match.id);
+    if (!result) continue;
+    const { error } = await admin.from("match_results").upsert(
+      result.players.map((p) => ({
+        match_id: match.id,
+        player_id: p.playerId,
+        performance: p.performance,
+        match_score: p.matchScore,
+        votes_received: p.votesReceived,
+        weight: p.weight,
+        rating_before: before.get(p.playerId)?.overall ?? DEFAULT_OVERALL,
+        rating_after: after.get(p.playerId)?.overall ?? DEFAULT_OVERALL,
+        is_mvp: p.playerId === result.mvpId,
+      })),
+    );
+    if (error) throw error;
+  }
+
+  const { ratings } = computeRatings(all);
+  const rows = [...ratings.values()].map((r) => ({
+    player_id: r.playerId,
+    overall: r.overall,
+    raw: r.raw,
+    confidence: r.confidence,
+    matches_played: r.matchesPlayed,
+    updated_at: new Date().toISOString(),
+  }));
+  for (let i = 0; i < rows.length; i += 500) {
+    const { error } = await admin.from("player_ratings").upsert(rows.slice(i, i + 500));
+    if (error) throw error;
   }
 }
 

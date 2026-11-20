@@ -17,7 +17,7 @@ Arkadaş gruplarının halısaha maçlarında birbirini puanladığı, FIFA tarz
 1. Her oy, oyu verenin o maçtaki kendi ortalamasına göre değerlendirilir (cömert/sert oy veren farkı silinir).
 2. 5+ oy alan oyuncunun en yüksek ve en düşük oyu atılır.
 3. Birbirine sürekli belirgin yüksek puan veren ikililerin karşılıklı oyları %30 ağırlıkla sayılır.
-4. Oy verebileceklerin yarısından azı oy verdiyse maçın ağırlığı orantılı düşer; 3'ten az oy alan oyuncunun maçı sayılmaz.
+4. Maçın ağırlığı iki şeye bağlı: oyuncuya oy verebilecek kişilerin (misafirler hariç) yarısı oy verdiyse katılım tamdır; 4+ oy tam güvendir, 2-3 oyda maç kısmi sayılır, tek oyla sayılmaz.
 5. Galibiyet küçük bir bonus verir; gol/asist rating'e girmez (profil ve rozetler için).
 6. Yakın maçlar daha ağır basar; yeni oyuncular grup ortalamasından (65) başlar.
 

@@ -20,6 +20,8 @@ export type Team = "A" | "B";
 export interface MatchPlayer {
   playerId: string;
   team: Team;
+  /** Oy verebilir mi? Misafirler (hesabı olmayanlar) oy veremez. Varsayılan: evet */
+  canVote?: boolean;
 }
 
 export interface Vote {
@@ -81,10 +83,12 @@ export const CONFIG = {
   MIN_VOTES_PER_VOTER: 3,
   /** Bu sayı ve üstünde oy alan oyuncunun en yüksek ve en düşük oyu atılır */
   TRIM_THRESHOLD: 5,
-  /** Bir maçın tam ağırlık alması için oy verebilecek kişilerin en az bu oranı oy vermiş olmalı */
+  /** Oyuncuya oy verebilecek kişilerin (misafirler hariç) en az bu oranı oy verdiyse katılım tam sayılır */
   FULL_WEIGHT_PARTICIPATION: 0.5,
+  /** Bu kadar ve üstü oy alan oyuncunun maçı tam güvenle sayılır; altında orantılı azalır */
+  FULL_TRUST_VOTES: 4,
   /** Bundan az oy alan oyuncunun maçı rating'e hiç sayılmaz */
-  MIN_VOTES_RECEIVED: 3,
+  MIN_VOTES_RECEIVED: 2,
   /** Galibiyet/mağlubiyet etkisi (göreli puan cinsinden) */
   RESULT_BONUS: 0.15,
   /** Her eski maçın ağırlığı bir öncekinin bu katı */
@@ -252,7 +256,7 @@ export function computeMatch(
   suspiciousPairs: Set<string> = new Set(),
 ): MatchResult {
   const votes = normalizeVotes(match);
-  const possibleVoters = match.players.length - 1;
+  const voters = match.players.filter((p) => p.canVote !== false).map((p) => p.playerId);
 
   const players: PlayerMatchResult[] = match.players.map((p) => {
     const received = votes
@@ -275,12 +279,17 @@ export function computeMatch(
     const performance =
       received.length > 0 ? trimmedWeightedMean(received) + bonus : bonus;
 
+    // Bu oyuncuya oy verebilecek kişi sayısı: oy hakkı olanlar, kendisi hariç.
+    // Sabit bir eşik kullanmıyoruz; yoksa misafirli küçük maçlarda hesabı olanlar
+    // hiçbir zaman yeterli oya ulaşamaz.
+    const possibleVoters = voters.filter((id) => id !== p.playerId).length;
     const participation =
       possibleVoters > 0 ? received.length / possibleVoters : 0;
     const weight =
       received.length < CONFIG.MIN_VOTES_RECEIVED
         ? 0
-        : Math.min(1, participation / CONFIG.FULL_WEIGHT_PARTICIPATION);
+        : Math.min(1, participation / CONFIG.FULL_WEIGHT_PARTICIPATION) *
+          Math.min(1, received.length / CONFIG.FULL_TRUST_VOTES);
 
     return {
       playerId: p.playerId,

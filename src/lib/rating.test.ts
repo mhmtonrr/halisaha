@@ -137,7 +137,7 @@ describe("computeMatch", () => {
     expect(Math.abs(a.performance - b.performance)).toBeLessThan(0.1);
   });
 
-  it("az oy alan maçın ağırlığı düşük, çok az oyda sıfırdır", () => {
+  it("az oy alan maçın ağırlığı düşük, tek oyda sıfırdır", () => {
     const five = ids(10); // 5'e 5
     const full = makeMatch({
       id: "m",
@@ -153,10 +153,35 @@ describe("computeMatch", () => {
     const res = computeMatch(partial);
     const p5 = res.players.find((p) => p.playerId === "p5")!;
     expect(p5.votesReceived).toBe(3);
-    expect(p5.weight).toBeCloseTo(3 / 9 / 0.5);
+    // katılım 3/9 (tam ağırlığın %67'si) × örneklem 3/4
+    expect(p5.weight).toBeCloseTo((3 / 9 / 0.5) * (3 / 4));
     const p1 = res.players.find((p) => p.playerId === "p1")!;
     expect(p1.votesReceived).toBe(2);
-    expect(p1.weight).toBe(0);
+    expect(p1.weight).toBeCloseTo((2 / 9 / 0.5) * (2 / 4));
+
+    // Sadece tek kişi oy verdiyse maç kimse için sayılmaz
+    const single = computeMatch({ ...full, votes: full.votes.filter((v) => v.voterId === "p1") });
+    expect(single.players.every((p) => p.weight === 0)).toBe(true);
+  });
+
+  it("misafirli küçük maçta hesabı olanlar da puan alır", () => {
+    // 5 kişi: 3 hesap sahibi (u1-u3) herkesi puanlar, 2 misafir (g1, g2) oy veremez.
+    // Hesap sahiplerine en fazla 2 oy gelebilir; yine de maçları sayılmalı.
+    const ids5 = ["u1", "u2", "u3", "g1", "g2"];
+    const skill: Record<string, number> = { u1: 9, u2: 8, u3: 5, g1: 6, g2: 4 };
+    const base = makeMatch({ id: "m", playedAt: "2026-01-01", players: ids5, skill });
+    const match: MatchInput = {
+      ...base,
+      players: base.players.map((p) => ({ ...p, canVote: p.playerId.startsWith("u") })),
+      votes: base.votes.filter((v) => v.voterId.startsWith("u")),
+    };
+    const byId = Object.fromEntries(computeMatch(match).players.map((p) => [p.playerId, p]));
+    for (const u of ["u1", "u2", "u3"]) {
+      expect(byId[u].votesReceived).toBe(2);
+      expect(byId[u].weight).toBeCloseTo(0.5); // 2/2 katılım × 2/4 örneklem
+    }
+    expect(byId.g1.weight).toBeCloseTo(0.75); // 3/3 katılım × 3/4 örneklem
+    expect(byId.u1.performance).toBeGreaterThan(byId.u3.performance);
   });
 
   it("MVP en çok oyu alandır, kendine oy sayılmaz", () => {
