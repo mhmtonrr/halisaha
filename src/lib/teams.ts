@@ -8,6 +8,8 @@
  * Kurallar:
  * - Takımlar arası kişi farkı en fazla 1.
  * - Kaleciler iki takıma eşit dağıtılır (fark en fazla 1).
+ * - Defans/orta saha/forvetler de mümkün olduğunca eşit dağıtılır: bir mevkide
+ *   takımlar arası fark 1'i aştıkça bölünmenin puanı POSITION_PENALTY kadar kötüleşir.
  * - Bir kişi eksik olan takımın oyuncu başı ortalaması EXTRA_PLAYER_BONUS
  *   kadar yüksek olmalı, çünkü fazladan bir oyuncu avantajdır.
  */
@@ -18,6 +20,8 @@ export interface TeamCandidate {
   /** FIFA tarzı genel puan */
   overall: number;
   isGoalkeeper?: boolean;
+  /** Maçtaki mevki: GK, DEF, MID, FWD */
+  position?: string | null;
 }
 
 export interface TeamSplit {
@@ -25,12 +29,17 @@ export interface TeamSplit {
   teamB: TeamCandidate[];
   /** Takımların "güç" farkı; 0 mükemmel denge */
   difference: number;
+  /** Sıralamada kullanılan toplam ceza: güç farkı + mevki dengesizliği */
+  score: number;
   averageA: number;
   averageB: number;
 }
 
 /** Fazladan bir oyuncunun kaç OVR ortalamaya bedel sayıldığı */
 export const EXTRA_PLAYER_BONUS = 3;
+/** Bir mevkide takımlar arası her fazladan oyuncunun cezası (OVR ortalaması cinsinden) */
+export const POSITION_PENALTY = 0.75;
+const FIELD_POSITIONS = ["DEF", "MID", "FWD"];
 const EXHAUSTIVE_LIMIT = 24;
 
 const avg = (team: TeamCandidate[]) =>
@@ -44,10 +53,17 @@ function evaluate(teamA: TeamCandidate[], teamB: TeamCandidate[]): TeamSplit {
   const difference = Math.abs(
     strength(teamA, teamB.length) - strength(teamB, teamA.length),
   );
+  let imbalance = 0;
+  for (const pos of FIELD_POSITIONS) {
+    const a = teamA.filter((p) => p.position === pos).length;
+    const b = teamB.filter((p) => p.position === pos).length;
+    imbalance += Math.max(0, Math.abs(a - b) - 1);
+  }
   return {
     teamA,
     teamB,
     difference: Math.round(difference * 100) / 100,
+    score: Math.round((difference + POSITION_PENALTY * imbalance) * 100) / 100,
     averageA: Math.round(avg(teamA) * 10) / 10,
     averageB: Math.round(avg(teamB) * 10) / 10,
   };
@@ -71,9 +87,9 @@ function exhaustive(players: TeamCandidate[], keep: number): TeamSplit[] {
     players.forEach((p, i) => (mask[i] ? teamA : teamB).push(p));
     if (!goalkeepersOk(teamA, teamB)) return;
     const split = evaluate(teamA, teamB);
-    if (best.length < keep || split.difference < best[best.length - 1].difference) {
+    if (best.length < keep || split.score < best[best.length - 1].score) {
       best.push(split);
-      best.sort((a, b) => a.difference - b.difference);
+      best.sort((a, b) => a.score - b.score);
       if (best.length > keep) best.pop();
     }
   };
@@ -130,7 +146,7 @@ function heuristic(players: TeamCandidate[]): TeamSplit[] {
         [a[i], b[j]] = [b[j], a[i]];
         if (!goalkeepersOk(a, b)) continue;
         const next = evaluate(a, b);
-        if (next.difference < current.difference - 1e-9) {
+        if (next.score < current.score - 1e-9) {
           current = next;
           improved = true;
         }
@@ -165,7 +181,7 @@ export function pickVariant(
   tolerance = 1,
   random: () => number = Math.random,
 ): TeamSplit {
-  const best = splits[0].difference;
-  const pool = splits.filter((s) => s.difference <= best + tolerance);
+  const best = splits[0].score;
+  const pool = splits.filter((s) => s.score <= best + tolerance);
   return pool[Math.floor(random() * pool.length)];
 }

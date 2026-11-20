@@ -5,10 +5,10 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { finalizeMatch } from "@/lib/finalize";
 import { balanceTeams, pickVariant, type TeamCandidate } from "@/lib/teams";
-import { getGroupPlayers, parseLocalDateTime, type Position } from "@/lib/data";
+import { getGroupPlayers, parseLocalDateTime, POSITIONS, type Position } from "@/lib/data";
 
 const VOTING_HOURS = 24;
-const POSITIONS: Position[] = ["GK", "DEF", "MID", "FWD"];
+const asPosition = (v: string): Position | null => (POSITIONS.includes(v as Position) ? (v as Position) : null);
 
 function fail(path: string, message: string): never {
   const sep = path.includes("?") ? "&" : "?";
@@ -20,6 +20,34 @@ const int = (fd: FormData, key: string) => {
   const n = Number(fd.get(key));
   return Number.isInteger(n) && n >= 0 ? n : 0;
 };
+
+// ---------------------------------------------------------------------------
+// Profil
+// ---------------------------------------------------------------------------
+
+export async function updateProfile(fd: FormData) {
+  const { supabase } = await requireUser();
+  const position = asPosition(str(fd, "position"));
+  const secondary = fd
+    .getAll("secondary")
+    .map(String)
+    .filter((p) => asPosition(p) && p !== position);
+  const foot = ["L", "R", "B"].includes(str(fd, "foot")) ? str(fd, "foot") : null;
+  const shirtRaw = Number(str(fd, "shirt"));
+  const shirt = Number.isInteger(shirtRaw) && shirtRaw >= 1 && shirtRaw <= 99 ? shirtRaw : null;
+
+  const { error } = await supabase.rpc("update_my_profile", {
+    p_display_name: str(fd, "name"),
+    p_position: position,
+    p_secondary: secondary,
+    p_foot: foot,
+    p_shirt: shirt,
+    p_bio: str(fd, "bio").slice(0, 160),
+  });
+  if (error) fail("/profil", error.message);
+  revalidatePath("/", "layout");
+  redirect("/profil?saved=1");
+}
 
 // ---------------------------------------------------------------------------
 // Gruplar
@@ -52,13 +80,13 @@ export async function addGuest(fd: FormData) {
   const { supabase } = await requireUser();
   const groupId = str(fd, "groupId");
   const name = str(fd, "name");
-  const position = str(fd, "position") as Position;
+  const position = asPosition(str(fd, "position"));
   const back = `/g/${groupId}/players`;
   if (name.length < 2) fail(back, "İsim en az 2 karakter olmalı");
   const { error } = await supabase.from("group_players").insert({
     group_id: groupId,
     display_name: name,
-    position: POSITIONS.includes(position) ? position : null,
+    position,
   });
   if (error) fail(back, "Misafir eklenemedi (yönetici olmalısınız)");
   revalidatePath(back);
@@ -80,8 +108,7 @@ export async function setPosition(fd: FormData) {
   const { supabase } = await requireUser();
   const groupId = str(fd, "groupId");
   const playerId = str(fd, "playerId");
-  const raw = str(fd, "position");
-  const position = POSITIONS.includes(raw as Position) ? raw : null;
+  const position = asPosition(str(fd, "position"));
   const { error } = await supabase.rpc("set_player_position", {
     p_player_id: playerId,
     p_position: position,
@@ -107,15 +134,15 @@ export async function removePlayer(fd: FormData) {
 // ---------------------------------------------------------------------------
 
 function toCandidates(
-  ids: string[],
+  rows: { id: string; position: Position | null }[],
   ratings: Map<string, { overall: number; name: string }>,
-  goalkeepers: Set<string>,
 ): TeamCandidate[] {
-  return ids.map((id) => ({
+  return rows.map(({ id, position }) => ({
     id,
     name: ratings.get(id)?.name,
     overall: ratings.get(id)?.overall ?? 65,
-    isGoalkeeper: goalkeepers.has(id),
+    isGoalkeeper: position === "GK",
+    position,
   }));
 }
 
@@ -124,7 +151,9 @@ async function ratingsFor(
   groupId: string,
 ) {
   const players = await getGroupPlayers(supabase, groupId);
-  return new Map(players.map((p) => [p.id, { overall: p.overall, name: p.display_name }]));
+  return new Map(
+    players.map((p) => [p.id, { overall: p.overall, name: p.display_name, position: p.position }]),
+  );
 }
 
 export async function createMatch(fd: FormData) {
@@ -134,12 +163,28 @@ export async function createMatch(fd: FormData) {
   const playerIds = [...new Set(fd.getAll("players").map(String))];
   const goalkeepers = new Set(fd.getAll("gk").map(String).filter((id) => playerIds.includes(id)));
   const when = str(fd, "playedAt");
+  const external = str(fd, "kind") === "external";
+  const opponent = str(fd, "opponent");
 
   if (!when) fail(back, "Maç tarihini seçin");
-  if (playerIds.length < 4) fail(back, "En az 4 oyuncu seçin");
+  if (external && opponent.length < 2) fail(back, "Rakip takımın adını yazın");
+  if (playerIds.length < (external ? 2 : 4)) fail(back, external ? "En az 2 oyuncu seçin" : "En az 4 oyuncu seçin");
 
   const ratings = await ratingsFor(supabase, groupId);
-  const [best] = balanceTeams(toCandidates(playerIds, ratings, goalkeepers));
+  // Maçtaki mevki: işaretlenen kaleciler GK, diğerleri profildeki mevki (GK değilse)
+  const positionOf = (id: string): Position | null => {
+    if (goalkeepers.has(id)) return "GK";
+    const p = ratings.get(id)?.position ?? null;
+    return p === "GK" ? null : p;
+  };
+  const roster = playerIds.map((id) => ({ id, position: positionOf(id) }));
+
+  let teamOf: (id: string) => "A" | "B" = () => "A";
+  if (!external) {
+    const [best] = balanceTeams(toCandidates(roster, ratings));
+    const inA = new Set(best.teamA.map((p) => p.id));
+    teamOf = (id) => (inA.has(id) ? "A" : "B");
+  }
 
   const { data: match, error } = await supabase
     .from("matches")
@@ -148,21 +193,22 @@ export async function createMatch(fd: FormData) {
       played_at: parseLocalDateTime(when),
       venue: str(fd, "venue") || null,
       created_by: user.id,
+      kind: external ? "external" : "internal",
+      opponent_name: external ? opponent.slice(0, 60) : null,
     })
     .select("id")
     .single();
   if (error) fail(back, "Maç oluşturulamadı");
 
-  const rows = [
-    ...best.teamA.map((p) => ({ team: "A", p })),
-    ...best.teamB.map((p) => ({ team: "B", p })),
-  ].map(({ team, p }) => ({
-    match_id: match.id,
-    player_id: p.id,
-    team,
-    is_goalkeeper: !!p.isGoalkeeper,
-  }));
-  const { error: rosterError } = await supabase.from("match_players").insert(rows);
+  const { error: rosterError } = await supabase.from("match_players").insert(
+    roster.map((r) => ({
+      match_id: match.id,
+      player_id: r.id,
+      team: teamOf(r.id),
+      position: r.position,
+      is_goalkeeper: r.position === "GK",
+    })),
+  );
   if (rosterError) {
     await supabase.from("matches").delete().eq("id", match.id);
     fail(back, "Kadro kaydedilemedi");
@@ -176,7 +222,7 @@ async function loadRoster(
 ) {
   const { data } = await supabase
     .from("match_players")
-    .select("player_id, team, is_goalkeeper")
+    .select("player_id, team, is_goalkeeper, position")
     .eq("match_id", matchId);
   return data ?? [];
 }
@@ -202,8 +248,12 @@ export async function reshuffleTeams(fd: FormData) {
   const back = `/g/${groupId}/m/${matchId}`;
   const roster = await loadRoster(supabase, matchId);
   const ratings = await ratingsFor(supabase, groupId);
-  const gks = new Set(roster.filter((r) => r.is_goalkeeper).map((r) => r.player_id));
-  const splits = balanceTeams(toCandidates(roster.map((r) => r.player_id), ratings, gks));
+  const splits = balanceTeams(
+    toCandidates(
+      roster.map((r) => ({ id: r.player_id, position: r.position as Position | null })),
+      ratings,
+    ),
+  );
   const pick = pickVariant(splits, 1.5);
   const error = await writeTeams(
     supabase,
@@ -230,18 +280,28 @@ export async function movePlayer(fd: FormData) {
   revalidatePath(back);
 }
 
-export async function toggleGoalkeeper(fd: FormData) {
+/** Maça özel mevkiler. RLS sadece maçı kuranın veya yöneticinin değiştirmesine izin verir. */
+export async function setMatchPositions(fd: FormData) {
   const { supabase } = await requireUser();
   const groupId = str(fd, "groupId");
   const matchId = str(fd, "matchId");
   const back = `/g/${groupId}/m/${matchId}`;
-  const { error } = await supabase
-    .from("match_players")
-    .update({ is_goalkeeper: str(fd, "value") === "true" })
-    .eq("match_id", matchId)
-    .eq("player_id", str(fd, "playerId"));
-  if (error) fail(back, "Güncellenemedi");
+  const roster = await loadRoster(supabase, matchId);
+  const results = await Promise.all(
+    roster.map((r) => {
+      const position = asPosition(str(fd, `pos_${r.player_id}`));
+      return supabase
+        .from("match_players")
+        .update({ position, is_goalkeeper: position === "GK" })
+        .eq("match_id", matchId)
+        .eq("player_id", r.player_id)
+        .select("player_id");
+    }),
+  );
+  if (results.some((r) => r.error || !r.data?.length))
+    fail(back, "Mevkileri sadece maçı kuran kişi veya yönetici değiştirebilir");
   revalidatePath(back);
+  redirect(`${back}?positions=1`);
 }
 
 export async function addToMatch(fd: FormData) {
@@ -249,12 +309,22 @@ export async function addToMatch(fd: FormData) {
   const groupId = str(fd, "groupId");
   const matchId = str(fd, "matchId");
   const back = `/g/${groupId}/m/${matchId}`;
-  const roster = await loadRoster(supabase, matchId);
+  const playerId = str(fd, "playerId");
+  const [roster, { data: match }, { data: player }] = await Promise.all([
+    loadRoster(supabase, matchId),
+    supabase.from("matches").select("kind").eq("id", matchId).single(),
+    supabase.from("group_players").select("position").eq("id", playerId).single(),
+  ]);
   const countA = roster.filter((r) => r.team === "A").length;
-  const team = countA <= roster.length - countA ? "A" : "B";
-  const { error } = await supabase
-    .from("match_players")
-    .insert({ match_id: matchId, player_id: str(fd, "playerId"), team });
+  const team = match?.kind === "external" || countA <= roster.length - countA ? "A" : "B";
+  const position = (player?.position as Position | null) ?? null;
+  const { error } = await supabase.from("match_players").insert({
+    match_id: matchId,
+    player_id: playerId,
+    team,
+    position,
+    is_goalkeeper: position === "GK",
+  });
   if (error) fail(back, "Oyuncu eklenemedi");
   revalidatePath(back);
 }

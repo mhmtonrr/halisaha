@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { submitVotes } from "@/lib/actions";
 import { Button, Card, cx } from "@/components/ui";
-import { initials } from "@/components/PlayerCard";
+import { initials, PositionChip } from "@/components/PlayerCard";
+import type { Position } from "@/lib/data";
 
 interface Target {
   id: string;
@@ -11,6 +12,7 @@ interface Target {
   team: "A" | "B";
   goals: number;
   assists: number;
+  position: Position | null;
 }
 
 const scoreLabel = (s: number) =>
@@ -40,7 +42,7 @@ export function VoteForm({
   const groups = [
     { label: "Takım arkadaşların", list: targets.filter((t) => t.team === myTeam) },
     { label: "Rakipler", list: targets.filter((t) => t.team !== myTeam) },
-  ];
+  ].filter((g) => g.list.length > 0);
 
   return (
     <form action={submitVotes} onSubmit={() => setPending(true)} className="space-y-4">
@@ -66,7 +68,10 @@ export function VoteForm({
                         {initials(t.name)}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <div className="truncate font-medium">{t.name}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate font-medium">{t.name}</span>
+                          <PositionChip position={t.position} />
+                        </div>
                         {(t.goals > 0 || t.assists > 0) && (
                           <div className="text-xs text-muted">
                             {t.goals > 0 && `${t.goals} gol `}

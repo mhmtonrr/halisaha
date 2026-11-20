@@ -45,6 +45,32 @@ describe("balanceTeams", () => {
     }
   });
 
+  it("mevkileri iki takıma dengeli dağıtır", () => {
+    // 4 defans, 4 forvet; hepsi aynı güçte olsa da defanslar tek takıma yığılmamalı
+    const players: TeamCandidate[] = [
+      ...[70, 70, 70, 70].map((o, i) => ({ id: `d${i}`, overall: o, position: "DEF" })),
+      ...[70, 70, 70, 70].map((o, i) => ({ id: `f${i}`, overall: o, position: "FWD" })),
+    ];
+    for (const split of balanceTeams(players, 5)) {
+      const defA = split.teamA.filter((p) => p.position === "DEF").length;
+      expect(defA).toBe(2);
+    }
+  });
+
+  it("güç farkı büyükse mevki dengesi için gücü feda etmez", () => {
+    // İki çok güçlü defans: aynı takıma düşmeleri 2 OVR'den fazla dengesizlik yaratır
+    const players: TeamCandidate[] = [
+      { id: "a", overall: 90, position: "DEF" },
+      { id: "b", overall: 90, position: "DEF" },
+      { id: "c", overall: 50, position: "DEF" },
+      { id: "d", overall: 50, position: "DEF" },
+      { id: "e", overall: 60, position: "FWD" },
+      { id: "f", overall: 60, position: "FWD" },
+    ];
+    const [best] = balanceTeams(players);
+    expect(best.difference).toBeLessThanOrEqual(1);
+  });
+
   it("çok kalabalık kadroda da çalışır", () => {
     const players = squad(Array.from({ length: 30 }, (_, i) => 45 + ((i * 37) % 50)), [0, 1]);
     const [best] = balanceTeams(players);

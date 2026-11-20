@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { finalizeExpired } from "@/lib/finalize";
-import { formatDate, getGroupPlayers, getGroupStats, statsFor, POSITION_LABEL } from "@/lib/data";
+import { byRanking, formatDate, getGroupSummaries, POSITION_LABEL } from "@/lib/data";
 import { Badge, Card, Header, LinkButton, SectionTitle } from "@/components/ui";
 import { OvrBadge } from "@/components/PlayerCard";
 import { InviteLink } from "./InviteLink";
@@ -26,29 +26,23 @@ export default async function GroupPage({ params }: { params: Promise<{ groupId:
 
   await finalizeExpired(groupId);
 
-  const [players, stats, { data: matches }] = await Promise.all([
-    getGroupPlayers(supabase, groupId),
-    getGroupStats(supabase, groupId),
+  const [players, { data: matches }] = await Promise.all([
+    getGroupSummaries(supabase, groupId),
     supabase
       .from("matches")
-      .select("id, played_at, venue, status, score_a, score_b, match_players(count)")
+      .select("id, played_at, venue, status, score_a, score_b, kind, opponent_name, match_players(count)")
       .eq("group_id", groupId)
       .order("played_at", { ascending: false })
       .limit(20),
   ]);
 
-  const ranked = [...players].sort(
-    (a, b) =>
-      Number(b.matches_played > 0) - Number(a.matches_played > 0) ||
-      b.overall - a.overall ||
-      a.display_name.localeCompare(b.display_name, "tr"),
-  );
+  const ranked = [...players].sort(byRanking);
   const active = (matches ?? []).filter((m) => m.status !== "closed");
   const recent = (matches ?? []).filter((m) => m.status === "closed").slice(0, 8);
 
   const leader = (key: "goals" | "assists" | "mvps") =>
     players
-      .map((p) => ({ p, v: statsFor(stats, p.id)[key] }))
+      .map((p) => ({ p, v: p.totals[key] }))
       .filter((x) => x.v > 0)
       .sort((a, b) => b.v - a.v)[0];
   const leaders = [
@@ -63,15 +57,18 @@ export default async function GroupPage({ params }: { params: Promise<{ groupId:
         title={group.name}
         back="/"
         right={
-          <LinkButton href={`/g/${groupId}/players`} variant="ghost">
-            Oyuncular
+          <LinkButton href={`/g/${groupId}/players`} variant="ghost" aria-label="Grup ayarları">
+            ⚙︎
           </LinkButton>
         }
       />
 
-      <LinkButton href={`/g/${groupId}/matches/new`} className="w-full">
-        + Yeni maç
-      </LinkButton>
+      <div className="grid grid-cols-2 gap-2">
+        <LinkButton href={`/g/${groupId}/matches/new`}>+ Yeni maç</LinkButton>
+        <LinkButton href={`/g/${groupId}/kadro`} variant="secondary">
+          🃏 Kadro
+        </LinkButton>
+      </div>
 
       {active.length > 0 && (
         <>
@@ -82,8 +79,11 @@ export default async function GroupPage({ params }: { params: Promise<{ groupId:
                 <Link href={`/g/${groupId}/m/${m.id}`}>
                   <Card className="flex items-center justify-between transition hover:border-accent/50">
                     <div>
-                      <div className="font-semibold">{formatDate(m.played_at)}</div>
+                      <div className="font-semibold">
+                        {m.kind === "external" ? `vs ${m.opponent_name}` : formatDate(m.played_at)}
+                      </div>
                       <div className="text-xs text-muted">
+                        {m.kind === "external" && `${formatDate(m.played_at)} · `}
                         {m.venue ?? "Saha belirtilmedi"} · {m.match_players[0]?.count ?? 0} oyuncu
                       </div>
                     </div>
@@ -100,7 +100,7 @@ export default async function GroupPage({ params }: { params: Promise<{ groupId:
       <Card className="p-0">
         <ol className="divide-y divide-line">
           {ranked.map((p, i) => {
-            const s = statsFor(stats, p.id);
+            const s = p.totals;
             return (
               <li key={p.id}>
                 <Link
@@ -151,14 +151,37 @@ export default async function GroupPage({ params }: { params: Promise<{ groupId:
                 <Link href={`/g/${groupId}/m/${m.id}`}>
                   <Card className="flex items-center justify-between py-3 transition hover:border-accent/50">
                     <div className="text-sm">
-                      <div>{formatDate(m.played_at)}</div>
-                      <div className="text-xs text-muted">{m.venue ?? ""}</div>
+                      <div>{m.kind === "external" ? `vs ${m.opponent_name}` : "Kendi aramızda"}</div>
+                      <div className="text-xs text-muted">
+                        {formatDate(m.played_at)}
+                        {m.venue ? ` · ${m.venue}` : ""}
+                      </div>
                     </div>
-                    <div className="text-lg font-black tabular-nums">
-                      <span className="text-team-a">{m.score_a}</span>
-                      <span className="mx-1 text-muted">-</span>
-                      <span className="text-team-b">{m.score_b}</span>
-                    </div>
+                    {m.kind === "external" ? (
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={
+                            "rounded-md px-1.5 py-0.5 text-xs font-bold " +
+                            ((m.score_a ?? 0) > (m.score_b ?? 0)
+                              ? "bg-accent/20 text-accent"
+                              : (m.score_a ?? 0) < (m.score_b ?? 0)
+                                ? "bg-red-400/20 text-red-300"
+                                : "bg-pitch-700 text-muted")
+                          }
+                        >
+                          {(m.score_a ?? 0) > (m.score_b ?? 0) ? "G" : (m.score_a ?? 0) < (m.score_b ?? 0) ? "M" : "B"}
+                        </span>
+                        <span className="text-lg font-black tabular-nums">
+                          {m.score_a} - {m.score_b}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="text-lg font-black tabular-nums">
+                        <span className="text-team-a">{m.score_a}</span>
+                        <span className="mx-1 text-muted">-</span>
+                        <span className="text-team-b">{m.score_b}</span>
+                      </div>
+                    )}
                   </Card>
                 </Link>
               </li>

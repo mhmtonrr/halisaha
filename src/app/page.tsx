@@ -26,9 +26,14 @@ export default async function Home({
       <Header
         title="Gruplarım"
         right={
-          <form action="/auth/signout" method="post">
-            <button className="rounded-lg px-3 py-2 text-sm text-muted hover:bg-pitch-800">Çıkış</button>
-          </form>
+          <div className="flex items-center">
+            <Link href="/profil" className="rounded-lg px-3 py-2 text-sm text-muted hover:bg-pitch-800">
+              Profilim
+            </Link>
+            <form action="/auth/signout" method="post">
+              <button className="rounded-lg px-3 py-2 text-sm text-muted hover:bg-pitch-800">Çıkış</button>
+            </form>
+          </div>
         }
       />
       <ErrorNote message={error} />

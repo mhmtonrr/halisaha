@@ -1,14 +1,27 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { DEFAULT_OVERALL } from "@/lib/rating";
+import { computeAttributes, recentForm, totals, type Attribute, type MatchRecord, type PlayerTotals } from "@/lib/attributes";
 
 export type Position = "GK" | "DEF" | "MID" | "FWD";
+export const POSITIONS: Position[] = ["GK", "DEF", "MID", "FWD"];
 
+/** Kart üzerindeki kısa etiket */
 export const POSITION_LABEL: Record<Position, string> = {
   GK: "KL",
   DEF: "DEF",
   MID: "OS",
   FWD: "FV",
 };
+
+export const POSITION_NAME: Record<Position, string> = {
+  GK: "Kaleci",
+  DEF: "Defans",
+  MID: "Orta saha",
+  FWD: "Forvet",
+};
+
+export type Foot = "L" | "R" | "B";
+export const FOOT_NAME: Record<Foot, string> = { L: "Sol", R: "Sağ", B: "İki ayak" };
 
 export interface GroupPlayer {
   id: string;
@@ -19,27 +32,20 @@ export interface GroupPlayer {
   overall: number;
   matches_played: number;
   confidence: number;
+  // Profil (misafirlerde boş)
+  secondary_positions: Position[];
+  preferred_foot: Foot | null;
+  shirt_number: number | null;
+  bio: string | null;
 }
-
-export interface PlayerStats {
-  played: number;
-  goals: number;
-  assists: number;
-  saves: number;
-  mvps: number;
-  wins: number;
-}
-
-const emptyStats = (): PlayerStats => ({
-  played: 0,
-  goals: 0,
-  assists: 0,
-  saves: 0,
-  mvps: 0,
-  wins: 0,
-});
 
 type RatingRow = { overall: number; matches_played: number; confidence: number };
+type ProfileRow = {
+  secondary_positions: Position[] | null;
+  preferred_foot: Foot | null;
+  shirt_number: number | null;
+  bio: string | null;
+};
 
 /** Supabase 1-1 ilişkileri bazen nesne bazen dizi döndürür. */
 export function one<T>(x: T | T[] | null | undefined): T | null {
@@ -47,19 +53,17 @@ export function one<T>(x: T | T[] | null | undefined): T | null {
   return x ?? null;
 }
 
-export async function getGroupPlayers(
-  supabase: SupabaseClient,
-  groupId: string,
-): Promise<GroupPlayer[]> {
+export async function getGroupPlayers(supabase: SupabaseClient, groupId: string): Promise<GroupPlayer[]> {
   const { data, error } = await supabase
     .from("group_players")
     .select(
-      "id, display_name, user_id, role, position, player_ratings(overall, matches_played, confidence)",
+      "id, display_name, user_id, role, position, player_ratings(overall, matches_played, confidence), profiles(secondary_positions, preferred_foot, shirt_number, bio)",
     )
     .eq("group_id", groupId);
   if (error) throw error;
   return (data ?? []).map((p) => {
     const r = one(p.player_ratings as RatingRow | RatingRow[] | null);
+    const prof = one(p.profiles as ProfileRow | ProfileRow[] | null);
     return {
       id: p.id,
       display_name: p.display_name,
@@ -69,57 +73,105 @@ export async function getGroupPlayers(
       overall: r?.overall ?? DEFAULT_OVERALL,
       matches_played: r?.matches_played ?? 0,
       confidence: r?.confidence ?? 0,
+      secondary_positions: prof?.secondary_positions ?? [],
+      preferred_foot: prof?.preferred_foot ?? null,
+      shirt_number: prof?.shirt_number ?? null,
+      bio: prof?.bio ?? null,
     };
   });
 }
 
-/** Kapanmış maçlardan oyuncu başına toplam istatistikler. */
-export async function getGroupStats(
+/** Kapanmış maçlardan oyuncu başına maç kayıtları (yeniden eskiye). */
+export async function getGroupHistory(
   supabase: SupabaseClient,
   groupId: string,
-): Promise<Map<string, PlayerStats>> {
-  const [{ data: rows }, { data: results }] = await Promise.all([
+): Promise<Map<string, MatchRecord[]>> {
+  type M = {
+    played_at: string;
+    score_a: number | null;
+    score_b: number | null;
+    kind: "internal" | "external";
+    opponent_name: string | null;
+  };
+  const [{ data: rows, error }, { data: results, error: rError }] = await Promise.all([
     supabase
       .from("match_players")
       .select(
-        "player_id, team, goals, assists, saves, matches!inner(group_id, status, score_a, score_b)",
+        "match_id, player_id, team, goals, assists, saves, position, matches!inner(group_id, status, played_at, score_a, score_b, kind, opponent_name)",
       )
       .eq("matches.group_id", groupId)
       .eq("matches.status", "closed")
       .limit(10000),
     supabase
       .from("match_results")
-      .select("player_id, is_mvp, matches!inner(group_id)")
+      .select("match_id, player_id, match_score, weight, is_mvp, matches!inner(group_id)")
       .eq("matches.group_id", groupId)
-      .eq("is_mvp", true)
       .limit(10000),
   ]);
+  if (error) throw error;
+  if (rError) throw rError;
 
-  const stats = new Map<string, PlayerStats>();
-  const get = (id: string) => {
-    if (!stats.has(id)) stats.set(id, emptyStats());
-    return stats.get(id)!;
-  };
-  type M = { score_a: number | null; score_b: number | null };
+  const res = new Map((results ?? []).map((r) => [`${r.match_id}:${r.player_id}`, r]));
+  const history = new Map<string, MatchRecord[]>();
   for (const r of rows ?? []) {
-    const s = get(r.player_id);
     const m = one(r.matches as M | M[]);
-    s.played += 1;
-    s.goals += r.goals;
-    s.assists += r.assists;
-    s.saves += r.saves;
-    if (m) {
-      const a = m.score_a ?? 0;
-      const b = m.score_b ?? 0;
-      if ((r.team === "A" && a > b) || (r.team === "B" && b > a)) s.wins += 1;
-    }
+    if (!m) continue;
+    const us = r.team === "A" ? (m.score_a ?? 0) : (m.score_b ?? 0);
+    const them = r.team === "A" ? (m.score_b ?? 0) : (m.score_a ?? 0);
+    const result = res.get(`${r.match_id}:${r.player_id}`);
+    const list = history.get(r.player_id) ?? [];
+    list.push({
+      matchId: r.match_id,
+      playedAt: m.played_at,
+      goals: r.goals,
+      assists: r.assists,
+      saves: r.saves,
+      outcome: us > them ? "win" : us < them ? "loss" : "draw",
+      matchScore: result?.match_score ?? null,
+      weight: result?.weight ?? 0,
+      mvp: result?.is_mvp ?? false,
+      kind: m.kind ?? "internal",
+      opponentName: m.opponent_name,
+      position: r.position,
+    });
+    history.set(r.player_id, list);
   }
-  for (const r of results ?? []) get(r.player_id).mvps += 1;
-  return stats;
+  for (const list of history.values()) list.sort((a, b) => b.playedAt.localeCompare(a.playedAt));
+  return history;
 }
 
-export function statsFor(stats: Map<string, PlayerStats>, id: string) {
-  return stats.get(id) ?? emptyStats();
+export interface PlayerSummary extends GroupPlayer {
+  totals: PlayerTotals;
+  attributes: Attribute[];
+  form: number | null;
+  history: MatchRecord[];
+}
+
+/** Oyuncular + istatistikler + kart özellikleri, tek seferde. */
+export async function getGroupSummaries(supabase: SupabaseClient, groupId: string): Promise<PlayerSummary[]> {
+  const [players, history] = await Promise.all([
+    getGroupPlayers(supabase, groupId),
+    getGroupHistory(supabase, groupId),
+  ]);
+  return players.map((p) => {
+    const h = history.get(p.id) ?? [];
+    return {
+      ...p,
+      history: h,
+      totals: totals(h),
+      attributes: computeAttributes(h, p.position === "GK"),
+      form: recentForm(h),
+    };
+  });
+}
+
+/** Sıralama: önce maçı olanlar, sonra rating, sonra isim */
+export function byRanking(a: GroupPlayer, b: GroupPlayer) {
+  return (
+    Number(b.matches_played > 0) - Number(a.matches_played > 0) ||
+    b.overall - a.overall ||
+    a.display_name.localeCompare(b.display_name, "tr")
+  );
 }
 
 const TZ = "Europe/Istanbul";

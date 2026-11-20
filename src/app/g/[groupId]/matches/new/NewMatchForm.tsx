@@ -4,13 +4,15 @@ import { useMemo, useState } from "react";
 import { createMatch } from "@/lib/actions";
 import { balanceTeams } from "@/lib/teams";
 import { Button, Card, Input, Label, cx } from "@/components/ui";
-import { OvrBadge, shortName } from "@/components/PlayerCard";
+import { OvrBadge, PositionChip, shortName } from "@/components/PlayerCard";
+import type { Position } from "@/lib/data";
 
 interface P {
   id: string;
   name: string;
   overall: number;
   isGoalkeeper: boolean;
+  position: Position | null;
   guest: boolean;
 }
 
@@ -18,6 +20,8 @@ export function NewMatchForm({ groupId, players, defaultWhen }: { groupId: strin
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [gks, setGks] = useState<Set<string>>(new Set(players.filter((p) => p.isGoalkeeper).map((p) => p.id)));
   const [pending, setPending] = useState(false);
+  const [kind, setKind] = useState<"internal" | "external">("internal");
+  const external = kind === "external";
 
   const toggle = (set: Set<string>, id: string) => {
     const next = new Set(set);
@@ -28,15 +32,23 @@ export function NewMatchForm({ groupId, players, defaultWhen }: { groupId: strin
 
   const chosen = players.filter((p) => selected.has(p.id));
   const preview = useMemo(() => {
-    if (chosen.length < 4) return null;
-    return balanceTeams(chosen.map((p) => ({ ...p, isGoalkeeper: gks.has(p.id) })), 1)[0];
-  }, [chosen, gks]);
+    if (external || chosen.length < 4) return null;
+    return balanceTeams(
+      chosen.map((p) => {
+        const gk = gks.has(p.id);
+        return { ...p, isGoalkeeper: gk, position: gk ? "GK" : p.position === "GK" ? null : p.position };
+      }),
+      1,
+    )[0];
+  }, [chosen, gks, external]);
+  const minPlayers = external ? 2 : 4;
 
   const half = Math.floor(chosen.length / 2);
 
   return (
     <form action={createMatch} onSubmit={() => setPending(true)} className="space-y-4">
       <input type="hidden" name="groupId" value={groupId} />
+      <input type="hidden" name="kind" value={kind} />
       {chosen.map((p) => (
         <input key={p.id} type="hidden" name="players" value={p.id} />
       ))}
@@ -45,6 +57,41 @@ export function NewMatchForm({ groupId, players, defaultWhen }: { groupId: strin
         .map((p) => (
           <input key={p.id} type="hidden" name="gk" value={p.id} />
         ))}
+
+      <div className="grid grid-cols-2 gap-1 rounded-2xl border border-line bg-pitch-900/80 p-1">
+        {(
+          [
+            ["internal", "⚔️ Kendi aramızda", "Grubu ikiye bölüp oynuyoruz"],
+            ["external", "🆚 Rakip takıma karşı", "Biz bir takımız, rakip dışarıdan"],
+          ] as const
+        ).map(([k, label, hint]) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setKind(k)}
+            className={cx(
+              "rounded-xl px-3 py-2.5 text-left transition",
+              kind === k ? "bg-accent text-pitch-950" : "text-muted hover:bg-pitch-800",
+            )}
+            aria-pressed={kind === k}
+          >
+            <div className="text-sm font-semibold">{label}</div>
+            <div className={cx("text-[11px]", kind === k ? "text-pitch-900" : "text-muted")}>{hint}</div>
+          </button>
+        ))}
+      </div>
+
+      {external && (
+        <Card>
+          <label>
+            <Label>Rakip takım</Label>
+            <Input name="opponent" placeholder="Örn. Yıldızspor" required minLength={2} maxLength={60} />
+          </label>
+          <p className="mt-2 text-xs text-muted">
+            Rakip oyuncuların uygulamada olması gerekmez. Sadece bizim kadro birbirini puanlar.
+          </p>
+        </Card>
+      )}
 
       <Card className="grid grid-cols-2 gap-3">
         <label className="col-span-2 sm:col-span-1">
@@ -60,7 +107,7 @@ export function NewMatchForm({ groupId, players, defaultWhen }: { groupId: strin
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted">
           Gelenler · {chosen.length}
-          {chosen.length >= 2 && (
+          {!external && chosen.length >= 2 && (
             <span className="ml-1 normal-case">
               ({half}&apos;e {chosen.length - half})
             </span>
@@ -98,9 +145,10 @@ export function NewMatchForm({ groupId, players, defaultWhen }: { groupId: strin
                     {on && "✓"}
                   </span>
                   <OvrBadge overall={p.overall} />
-                  <span className="truncate">
-                    {p.name}
-                    {p.guest && <span className="ml-1 text-xs text-muted">misafir</span>}
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate">{p.name}</span>
+                    {!gks.has(p.id) && p.position !== "GK" && <PositionChip position={p.position} />}
+                    {p.guest && <span className="text-xs text-muted">misafir</span>}
                   </span>
                 </button>
                 {on && (
@@ -145,12 +193,14 @@ export function NewMatchForm({ groupId, players, defaultWhen }: { groupId: strin
               </div>
             ))}
           </div>
-          <p className="mt-3 text-xs text-muted">Maçı oluşturduktan sonra takımları karıştırabilir veya elle değiştirebilirsin.</p>
+          <p className="mt-3 text-xs text-muted">
+            Mevkiler de dengelenir. Maçı oluşturduktan sonra takımları karıştırabilir, mevkileri değiştirebilirsin.
+          </p>
         </Card>
       )}
 
-      <Button className="w-full" disabled={chosen.length < 4 || pending}>
-        {pending ? "Oluşturuluyor…" : chosen.length < 4 ? "En az 4 oyuncu seç" : "Maçı oluştur"}
+      <Button className="w-full" disabled={chosen.length < minPlayers || pending}>
+        {pending ? "Oluşturuluyor…" : chosen.length < minPlayers ? `En az ${minPlayers} oyuncu seç` : "Maçı oluştur"}
       </Button>
     </form>
   );
