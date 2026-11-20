@@ -1,36 +1,33 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Halısaha Performans
 
-## Getting Started
+Arkadaş gruplarının halısaha maçlarında birbirini puanladığı, FIFA tarzı rating ve dengeli takım kurma uygulaması.
 
-First, run the development server:
+**Teknoloji:** Next.js (App Router) · Supabase (Postgres, Auth, RLS) · Tailwind · Vitest
+
+## Yapı
+
+| Dosya | Görev |
+|---|---|
+| `src/lib/rating.ts` | Puanlama motoru: oy normalizasyonu, uç değer kırpma, ikili tespiti, ağırlıklı rating, 40-99 ölçeği |
+| `src/lib/teams.ts` | Dengeli takım kurma: her kadro büyüklüğü, kaleci dağıtımı, eksik takım telafisi |
+| `supabase/migrations/0001_init.sql` | Şema, satır seviyesinde güvenlik, RPC'ler |
+
+## Puanlama kuralları
+
+1. Her oy, oyu verenin o maçtaki kendi ortalamasına göre değerlendirilir (cömert/sert oy veren farkı silinir).
+2. 5+ oy alan oyuncunun en yüksek ve en düşük oyu atılır.
+3. Birbirine sürekli belirgin yüksek puan veren ikililerin karşılıklı oyları %30 ağırlıkla sayılır.
+4. Oy verebileceklerin yarısından azı oy verdiyse maçın ağırlığı orantılı düşer; 3'ten az oy alan oyuncunun maçı sayılmaz.
+5. Galibiyet küçük bir bonus verir; gol/asist rating'e girmez (profil ve rozetler için).
+6. Yakın maçlar daha ağır basar; yeni oyuncular grup ortalamasından (65) başlar.
+
+Ayarlar `CONFIG` nesnesinde.
+
+## Geliştirme
 
 ```bash
+npm install
+cp .env.example .env.local   # Supabase bilgilerini doldurun
+npm test
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
