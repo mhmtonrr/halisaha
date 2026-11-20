@@ -32,7 +32,7 @@ export default async function GroupPage({ params }: { params: Promise<{ groupId:
 
   await finalizeExpired(groupId);
 
-  const [players, { data: matches }, { data: inviteCode }, { data: polls }] = await Promise.all([
+  const [players, { data: matches }, { data: inviteCode }, { data: polls }, { data: unread }] = await Promise.all([
     getGroupSummaries(supabase, groupId),
     supabase
       .from("matches")
@@ -48,7 +48,9 @@ export default async function GroupPage({ params }: { params: Promise<{ groupId:
       .eq("status", "open")
       .order("starts_at")
       .limit(10),
+    supabase.rpc("unread_counts"),
   ]);
+  const unreadHere = ((unread ?? []) as { group_id: string; unread: number }[]).find((u) => u.group_id === groupId)?.unread ?? 0;
 
   const me = players.find((p) => p.user_id === user.id);
   const myRole = (me?.role ?? null) as Role | null;
@@ -151,6 +153,17 @@ export default async function GroupPage({ params }: { params: Promise<{ groupId:
             </Card>
           ))}
         </div>
+      )}
+
+      {me && (
+        <LinkButton href={`/g/${groupId}/sohbet`} variant="secondary" className="mb-2 w-full justify-between border-accent/40">
+          <span>💬 {isTeam ? "Takım sohbeti" : "Grup sohbeti"}</span>
+          {unreadHere > 0 ? (
+            <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-bold text-pitch-950">{unreadHere > 99 ? "99+" : unreadHere} yeni</span>
+          ) : (
+            <span className="text-muted">›</span>
+          )}
+        </LinkButton>
       )}
 
       {canManage && (

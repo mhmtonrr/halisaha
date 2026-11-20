@@ -21,7 +21,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
   const groupIds = memberships.map((m) => m.group.id);
   await Promise.all(groupIds.map((id) => finalizeExpired(id)));
 
-  const [{ data: active }, { data: myVotes }, regionTeams, { data: openPolls }] = await Promise.all([
+  const [{ data: active }, { data: myVotes }, regionTeams, { data: openPolls }, { data: unreadRows }] = await Promise.all([
     groupIds.length
       ? supabase
           .from("matches")
@@ -46,7 +46,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
           .order("starts_at")
           .limit(10)
       : Promise.resolve({ data: [] as never[] }),
+    supabase.rpc("unread_counts"),
   ]);
+  const unread = new Map(((unreadRows ?? []) as { group_id: string; unread: number }[]).map((u) => [u.group_id, u.unread]));
 
   const voted = new Set((myVotes ?? []).map((v) => v.match_id));
   const myPlayerIds = new Set(memberships.map((m) => m.playerId));
@@ -165,7 +167,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
           Henüz bir takımda değilsin. Takımını kur ya da kaptanından davet linki iste.
         </Card>
       ) : (
-        <div className="space-y-2">{teams.map((m) => <MembershipRow key={m.playerId} m={m} />)}</div>
+        <div className="space-y-2">{teams.map((m) => <MembershipRow key={m.playerId} m={m} unread={unread.get(m.group.id) ?? 0} />)}</div>
       )}
 
       <SectionTitle action={<LinkButton href="/grup-kur" variant="ghost" className="min-h-8 px-2 text-accent">+ Grup kur</LinkButton>}>
@@ -176,7 +178,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
           Gruplar arkadaş toplulukların içindir: kendi aranızda maç kurup puanlaşırsınız.
         </Card>
       ) : (
-        <div className="space-y-2">{groups.map((m) => <MembershipRow key={m.playerId} m={m} />)}</div>
+        <div className="space-y-2">{groups.map((m) => <MembershipRow key={m.playerId} m={m} unread={unread.get(m.group.id) ?? 0} />)}</div>
       )}
 
       {profile?.city && (
@@ -221,13 +223,20 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
   );
 }
 
-function MembershipRow({ m }: { m: Membership }) {
+function MembershipRow({ m, unread }: { m: Membership; unread: number }) {
   const g = m.group;
   const role = ROLE_LABEL[g.kind][m.role];
   return (
     <Link href={`/g/${g.id}`}>
       <Card className="flex items-center gap-3 p-3 transition hover:border-accent/50">
-        <TeamBadge name={g.name} color={g.color} />
+        <span className="relative">
+          <TeamBadge name={g.name} color={g.color} />
+          {unread > 0 && (
+            <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-pitch-900 bg-accent px-1 text-[10px] font-bold text-pitch-950" title={`${unread} okunmamış mesaj`}>
+              {unread > 99 ? "99+" : unread}
+            </span>
+          )}
+        </span>
         <div className="min-w-0 flex-1">
           <div className="truncate font-semibold">{g.name}</div>
           <div className="text-xs text-muted">

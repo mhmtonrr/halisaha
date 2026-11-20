@@ -145,6 +145,7 @@ export async function finalizeMatch(matchId: string): Promise<boolean> {
 
   try {
     await recomputeGroup(claimed.group_id, matchId);
+    await announceResults(admin, claimed.group_id, matchId);
     return true;
   } catch (e) {
     await admin.from("matches").update({ status: "voting" }).eq("id", matchId);
@@ -212,4 +213,22 @@ export async function finalizeExpired(groupId: string) {
     .eq("status", "voting")
     .lt("voting_deadline", new Date().toISOString());
   for (const m of data ?? []) await finalizeMatch(m.id);
+}
+
+/** Sohbete "sonuçlar açıklandı" kartı: MVP ile birlikte */
+async function announceResults(admin: SupabaseClient, groupId: string, matchId: string) {
+  const { data: mvp } = await admin
+    .from("match_results")
+    .select("group_players(display_name)")
+    .eq("match_id", matchId)
+    .eq("is_mvp", true)
+    .maybeSingle();
+  const gp = mvp?.group_players as { display_name: string } | { display_name: string }[] | null | undefined;
+  const name = Array.isArray(gp) ? gp[0]?.display_name : gp?.display_name;
+  await admin.from("group_messages").insert({
+    group_id: groupId,
+    kind: "system",
+    body: name ? `🏆 Sonuçlar açıklandı! Maçın adamı: ${name} ⭐` : "🏆 Maç sonuçları açıklandı!",
+    match_id: matchId,
+  });
 }
