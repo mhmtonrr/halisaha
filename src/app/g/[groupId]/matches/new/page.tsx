@@ -61,7 +61,7 @@ export default async function NewMatchPage({
           overall: p.overall,
           isGoalkeeper: p.position === "GK",
           position: p.position,
-          guest: !p.user_id,
+          guest: !p.user_id || p.is_loan,
         }))}
       />
     </main>

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { finalizeExpired } from "@/lib/finalize";
-import { formatDate, getGroupSummaries } from "@/lib/data";
+import { formatDate, getGroupSummaries, isSquadMember } from "@/lib/data";
 import { formatRegion } from "@/lib/regions";
 import { teamRating } from "@/lib/teams-data";
 import {
@@ -73,7 +73,7 @@ export default async function TeamStatsPage({ params }: { params: Promise<{ grou
   const recent = competitive(matches).reverse().slice(0, 10);
 
   // Takım liderleri ve puanı asıl kadrodandır; misafirlerin istatistikleri kendi sekmesinde
-  const squad = players.filter((p) => p.user_id);
+  const squad = players.filter(isSquadMember);
   const statRows: PlayerStatRow[] = squad.map((p) => ({
     playerId: p.id,
     name: p.display_name,

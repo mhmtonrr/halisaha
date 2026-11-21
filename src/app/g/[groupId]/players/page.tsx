@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { claimGuest, removePlayer, setMemberRole, setPosition, updateTeam } from "@/lib/actions";
-import { getGroupSummaries, type Position } from "@/lib/data";
+import { getGroupSummaries, isGuestLike, isSquadMember, type Position } from "@/lib/data";
 import { ROLE_LABEL, type GroupKind, type Role } from "@/lib/teams-data";
 import { Badge, Button, Card, ErrorNote, Header, SectionTitle } from "@/components/ui";
 import { OvrBadge, PositionChip } from "@/components/PlayerCard";
@@ -71,14 +71,14 @@ export default async function ManagePage({
   const labels = ROLE_LABEL[kind];
 
   const players = await getGroupSummaries(supabase, groupId);
-  const me = players.find((p) => p.user_id === user.id);
+  const me = players.find((p) => p.user_id === user.id && !p.is_loan);
   const myRole = me?.role as Role | undefined;
   const isCaptain = myRole === "captain";
   const canManage = isCaptain || myRole === "admin";
-  const guests = players.filter((p) => !p.user_id);
+  const guests = players.filter(isGuestLike);
   // Misafir geçmişi sadece henüz maçı olmayan üyelere aktarılabilir
-  const claimable = players.filter((p) => p.user_id && p.totals.played === 0);
-  const sorted = players.filter((p) => p.user_id).sort(
+  const claimable = players.filter((p) => isSquadMember(p) && p.totals.played === 0);
+  const sorted = players.filter(isSquadMember).sort(
     (a, b) => ROLE_ORDER[a.role as Role] - ROLE_ORDER[b.role as Role] || a.display_name.localeCompare(b.display_name, "tr"),
   );
 
@@ -185,7 +185,7 @@ export default async function ManagePage({
                       {p.display_name} <PositionChip position={p.position} />
                     </div>
                     <div className="flex flex-wrap items-center gap-1 pt-0.5">
-                      <Badge>Misafir</Badge>
+                      <Badge>{p.is_loan ? "Ödünç" : "Misafir"}</Badge>
                       <span className="text-xs text-muted">
                         {p.totals.played} maç · {p.totals.goals} gol · {p.totals.assists} asist
                       </span>

@@ -1,7 +1,7 @@
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
-import { getGroupSummaries } from "@/lib/data";
+import { getGroupSummaries, isGuestLike, isSquadMember } from "@/lib/data";
 import { Header } from "@/components/ui";
 import { SquadGrid } from "./SquadGrid";
 import { RosterTabs } from "@/components/RosterTabs";
@@ -20,11 +20,11 @@ export default async function SquadPage({
   if (!group) notFound();
 
   const all = await getGroupSummaries(supabase, groupId);
-  const memberCount = all.filter((p) => p.user_id).length;
+  const memberCount = all.filter(isSquadMember).length;
   const guestCount = all.length - memberCount;
   const tab = sekme === "misafir" && guestCount > 0 ? "misafir" : "kadro";
   // Asıl kadro ile misafirler ayrı sekmelerde
-  const players = all.filter((p) => (tab === "misafir" ? !p.user_id : !!p.user_id));
+  const players = all.filter((p) => (tab === "misafir" ? isGuestLike(p) : isSquadMember(p)));
 
   return (
     <main>
@@ -47,7 +47,8 @@ export default async function SquadPage({
           shirt: p.shirt_number,
           provisional: p.matches_played > 0 && p.confidence < 0.6,
           hasMatches: p.matches_played > 0,
-          guest: !p.user_id,
+          guest: isGuestLike(p),
+          loan: p.is_loan,
           form: p.form,
           goals: p.totals.goals,
           played: p.totals.played,

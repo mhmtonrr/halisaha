@@ -4,6 +4,9 @@ import { joinGroup } from "@/lib/actions";
 import { canonicalDistrict, isProvince } from "@/lib/regions";
 import { RegionSelect } from "@/components/RegionSelect";
 import { findTeams } from "@/lib/teams-data";
+import { getOpenListings } from "@/lib/listings-data";
+import { formatDate } from "@/lib/data";
+import { LiveRefresh } from "@/components/LiveRefresh";
 import { Button, Card, ErrorNote, Header, Input, SectionTitle, cx } from "@/components/ui";
 import { OvrBadge } from "@/components/PlayerCard";
 import { TeamBadge } from "@/components/TeamBadge";
@@ -20,10 +23,14 @@ export default async function DiscoverPage({
   // Filtre hiç seçilmediyse kullanıcının ili; boş seçildiyse Türkiye geneli
   const city = sp.il === undefined ? (profile?.city ?? "") : isProvince(sp.il) ? sp.il : "";
   const district = canonicalDistrict(city, sp.ilce) ?? undefined;
-  const teams = await findTeams(supabase, { city: city || undefined, district, q: sp.q, limit: 100 });
+  const [teams, listings] = await Promise.all([
+    findTeams(supabase, { city: city || undefined, district, q: sp.q, limit: 100 }),
+    getOpenListings(supabase, { city: city || undefined, district, limit: 20 }),
+  ]);
 
   return (
     <main>
+      <LiveRefresh watches={[{ table: "player_listings" }]} />
       <Header title="Keşfet" />
       <ErrorNote message={sp.error} />
 
@@ -44,6 +51,32 @@ export default async function DiscoverPage({
           <Button variant="secondary">Ara</Button>
         </div>
       </form>
+
+      {listings.length > 0 && (
+        <>
+          <SectionTitle>🔎 Oyuncu arayan takımlar · {listings.length}</SectionTitle>
+          <div className="space-y-2">
+            {listings.map((l) => (
+              <Link key={l.id} href={`/ilan/${l.id}`}>
+                <Card className="flex items-center gap-3 border-amber-400/30 transition hover:border-amber-400">
+                  <TeamBadge name={l.team.name} color={l.team.color} size="sm" />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-semibold">
+                      {l.team.name} · {l.needed} oyuncu
+                    </div>
+                    <div className="truncate text-xs text-muted">
+                      {formatDate(l.playedAt)}
+                      {l.positions.length ? ` · ${l.positions.join("/")}` : ""}
+                      {l.minOverall ? ` · min ${l.minOverall}` : ""}
+                    </div>
+                  </div>
+                  <span className="text-amber-300">›</span>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </>
+      )}
 
       <SectionTitle>
         {city ? `${city}${district ? ` · ${district}` : ""}` : "Türkiye"} takımları · {teams.length}

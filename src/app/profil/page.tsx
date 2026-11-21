@@ -25,7 +25,8 @@ export default async function ProfilePage({
     supabase
       .from("group_players")
       .select("id, group_id, groups(name), player_ratings(overall, matches_played)")
-      .eq("user_id", user.id),
+      .eq("user_id", user.id)
+      .eq("is_loan", false),
   ]);
 
   const position = (profile?.preferred_position ?? null) as Position | null;

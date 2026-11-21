@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { finalizeExpired } from "@/lib/finalize";
 import { settleExpiredPolls } from "@/lib/polls";
-import { byRanking, formatDate, getGroupSummaries, POSITION_LABEL } from "@/lib/data";
+import { byRanking, formatDate, getGroupSummaries, isGuestLike, isSquadMember, POSITION_LABEL } from "@/lib/data";
 import { formatRegion } from "@/lib/regions";
 import { ROLE_LABEL, teamRating, type GroupKind, type Role } from "@/lib/teams-data";
 import { TeamBadge } from "@/components/TeamBadge";
@@ -13,6 +13,7 @@ import { OvrBadge, initials } from "@/components/PlayerCard";
 import { InviteLink } from "./InviteLink";
 import { regenerateInvite } from "@/lib/actions";
 import { countIncoming } from "@/lib/challenges-data";
+import { getOpenListings } from "@/lib/listings-data";
 import { LiveRefresh } from "@/components/LiveRefresh";
 
 const STATUS: Record<string, { label: string; tone: "default" | "accent" | "warn" }> = {
@@ -67,14 +68,15 @@ export default async function GroupPage({
   const pendingOffers = isTeam && (await supabase.rpc("is_group_member", { p_group_id: groupId })).data
     ? ((await countIncoming(supabase, [groupId])).get(groupId) ?? 0)
     : 0;
+  const openListings = isTeam ? await getOpenListings(supabase, { groupId, limit: 3 }) : [];
   const unreadHere = ((unread ?? []) as { group_id: string; unread: number }[]).find((u) => u.group_id === groupId)?.unread ?? 0;
 
-  const me = players.find((p) => p.user_id === user.id);
+  const me = players.find((p) => p.user_id === user.id && !p.is_loan);
   const myRole = (me?.role ?? null) as Role | null;
   const canManage = myRole === "captain" || myRole === "admin";
   // Asıl kadro hesabı olan üyelerdir; misafirler ayrı sekmede (istatistikleri orada görünür)
-  const members = players.filter((p) => p.user_id);
-  const guests = players.filter((p) => !p.user_id);
+  const members = players.filter(isSquadMember);
+  const guests = players.filter(isGuestLike);
   const tab = sekme === "misafir" && guests.length > 0 ? "misafir" : "kadro";
   const ranked = [...members].sort(byRanking);
   const guestRanked = [...guests].sort(byRanking);
@@ -109,6 +111,7 @@ export default async function GroupPage({
           { table: "matches", filter: `group_id=eq.${groupId}` },
           { table: "match_polls", filter: `group_id=eq.${groupId}` },
           { table: "group_players", filter: `group_id=eq.${groupId}` },
+          ...(isTeam ? [{ table: "player_listings", filter: `group_id=eq.${groupId}` }] : []),
           ...(isTeam
             ? [
                 { table: "match_challenges", filter: `to_group_id=eq.${groupId}` },
@@ -218,6 +221,21 @@ export default async function GroupPage({
           </LinkButton>
         </div>
       )}
+      {openListings.map((l) => (
+        <Link key={l.id} href={`/ilan/${l.id}`} className="mb-2 block">
+          <Card className="flex items-center gap-3 border-amber-400/40 bg-amber-400/10 transition hover:border-amber-400">
+            <span className="text-2xl">🔎</span>
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold">{l.needed} oyuncu aranıyor</div>
+              <div className="truncate text-xs text-muted">
+                {formatDate(l.playedAt)}
+                {l.positions.length ? ` · ${l.positions.join("/")}` : ""} · {me ? "ilanı gör" : "başvur"}
+              </div>
+            </div>
+            <span className="text-amber-300">›</span>
+          </Card>
+        </Link>
+      ))}
       {!isTeam && me && !canManage && (
         <LinkButton href={`/g/${groupId}/cagri/yeni`} className="mb-2 w-full">
           📣 Maç çağrısı aç
@@ -354,7 +372,7 @@ export default async function GroupPage({
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-medium">
                       {p.display_name}
-                      {!p.user_id && <span className="ml-2 text-xs text-muted">misafir</span>}
+                      {!isSquadMember(p) && <span className="ml-2 text-xs text-muted">{p.is_loan ? "ödünç" : "misafir"}</span>}
                     </div>
                     <div className="text-xs text-muted">
                       {p.position ? POSITION_LABEL[p.position] + " · " : ""}

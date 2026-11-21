@@ -37,7 +37,7 @@ export interface TeamSummary {
   rated: boolean;
 }
 
-type GPRow = { user_id: string | null; player_ratings: { overall: number; matches_played: number } | { overall: number; matches_played: number }[] | null };
+type GPRow = { user_id: string | null; is_loan?: boolean; player_ratings: { overall: number; matches_played: number } | { overall: number; matches_played: number }[] | null };
 
 function summarize(g: {
   id: string;
@@ -49,7 +49,7 @@ function summarize(g: {
   group_players: GPRow[];
 }): TeamSummary {
   // Asıl kadro: hesabı olan üyeler. Misafirler (user_id boş) takım puanına ve oyuncu sayısına girmez.
-  const members = g.group_players.filter((p) => p.user_id);
+  const members = g.group_players.filter((p) => p.user_id && !p.is_loan);
   const ratings = members.map((p) => one(p.player_ratings));
   return {
     id: g.id,
@@ -65,7 +65,7 @@ function summarize(g: {
 }
 
 const TEAM_SELECT =
-  "id, name, city, district, color, description, group_players(user_id, player_ratings(overall, matches_played))";
+  "id, name, city, district, color, description, group_players(user_id, is_loan, player_ratings(overall, matches_played))";
 
 /** Bölgedeki takımlar, rating'e göre sıralı */
 export async function findTeams(
@@ -99,7 +99,8 @@ export async function getMemberships(supabase: SupabaseClient, userId: string): 
     .select(
       `id, role, player_ratings(overall, matches_played), groups(kind, ${TEAM_SELECT})`,
     )
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .eq("is_loan", false); // ödünç oyuncu takımın üyesi sayılmaz
   if (error) throw error;
   type G = Parameters<typeof summarize>[0] & { kind: GroupKind };
   return (data ?? [])

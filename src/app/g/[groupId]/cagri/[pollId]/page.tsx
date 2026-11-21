@@ -58,7 +58,7 @@ export default async function PollPage({
   ]);
   if (!poll) notFound();
 
-  const me = players.find((p) => p.user_id === user.id);
+  const me = players.find((p) => p.user_id === user.id && !p.is_loan);
   const byId = new Map(players.map((p) => [p.id, p]));
   const responses = [...poll.poll_responses].sort((a, b) => a.responded_at.localeCompare(b.responded_at));
   const mine = responses.find((r) => r.player_id === me?.id);
@@ -66,7 +66,7 @@ export default async function PollPage({
   const maybe = responses.filter((r) => r.answer === "maybe");
   const no = responses.filter((r) => r.answer === "no");
   const answered = new Set(responses.map((r) => r.player_id));
-  const silent = players.filter((p) => p.user_id && !answered.has(p.id));
+  const silent = players.filter((p) => p.user_id && !p.is_loan && !answered.has(p.id));
   const approvedCount = yes.filter((r) => r.approved).length;
 
   const deadlinePassed = poll.deadline ? new Date(poll.deadline) < new Date() : false;

@@ -534,10 +534,17 @@ export async function submitResult(fd: FormData) {
   const back = `/g/${groupId}/m/${matchId}`;
   if (fd.get("scoreA") === "" || fd.get("scoreB") === "") fail(back, "Skoru girin");
 
+  // Gelmeyen oyuncular önce işaretlenir: kadrodan çıkar, hesabı olanlar güvenilirlik için kaydedilir
+  const noShows = [...new Set(fd.getAll("noshow").map(String).filter(Boolean))];
+  if (noShows.length) {
+    const { error: nsError } = await supabase.rpc("mark_no_shows", { p_match: matchId, p_players: noShows });
+    if (nsError) fail(back, rpcMessage(nsError, "Gelmeyenler işaretlenemedi"));
+  }
   const [roster, { data: cur }] = await Promise.all([
     loadRoster(supabase, matchId),
     supabase.from("matches").select("challenge_id").eq("id", matchId).single(),
   ]);
+  if (roster.length < 2) fail(back, "Sonuç girmek için kadroda en az 2 oyuncu kalmalı");
   const linked = !!cur?.challenge_id;
   if (linked && roster.length < 2) fail(back, "Skoru girmeden önce kadroya en az 2 oyuncu ekleyin");
 
@@ -913,4 +920,81 @@ export async function setLineup(fd: FormData) {
   if (error) fail(back, "Diziliş kaydedilemedi");
   revalidatePath(back);
   redirect(`${back}?dizilis=1`);
+}
+
+// ---------------------------------------------------------------------------
+// Oyuncu arama ilanı ve ödünç oyuncu
+// ---------------------------------------------------------------------------
+
+/** Takımın planlanmış maçı için "oyuncu arıyoruz" ilanı aç (kaptan/yetkili) */
+export async function createListing(fd: FormData) {
+  const { supabase } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const matchId = str(fd, "matchId");
+  const back = `/g/${groupId}/m/${matchId}`;
+  const needed = Number(str(fd, "needed"));
+  if (!Number.isInteger(needed) || needed < 1 || needed > 10) fail(back, "Kaç oyuncu arandığını seçin (1-10)");
+  const positions = fd.getAll("positions").map(String).filter((p) => asPosition(p));
+  const minRaw = str(fd, "minOverall");
+  const minOverall = minRaw ? Number(minRaw) : null;
+  if (minOverall !== null && (!Number.isInteger(minOverall) || minOverall < 40 || minOverall > 99)) fail(back, "Minimum rating 40-99 arası olmalı");
+  const { error } = await supabase.rpc("create_listing", {
+    p_match: matchId,
+    p_needed: needed,
+    p_positions: positions,
+    p_min_overall: minOverall,
+    p_note: str(fd, "note").slice(0, 300),
+  });
+  if (error) fail(back, rpcMessage(error, "İlan açılamadı"));
+  revalidatePath(back);
+}
+
+export async function closeListing(fd: FormData) {
+  const { supabase } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const matchId = str(fd, "matchId");
+  const back = `/g/${groupId}/m/${matchId}`;
+  const { error } = await supabase.rpc("close_listing", { p_listing: str(fd, "listingId") });
+  if (error) fail(back, rpcMessage(error, "İlan kapatılamadı"));
+  revalidatePath(back);
+}
+
+/** Kaptan/yetkili başvuruyu kabul eder (oyuncu ödünç olarak maç kadrosuna girer) veya reddeder */
+export async function decideApplication(fd: FormData) {
+  const { supabase } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const matchId = str(fd, "matchId");
+  const back = `/g/${groupId}/m/${matchId}`;
+  const { error } = await supabase.rpc("decide_application", {
+    p_listing: str(fd, "listingId"),
+    p_user: str(fd, "userId"),
+    p_accept: str(fd, "answer") === "accept",
+  });
+  if (error) fail(back, rpcMessage(error, "Başvuru yanıtlanamadı"));
+  revalidatePath(back);
+}
+
+/** Herkese açık ilana başvur (hesabı olan herkes) */
+export async function applyListing(fd: FormData) {
+  const { supabase } = await requireUser();
+  const listingId = str(fd, "listingId");
+  const back = `/ilan/${listingId}`;
+  const { error } = await supabase.rpc("apply_listing", {
+    p_listing: listingId,
+    p_position: asPosition(str(fd, "position")),
+    p_note: str(fd, "note").slice(0, 200),
+  });
+  if (error) fail(back, rpcMessage(error, "Başvuru gönderilemedi"));
+  revalidatePath(back);
+  revalidatePath("/");
+}
+
+export async function withdrawApplication(fd: FormData) {
+  const { supabase } = await requireUser();
+  const listingId = str(fd, "listingId");
+  const back = `/ilan/${listingId}`;
+  const { error } = await supabase.rpc("withdraw_application", { p_listing: listingId });
+  if (error) fail(back, rpcMessage(error, "Başvuru geri çekilemedi"));
+  revalidatePath(back);
+  revalidatePath("/");
 }

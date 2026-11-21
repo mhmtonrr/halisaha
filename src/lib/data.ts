@@ -27,6 +27,8 @@ export interface GroupPlayer {
   id: string;
   display_name: string;
   user_id: string | null;
+  /** Ödünç oyuncu: hesabı var, bir maça başvuruyla alındı ama takımın asıl kadrosunda değil */
+  is_loan: boolean;
   role: "captain" | "admin" | "member";
   position: Position | null;
   overall: number;
@@ -51,6 +53,11 @@ type ProfileRow = {
   district: string | null;
 };
 
+/** Asıl kadro: hesabı olan ve ödünç olmayan oyuncular (davetle/kodla katılanlar) */
+export const isSquadMember = (p: { user_id: string | null; is_loan?: boolean }) => !!p.user_id && !p.is_loan;
+/** Misafirler sekmesi: hesapsız misafirler ve ödünç oyuncular */
+export const isGuestLike = (p: { user_id: string | null; is_loan?: boolean }) => !isSquadMember(p);
+
 /** Supabase 1-1 ilişkileri bazen nesne bazen dizi döndürür. */
 export function one<T>(x: T | T[] | null | undefined): T | null {
   if (Array.isArray(x)) return x[0] ?? null;
@@ -61,7 +68,7 @@ export async function getGroupPlayers(supabase: SupabaseClient, groupId: string)
   const { data, error } = await supabase
     .from("group_players")
     .select(
-      "id, display_name, user_id, role, position, player_ratings(overall, matches_played, confidence), profiles(secondary_positions, preferred_foot, shirt_number, bio, city, district)",
+      "id, display_name, user_id, is_loan, role, position, player_ratings(overall, matches_played, confidence), profiles(secondary_positions, preferred_foot, shirt_number, bio, city, district)",
     )
     .eq("group_id", groupId);
   if (error) throw error;
@@ -72,6 +79,7 @@ export async function getGroupPlayers(supabase: SupabaseClient, groupId: string)
       id: p.id,
       display_name: p.display_name,
       user_id: p.user_id,
+      is_loan: !!p.is_loan,
       role: p.role,
       position: p.position,
       overall: r?.overall ?? DEFAULT_OVERALL,

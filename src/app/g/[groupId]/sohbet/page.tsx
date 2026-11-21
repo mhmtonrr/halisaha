@@ -10,7 +10,7 @@ export default async function ChatPage({ params }: { params: Promise<{ groupId: 
 
   const [{ data: group }, { data: members }, { data: messages }] = await Promise.all([
     supabase.from("groups").select("id, name, color, kind").eq("id", groupId).maybeSingle(),
-    supabase.from("group_players").select("id, display_name, role, user_id").eq("group_id", groupId),
+    supabase.from("group_players").select("id, display_name, role, user_id, is_loan").eq("group_id", groupId),
     supabase
       .from("group_messages")
       .select("id, author_id, kind, body, poll_id, match_id, deleted_at, created_at")
@@ -19,7 +19,8 @@ export default async function ChatPage({ params }: { params: Promise<{ groupId: 
       .limit(PAGE_SIZE),
   ]);
   if (!group) notFound();
-  const me = (members ?? []).find((m) => m.user_id === user.id);
+  // Ödünç oyuncu takım sohbetine giremez
+  const me = (members ?? []).find((m) => m.user_id === user.id && !m.is_loan);
   // Sohbet sadece üyelere
   if (!me) redirect(`/g/${groupId}`);
 

@@ -7,6 +7,7 @@ import { formatRegion } from "@/lib/regions";
 import { DEFAULT_OVERALL } from "@/lib/rating";
 import { ROLE_LABEL, findTeams, getMemberships, type Membership } from "@/lib/teams-data";
 import { countIncoming } from "@/lib/challenges-data";
+import { getMyApplications } from "@/lib/listings-data";
 import { Badge, Card, ErrorNote, LinkButton, SectionTitle, cx } from "@/components/ui";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { inList } from "@/lib/live";
@@ -56,7 +57,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
   const unread = new Map(((unreadRows ?? []) as { group_id: string; unread: number }[]).map((u) => [u.group_id, u.unread]));
 
   const adminTeamIds = memberships.filter((m) => m.group.kind === "team" && m.role !== "member").map((m) => m.group.id);
-  const incoming = await countIncoming(supabase, adminTeamIds);
+  const [incoming, myApplications] = await Promise.all([countIncoming(supabase, adminTeamIds), getMyApplications(supabase, user.id)]);
 
   const voted = new Set((myVotes ?? []).map((v) => v.match_id));
   const myPlayerIds = new Set(memberships.map((m) => m.playerId));
@@ -83,6 +84,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
     <main className="pt-5">
       <LiveRefresh
         watches={[
+          { table: "listing_applications", filter: `user_id=eq.${user.id}` },
           ...(groupIds.length
             ? [
                 { table: "matches", filter: inList("group_id", groupIds) },
@@ -133,6 +135,22 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
               <div className="truncate text-xs text-muted">{byGroup.get(groupId)?.group.name}</div>
             </div>
             <span className="text-amber-300">›</span>
+          </Card>
+        </Link>
+      ))}
+
+      {/* Oyuncu ilanlarına başvurularım (ödünç oyuncu olarak) */}
+      {myApplications.map((a) => (
+        <Link key={a.listingId} href={a.status === "accepted" ? `/g/${a.groupId}/m/${a.matchId}` : `/ilan/${a.listingId}`}>
+          <Card className={cx("mb-3 flex items-center gap-3", a.status === "accepted" ? "border-accent/40 bg-accent/10" : "border-line")}>
+            <span className="text-2xl">{a.status === "accepted" ? "✅" : "⏳"}</span>
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold">
+                {a.status === "accepted" ? `${a.team} seni maça aldı` : `${a.team} ilanına başvurun yanıt bekliyor`}
+              </div>
+              <div className="truncate text-xs text-muted">{formatDate(a.playedAt)}</div>
+            </div>
+            <span className="text-muted">›</span>
           </Card>
         </Link>
       ))}

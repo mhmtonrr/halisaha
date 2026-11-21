@@ -52,6 +52,8 @@ src/lib/teams-data.ts    Takım rating'i (en iyi 7), rol etiketleri, takım/üye
 src/lib/formations.ts    Sabit dizilişler (5-11 kişilik, slot koordinatları), otomatik yerleştirme (saf, testli)
 src/lib/poll-rules.ts    Üye çağrısı kuralları: dolunca kur / süre bitince %70 / yedek sırası (saf, testli)
 src/lib/polls.ts         Çağrıyı değerlendirip maça dönüştürür veya iptal eder (service role, atomik talep)
+src/lib/listings-data.ts Oyuncu ilanı sorguları (açık ilanlar, başvuranlar, başvurularım)
+src/lib/reliability.ts   Güvenilirlik: oynadığı / (oynadığı + gelmediği) (saf, testli)
 src/lib/team-stats.ts    Takım karnesi, form, seri, rakip bazlı geçmiş, oyuncu liderleri (saf, testli)
 src/lib/challenges-data.ts  Maç teklifleri sorguları (gelen/giden, bekleyen sayısı)
 src/lib/data.ts          Ortak sorgular, mevki/ayak sabitleri, tarih yardımcıları (TR saati)
@@ -65,7 +67,7 @@ src/lib/authErrors.ts    Supabase Auth hatalarının Türkçesi
 src/lib/supabase/        server.ts (requireUser + karşılama yönlendirmesi), client.ts, admin.ts
 src/middleware.ts        Oturum yenileme, girişsiz yönlendirme, x-pathname başlığı
 src/app/                 Sayfalar (aşağıda)
-supabase/migrations/     0001..0014 SQL (sırayla; hepsi canlıya uygulandı)
+supabase/migrations/     0001..0015 SQL (sırayla; hepsi canlıya uygulandı)
 scripts/db-checks/       PGlite ile RLS/yetki kontrolleri (npm run db:check)
 scripts/e2e/             Canlı veritabanına karşı Playwright akış testleri
 scripts/recompute-all.ts Tüm ratingleri baştan hesaplar (vite-node ile, aşağıda)
@@ -99,9 +101,22 @@ tetiklenir (`settleExpiredPolls`, cron yok; çağrı sayfası açıkken 30 sn'de
 (`status open → converted`), hata olursa maç silinir ve çağrı yeniden açılır. Çağrıyı açan veya yetkili `close_poll` ile iptal eder. Yetkililerin
 çağrısı eskisi gibi elle onaylıdır (`approve_*` RPC'leri, "Maçı oluştur"); yetkili hem maç kurar hem çağrı açar.
 
-**Henüz yapılmayan (tasarım tartışması sürüyor)**: takımın eksik oyuncusu için **oyuncu arama ilanı** (herkese açık ilan + gruplarda paylaşım;
-başvuranların rating/mevkisini kaptan görüp tek tek onaylar; kabul edilen oyuncu takım kadrosuna girmez, sadece o maçın kadrosunda
-"ödünç oyuncu" olur ve Misafirler sekmesinde görünür).
+**Oyuncu arama ilanı ve ödünç oyuncu (migration 0015, yapıldı)**: takımın kaptanı/yetkilisi planlanmış rakip maçı için "oyuncu arıyoruz"
+ilanı açar (`create_listing`: 1-10 oyuncu, aranan mevkiler, isteğe bağlı min. rating, not; maç başına 1, takım başına en fazla 5 açık ilan).
+İlan **herkese açıktır** (giriş yapmış herkes görür): `/ilan/[id]`, Keşfet'te bölgeye göre "Oyuncu arayan takımlar", takım sayfası, maç ekranı
+şeridi; `ShareLink` ile gruplarda paylaşılır. Hesabı olan herkes `apply_listing` ile başvurur (mevki + not; takımın oyuncusu, maçta/rakip kadroda
+olan ve min. rating altı başvuramaz; en fazla 10 bekleyen başvuru). Kaptan/yetkili başvuranları `listing_applicants` RPC'siyle **rating,
+mevki ve güvenilirlikle** görür (başvuranın rating'i kendi özel gruplarındaki satırlara bağlı olduğundan normal sorguyla okunamaz) ve
+`decide_application` ile **tek tek** kabul/ret eder (ilk gelen otomatik girmez). Kabul edilen oyuncu takıma `group_players.is_loan = true`
+olarak yazılır ve o maçın kadrosuna girer; takımın asıl kadrosunda değildir: `is_group_member` onu **saymaz** (takım sohbeti, teklifler,
+çağrılar, yetkiler kapalı), `getMemberships`/Takımlarım/profil kartlarında yoktur, takım sayfasında "Misafirler" sekmesinde "ödünç" etiketiyle
+görünür (maç ekranı ve kadro sayfası da `isSquadMember`/`isGuestLike` ayrımını kullanır). Oy verir/oylanır, genel ratingi geçerlidir.
+Gereken sayı dolunca ilan `filled` olur. Ödünç oyuncu davet koduyla katılırsa kalıcı üye olur (`join_group` upsert). Oyuncu ilan
+kabulünü/durumunu ana sayfada görür (canlı). **Güvenilirlik**: maç sonucu girerken kaptan "gelmedi" işaretler (`mark_no_shows`: kadrodan
+çıkarır, hesabı olanı `match_no_shows`'a yazar); `player_reliability` oynadığı (oylama/kapanışa ulaşmış) maç ve gelmediği maç sayısını verir,
+`reliability()` yüzdeyi ve etiketi üretir (3 kayıttan azında "Yeni"). Tuzak: `returns table` içinde `position` sütun adı olamaz (`chosen_position`).
+Tuzak: canlı yenilenen sunucu bileşeninde `<details open={koşul}>` her yenilemede kullanıcının açtığını kapatır → `AutoOpenDetails`
+(sadece ilk yüklemede açar).
 
 **Roller (`group_players.role`)**: `captain` (takımda "Kaptan", grupta "Kurucu"), `admin` ("Yetkili"), `member`.
 - Maç ve maç çağrısını sadece captain/admin kurar (RLS). Rolleri sadece captain değiştirir (`set_member_role` RPC;
@@ -226,7 +241,7 @@ Uçtan uca (canlı Supabase'e karşı; test kullanıcıları/grupları oluşturu
 (NODE_USE_ENV_PROXY=1 npx next start -p 3000 > /tmp/server.log 2>&1 &)
 NODE_USE_ENV_PROXY=1 NO_PROXY=localhost,127.0.0.1 node scripts/e2e/chat.mjs /tmp/shots
 ```
-Senaryolar: `positions-external`, `auth-onboarding`, `teams-polls`, `regions-community`, `chat`, `challenges`, `guest-match`, `realtime`, `member-poll`.
+Senaryolar: `positions-external`, `auth-onboarding`, `teams-polls`, `regions-community`, `chat`, `challenges`, `guest-match`, `realtime`, `member-poll`, `listings`.
 Ekran görüntülerine bak (390px genişlik, telefon) — görsel sorunlar çoğu zaman sadece orada yakalanıyor.
 Port doluysa: `fuser -k 3000/tcp`. Arayüzden kayıt (signUp) test etme: onay maili gönderir, limit saatte 2.
 

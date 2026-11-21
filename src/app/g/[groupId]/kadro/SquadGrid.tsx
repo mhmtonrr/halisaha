@@ -17,6 +17,8 @@ interface SquadPlayer {
   provisional: boolean;
   hasMatches: boolean;
   guest: boolean;
+  /** Ödünç oyuncu (misafirler sekmesinde "ödünç" olarak görünür) */
+  loan?: boolean;
   form: number | null;
   goals: number;
   played: number;
@@ -103,7 +105,7 @@ export function SquadGrid({ groupId, players }: { groupId: string; players: Squa
                 attributes={p.attributes}
               />
               <div className="mt-1 text-center text-[11px] text-muted">
-                {p.played} maç{p.guest ? " · misafir" : ""}
+                {p.played} maç{p.loan ? " · ödünç" : p.guest ? " · misafir" : ""}
               </div>
             </Link>
           ))}
