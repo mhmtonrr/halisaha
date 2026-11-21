@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import {
   approveFirstResponders,
+  closePoll,
   deletePoll,
   respondPoll,
   setPollStatus,
@@ -12,6 +13,9 @@ import {
 import { formatDate, getGroupPlayers, type Position } from "@/lib/data";
 import { Badge, Button, Card, ErrorNote, Header, LinkButton, SectionTitle, cx } from "@/components/ui";
 import { OvrBadge, PositionChip } from "@/components/PlayerCard";
+import { SubmitButton } from "@/components/SubmitButton";
+import { settlePoll } from "@/lib/polls";
+import { pollProgress } from "@/lib/poll-rules";
 
 type Answer = "yes" | "maybe" | "no";
 const ANSWERS: { value: Answer; label: string; icon: string; active: string }[] = [
@@ -39,11 +43,13 @@ export default async function PollPage({
   const { groupId, pollId } = await params;
   const { error } = await searchParams;
   const { supabase, user } = await requireUser();
+  // Süresi dolmuşsa veya kontenjan dolduysa üye çağrısı bu ziyarette maça dönüşür / iptal olur
+  await settlePoll(pollId);
 
   const [{ data: poll }, players, { data: isAdmin }] = await Promise.all([
     supabase
       .from("match_polls")
-      .select("id, starts_at, venue, capacity, deadline, note, status, match_id, poll_responses(player_id, answer, approved, responded_at)")
+      .select("id, created_by, auto_match, team_size, starts_at, venue, capacity, deadline, note, status, match_id, poll_responses(player_id, answer, approved, responded_at)")
       .eq("id", pollId)
       .eq("group_id", groupId)
       .maybeSingle(),
@@ -66,6 +72,9 @@ export default async function PollPage({
   const deadlinePassed = poll.deadline ? new Date(poll.deadline) < new Date() : false;
   const open = poll.status === "open" && !deadlinePassed;
   const pct = Math.min(100, (yes.length / poll.capacity) * 100);
+  const auto = poll.auto_match;
+  const progress = pollProgress(yes.length, poll.capacity);
+  const isCreator = poll.created_by === user.id;
 
   const Person = ({ id, children }: { id: string; children?: React.ReactNode }) => {
     const p = byId.get(id);
@@ -85,6 +94,8 @@ export default async function PollPage({
   return (
     <main>
       <LiveRefresh
+        // Üye çağrısında süre bitimini yakalamak için görünürken 30 sn'de bir tazele (sayfa açılışı çağrıyı değerlendirir)
+        pollMs={auto && open ? 30000 : undefined}
         watches={[
           { table: "match_polls", filter: `id=eq.${pollId}` },
           { table: "poll_responses", filter: `poll_id=eq.${pollId}` },
@@ -125,6 +136,27 @@ export default async function PollPage({
         {yes.length > poll.capacity && (
           <p className="mt-2 text-xs text-amber-300">Kontenjan aşıldı: ilk {poll.capacity} kişi öncelikli, gerisi yedek.</p>
         )}
+        {auto && poll.status === "open" && (
+          <div className="mt-3 space-y-1 rounded-lg bg-pitch-950 p-3 text-xs text-muted">
+            <p>
+              <b className="text-white">Otomatik maç:</b> {poll.team_size ? `${poll.team_size}v${poll.team_size}. ` : ""}Kontenjan ({poll.capacity})
+              dolunca maç hemen kurulur, takımlar dengeli bölünür.
+            </p>
+            <p>
+              Son yanıt süresi bitince en az <b className="text-white">{progress.need}</b> kişi gelirse eksik kadroyla yine kurulur; gelmezse çağrı iptal olur.{" "}
+              {progress.enough ? (
+                <span className="text-accent">Kurulmak için yeterli kişi var ✓</span>
+              ) : (
+                <span className="text-amber-300">Kurulması için {progress.missingForMin} kişi daha gerekli.</span>
+              )}
+            </p>
+          </div>
+        )}
+        {auto && poll.status === "closed" && !poll.match_id && (
+          <p className="mt-3 rounded-lg bg-red-950/50 p-3 text-xs text-red-300">
+            Çağrı kapandı: maç kurulmadı{deadlinePassed && !progress.enough ? " (yeterli kişi toplanamadı)" : ""}.
+          </p>
+        )}
       </Card>
 
       {poll.status === "converted" && poll.match_id && (
@@ -155,14 +187,29 @@ export default async function PollPage({
           </div>
           {mine?.answer === "yes" && (
             <p className="mt-2 text-center text-xs text-muted">
-              {mine.approved ? "✓ Kadroya onaylandın" : "Yetkilinin onayını bekliyorsun"}
-              {!mine.approved && yes.findIndex((r) => r.player_id === me.id) >= poll.capacity && " · şu an yedektesin"}
+              {auto
+                ? yes.findIndex((r) => r.player_id === me.id) >= poll.capacity
+                  ? "Şu an yedektesin; biri vazgeçerse sıran gelir"
+                  : "✓ Kadrodasın"
+                : mine.approved
+                  ? "✓ Kadroya onaylandın"
+                  : "Yetkilinin onayını bekliyorsun"}
+              {!auto && !mine.approved && yes.findIndex((r) => r.player_id === me.id) >= poll.capacity && " · şu an yedektesin"}
             </p>
           )}
         </>
       )}
 
-      {isAdmin && poll.status !== "converted" && (
+      {auto && poll.status === "open" && (isCreator || isAdmin) && (
+        <form action={closePoll} className="mt-4 text-center">
+          <Hidden groupId={groupId} pollId={pollId} />
+          <SubmitButton variant="secondary" className="w-full" pendingLabel="İptal ediliyor…">
+            Çağrıyı iptal et
+          </SubmitButton>
+        </form>
+      )}
+
+      {isAdmin && !auto && poll.status !== "converted" && (
         <Card className="mt-4 space-y-2 border-accent/30">
           <div className="text-sm font-semibold">Yetkili işlemleri</div>
           <p className="text-xs text-muted">
@@ -204,7 +251,7 @@ export default async function PollPage({
             {yes.map((r, i) => (
               <Person key={r.player_id} id={r.player_id}>
                 {i >= poll.capacity && <Badge>Yedek</Badge>}
-                {isAdmin && poll.status !== "converted" ? (
+                {isAdmin && !auto && poll.status !== "converted" ? (
                   <form action={togglePollApproval}>
                     <Hidden groupId={groupId} pollId={pollId} />
                     <input type="hidden" name="playerId" value={r.player_id} />

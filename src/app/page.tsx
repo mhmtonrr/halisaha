@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/supabase/server";
 import { finalizeExpired } from "@/lib/finalize";
+import { settleExpiredPolls } from "@/lib/polls";
 import { formatDate } from "@/lib/data";
 import { formatRegion } from "@/lib/regions";
 import { DEFAULT_OVERALL } from "@/lib/rating";
@@ -23,6 +24,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
 
   const groupIds = memberships.map((m) => m.group.id);
   await Promise.all(groupIds.map((id) => finalizeExpired(id)));
+  await Promise.all(groupIds.map((id) => settleExpiredPolls(id)));
 
   const [{ data: active }, { data: myVotes }, regionTeams, { data: openPolls }, { data: unreadRows }] = await Promise.all([
     groupIds.length

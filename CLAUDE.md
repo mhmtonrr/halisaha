@@ -50,6 +50,8 @@ src/lib/teams.ts         Dengeli takım kurma (saf, testli)
 src/lib/attributes.ts    Kart özellikleri FRM/İST/GOL|KRT/AST/GAL/MVP (saf, testli)
 src/lib/teams-data.ts    Takım rating'i (en iyi 7), rol etiketleri, takım/üyelik sorguları
 src/lib/formations.ts    Sabit dizilişler (5-11 kişilik, slot koordinatları), otomatik yerleştirme (saf, testli)
+src/lib/poll-rules.ts    Üye çağrısı kuralları: dolunca kur / süre bitince %70 / yedek sırası (saf, testli)
+src/lib/polls.ts         Çağrıyı değerlendirip maça dönüştürür veya iptal eder (service role, atomik talep)
 src/lib/team-stats.ts    Takım karnesi, form, seri, rakip bazlı geçmiş, oyuncu liderleri (saf, testli)
 src/lib/challenges-data.ts  Maç teklifleri sorguları (gelen/giden, bekleyen sayısı)
 src/lib/data.ts          Ortak sorgular, mevki/ayak sabitleri, tarih yardımcıları (TR saati)
@@ -63,7 +65,7 @@ src/lib/authErrors.ts    Supabase Auth hatalarının Türkçesi
 src/lib/supabase/        server.ts (requireUser + karşılama yönlendirmesi), client.ts, admin.ts
 src/middleware.ts        Oturum yenileme, girişsiz yönlendirme, x-pathname başlığı
 src/app/                 Sayfalar (aşağıda)
-supabase/migrations/     0001..0013 SQL (sırayla; hepsi canlıya uygulandı)
+supabase/migrations/     0001..0014 SQL (sırayla; hepsi canlıya uygulandı)
 scripts/db-checks/       PGlite ile RLS/yetki kontrolleri (npm run db:check)
 scripts/e2e/             Canlı veritabanına karşı Playwright akış testleri
 scripts/recompute-all.ts Tüm ratingleri baştan hesaplar (vite-node ile, aşağıda)
@@ -87,9 +89,19 @@ Sayfalar: `/login` (e-posta+şifre, Google, şifremi unuttum) · `/hosgeldin` (i
 | Rating etkisi | yarım (`CONFIG.CASUAL_IMPORTANCE = 0.5`) | rakip maçı tam; iç/antrenman maçı (eski veri) yarım |
 | Görünürlük | özel | herkese açık; teklif, istatistik, diziliş, çapraz oylama sadece takımda |
 
-**Kararlaştırılan ama henüz yapılmayanlar** (tasarım tartışması sürüyor): (1) grupta üyeler yalnızca **çağrı** açar, çağrı doluluk/süre
-şartını sağlarsa otomatik maça dönüşür; yetkililer hem maç kurar hem çağrı açar (takımda çağrıyı sadece yetkili açar); (2) takım,
-eksik oyuncusu için **gruplardan davetle oyuncu çekebilir** (ödünç/konuk hesaplı oyuncu; takım kadrosuna girmez, maç kadrosuna girer).
+**Üye çağrısı (migration 0014, yapıldı)**: grupta üyeler maç kuramaz, **çağrı** açar (`create_member_poll` RPC: `match_polls.auto_match`,
+`team_size`; kontenjan = 2 × kişi sayısı). Sınırlar DB'de: maç en az 3 saat sonra, en fazla 14 gün içinde; son yanıt süresi (boşsa maçtan
+3 saat önce) maçtan en az 1 saat önce ve gelecekte; yetkili olmayan üye aynı anda 1 açık çağrı; açan otomatik "geliyorum". Takımda üye
+çağrı açamaz. Maça dönüşüm (`polls.ts`, `poll-rules.ts`): **kontenjan dolunca hemen** (`respondPoll` sonrası `settlePoll`); **son yanıt süresi
+bitince** "geliyorum" ≥ %70 (`MIN_FILL_RATIO`; 14 için 10) ise eksik kadroyla, değilse çağrı iptal olur ve sohbete yazılır. Sayfa açılışında
+tetiklenir (`settleExpiredPolls`, cron yok; çağrı sayfası açıkken 30 sn'de bir tazelenir). Kadro: yanıt sırasına göre ilk N kişi, fazlası yedek
+(biri vazgeçerse sıradaki girer); takımlar `balanceTeams` ile dengeli bölünür (profilinde mevkisi kaleci olan kaleci). Dönüşüm atomik talep eder
+(`status open → converted`), hata olursa maç silinir ve çağrı yeniden açılır. Çağrıyı açan veya yetkili `close_poll` ile iptal eder. Yetkililerin
+çağrısı eskisi gibi elle onaylıdır (`approve_*` RPC'leri, "Maçı oluştur"); yetkili hem maç kurar hem çağrı açar.
+
+**Henüz yapılmayan (tasarım tartışması sürüyor)**: takımın eksik oyuncusu için **oyuncu arama ilanı** (herkese açık ilan + gruplarda paylaşım;
+başvuranların rating/mevkisini kaptan görüp tek tek onaylar; kabul edilen oyuncu takım kadrosuna girmez, sadece o maçın kadrosunda
+"ödünç oyuncu" olur ve Misafirler sekmesinde görünür).
 
 **Roller (`group_players.role`)**: `captain` (takımda "Kaptan", grupta "Kurucu"), `admin` ("Yetkili"), `member`.
 - Maç ve maç çağrısını sadece captain/admin kurar (RLS). Rolleri sadece captain değiştirir (`set_member_role` RPC;
@@ -214,7 +226,7 @@ Uçtan uca (canlı Supabase'e karşı; test kullanıcıları/grupları oluşturu
 (NODE_USE_ENV_PROXY=1 npx next start -p 3000 > /tmp/server.log 2>&1 &)
 NODE_USE_ENV_PROXY=1 NO_PROXY=localhost,127.0.0.1 node scripts/e2e/chat.mjs /tmp/shots
 ```
-Senaryolar: `positions-external`, `auth-onboarding`, `teams-polls`, `regions-community`, `chat`, `challenges`, `guest-match`, `realtime`.
+Senaryolar: `positions-external`, `auth-onboarding`, `teams-polls`, `regions-community`, `chat`, `challenges`, `guest-match`, `realtime`, `member-poll`.
 Ekran görüntülerine bak (390px genişlik, telefon) — görsel sorunlar çoğu zaman sadece orada yakalanıyor.
 Port doluysa: `fuser -k 3000/tcp`. Arayüzden kayıt (signUp) test etme: onay maili gönderir, limit saatte 2.
 

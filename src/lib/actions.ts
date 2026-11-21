@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { finalizeMatch, recomputePlayers } from "@/lib/finalize";
+import { settlePoll } from "@/lib/polls";
 import { balanceTeams, pickVariant, type TeamCandidate } from "@/lib/teams";
 import { getGroupPlayers, parseLocalDateTime, POSITIONS, type Position } from "@/lib/data";
 import { canonicalDistrict, isProvince } from "@/lib/regions";
@@ -695,6 +696,42 @@ export async function respondPoll(fd: FormData) {
   const back = `/g/${groupId}/cagri/${pollId}`;
   const { error } = await supabase.rpc("respond_poll", { p_poll_id: pollId, p_answer: str(fd, "answer") });
   if (error) fail(back, error.message);
+  // Üye çağrısı kontenjanı dolduysa maç hemen kurulur (elle onaylı çağrıya dokunmaz)
+  await settlePoll(pollId);
+  revalidatePath(back);
+  revalidatePath("/");
+}
+
+/** Üye çağrısı: otomatik maça dönüşen çağrı (kurallar ve sınırlar veritabanında zorunlu) */
+export async function createMemberPoll(fd: FormData) {
+  const { supabase } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const back = `/g/${groupId}/cagri/yeni`;
+  const when = str(fd, "startsAt");
+  if (!when) fail(back, "Maç zamanını seçin");
+  const size = sizeOf(fd);
+  if (!size) fail(back, "Kaç kişilik oynanacağını seçin (5-11)");
+  const deadline = str(fd, "deadline");
+  const { data, error } = await supabase.rpc("create_member_poll", {
+    p_group: groupId,
+    p_starts_at: parseLocalDateTime(when),
+    p_venue: str(fd, "venue").slice(0, 80),
+    p_size: size,
+    p_deadline: deadline ? parseLocalDateTime(deadline) : null,
+    p_note: str(fd, "note").slice(0, 300),
+  });
+  if (error || !data) fail(back, rpcMessage(error ?? {}, "Çağrı açılamadı"));
+  redirect(`/g/${groupId}/cagri/${data}`);
+}
+
+/** Çağrıyı iptal et: açan kişi veya yetkili */
+export async function closePoll(fd: FormData) {
+  const { supabase } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const pollId = str(fd, "pollId");
+  const back = `/g/${groupId}/cagri/${pollId}`;
+  const { error } = await supabase.rpc("close_poll", { p_poll_id: pollId });
+  if (error) fail(back, rpcMessage(error, "Çağrı iptal edilemedi"));
   revalidatePath(back);
   revalidatePath("/");
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { finalizeExpired } from "@/lib/finalize";
+import { settleExpiredPolls } from "@/lib/polls";
 import { byRanking, formatDate, getGroupSummaries, POSITION_LABEL } from "@/lib/data";
 import { formatRegion } from "@/lib/regions";
 import { ROLE_LABEL, teamRating, type GroupKind, type Role } from "@/lib/teams-data";
@@ -42,6 +43,8 @@ export default async function GroupPage({
   const labels = ROLE_LABEL[group.kind as GroupKind];
 
   await finalizeExpired(groupId);
+  // Süresi dolan üye çağrıları maça dönüşür veya iptal olur
+  await settleExpiredPolls(groupId);
 
   const [players, { data: matches }, { data: inviteCode }, { data: polls }, { data: unread }] = await Promise.all([
     getGroupSummaries(supabase, groupId),
@@ -215,6 +218,11 @@ export default async function GroupPage({
           </LinkButton>
         </div>
       )}
+      {!isTeam && me && !canManage && (
+        <LinkButton href={`/g/${groupId}/cagri/yeni`} className="mb-2 w-full">
+          📣 Maç çağrısı aç
+        </LinkButton>
+      )}
       {isTeam && me && (
         <LinkButton href={`/g/${groupId}/teklifler`} variant="secondary" className="mb-2 w-full justify-between">
           <span>🤝 Maç teklifleri</span>
@@ -273,7 +281,11 @@ export default async function GroupPage({
         </p>
       )}
       {me && !canManage && (
-        <p className="mt-2 text-center text-xs text-muted">Maçları {isTeam ? "kaptan ve yetkililer" : "kurucu ve yetkililer"} kurar.</p>
+        <p className="mt-2 text-center text-xs text-muted">
+          {isTeam
+            ? "Maçları kaptan ve yetkililer kurar."
+            : "Maçı kurucu ve yetkililer kurar; sen çağrı açabilirsin, yeterli kişi toplanınca maç kendiliğinden kurulur."}
+        </p>
       )}
 
       {staff.length > 0 && (
