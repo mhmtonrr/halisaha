@@ -13,6 +13,7 @@ import { LiveRefresh } from "@/components/LiveRefresh";
 import { inList } from "@/lib/live";
 import { OvrBadge, initials, tierOf } from "@/components/PlayerCard";
 import { TeamBadge } from "@/components/TeamBadge";
+import { SkillQueueBanner } from "@/components/SkillQueueBanner";
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { error } = await searchParams;
@@ -149,6 +150,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
           </div>
         </div>
       </Link>
+
+      <SkillQueueBanner supabase={supabase} className="mb-3 block" />
 
       {/* Takımıma gelen maç teklifleri (kaptan/yetkili) */}
       {[...incoming].map(([groupId, count]) => (

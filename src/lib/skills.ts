@@ -1,9 +1,10 @@
 /**
- * Yetenek itibarı: karttaki 6 özellik maç sonrası "kim öne çıktı?" işaretlemesinden gelir.
+ * Yetenek itibarı: karttaki 6 özellik, birlikte en az 2 maç oynayanların 1-10 puanlarından gelir (bilinmeyen boş).
  *
- * Her oy veren (maçta sahada olan, kendisi hariç) her kategoride en fazla 2 kişi seçer. Bir kişinin değeri,
- * aldığı işaret sayısının, rastgele dağılsaydı alacağı beklenen işarete oranıdır; böylece kadro büyüklüğü
- * ve kaç kişinin oy verdiği sonucu bozmaz. Az oyda ortalamaya (65) çekilir. Yeterli oy yoksa değer boş ("—").
+ * rating.ts ile aynı fikir: **oy verene göre normalizasyon**. Herkese 9 veren de herkese 5 veren de aynı oyuncuyu
+ * ortalama görür; sadece birini diğerlerinden ayırması puan sayılır (z). Az puan veren, ortalamaya (6) çekilerek
+ * normalize edilir. Karşılıklı yüksek puan verenler (klik) yarım ağırlık alır. Değer, ağırlıklı z ortalamasının
+ * 40-99 ölçeğine taşınmasıdır; az oyda ortalamaya (65) çekilir. En az 2 farklı oy veren yoksa değer boş ("—").
  */
 
 export const FIELD_SKILLS = [
@@ -34,66 +35,98 @@ export const isSkillKey = (x: string): x is SkillKey => (SKILL_KEYS as string[])
 export const skillSet = (isGoalkeeper: boolean) => (isGoalkeeper ? KEEPER_SKILLS : FIELD_SKILLS);
 
 export const SKILL_CONFIG = {
-  /** Bir oy verenin kategori başına seçebileceği kişi sayısı */
-  MAX_PICKS: 2,
-  /** Değerin görünmesi için gereken en az farklı oy veren ve oylanmış maç */
+  /** Değerin görünmesi için gereken en az farklı oy veren */
   MIN_VOTERS: 2,
-  MIN_BALLOTS: 2,
-  /** Ortalamaya çekme: kaç "beklenen işaret" değerinde ön bilgi */
-  PRIOR: 1,
+  /** Birlikte oynanması gereken en az maç (veritabanı ve sıra için; burada bilgi amaçlı) */
+  MIN_SHARED_MATCHES: 2,
   BASE: 65,
-  /** r=2 (beklenenin iki katı) → BASE + SPREAD */
-  SPREAD: 18,
-  /** r=0,5 (beklenenin yarısı) → BASE - SPREAD_DOWN; düşüş yönü daha yumuşaktır, ortalama oyuncu 40'a yapışmasın */
-  SPREAD_DOWN: 10,
+  /** 1 standart sapma üstü = BASE + SCALE */
+  SCALE: 11,
+  /** Ortalamaya çekme: ağırlık cinsinden ön bilgi (tek oy BASE'e doğru yarı yolda kalır) */
+  PRIOR: 1,
+  /** Oy verenin normalizasyonu için ön bilgi: tarafsız ortalama, standart sapma ve ağırlığı (puan sayısı cinsinden) */
+  NEUTRAL_MEAN: 6,
+  NEUTRAL_SD: 1.5,
+  NORM_WEIGHT: 3,
+  /** İki kişi birbirine ortalama bu puanın üstünü verirse (klik) oyları bu çarpanla sayılır */
+  CLIQUE_MEAN: 8.5,
+  CLIQUE_WEIGHT: 0.5,
 };
 
-/** Bir kişi için tek bir oy pusulası (bir oy verenin bir maçtaki yetenek oyu) */
-export interface SkillBallot {
-  voterKey: string;
-  matchId: string;
-  /** Kategori → bu pusulada kişinin işaretlenip işaretlenmediği */
-  picked: Partial<Record<SkillKey, boolean>>;
-  /** Kategori → oy verenin seçebileceği aday sayısı (kendisi hariç). 0 ise o kategori sayılmaz. */
-  candidates: Partial<Record<SkillKey, number>>;
+export type Scores = Partial<Record<SkillKey, number>>;
+
+export interface VoterNorm {
+  mean: Partial<Record<SkillKey, number>>;
+  sd: Partial<Record<SkillKey, number>>;
 }
+
+const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
+
+/**
+ * Bir oy verenin verdiği TÜM puanlardan (her hedefe verdikleri) kategori başına ortalama ve sapma.
+ * Az puan verdiyse tarafsız ön bilgiye (6, 1,5) çekilir; hiç vermediyse tarafsızdır.
+ */
+export function voterNorm(given: Scores[]): VoterNorm {
+  const mean: VoterNorm["mean"] = {};
+  const sd: VoterNorm["sd"] = {};
+  for (const key of SKILL_KEYS) {
+    const xs = given.map((g) => g[key]).filter((x): x is number => typeof x === "number");
+    const n = xs.length;
+    const k = SKILL_CONFIG.NORM_WEIGHT;
+    const m = (xs.reduce((a, b) => a + b, 0) + SKILL_CONFIG.NEUTRAL_MEAN * k) / (n + k);
+    const ss = xs.reduce((a, b) => a + (b - m) ** 2, 0) + SKILL_CONFIG.NEUTRAL_SD ** 2 * k;
+    mean[key] = m;
+    sd[key] = Math.max(0.75, Math.sqrt(ss / (n + k)));
+  }
+  return { mean, sd };
+}
+
+/** Bir oy verenin bir hedefe verdiği puanlar (normalizasyonuyla) */
+export interface SkillRating {
+  voterKey: string;
+  scores: Scores;
+  norm: VoterNorm;
+  /** İki kişi birbirine karşılıklı yüksek puan veriyor (klik) */
+  mutualHigh?: boolean;
+}
+
+const avg = (s: Scores) => {
+  const xs = Object.values(s).filter((x): x is number => typeof x === "number");
+  return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
+};
+
+/** A'nın B'ye ve B'nin A'ya verdiği puanların ortalaması ikisi de eşiğin üstündeyse klik sayılır */
+export const isMutualHigh = (aToB: Scores, bToA: Scores | null | undefined) =>
+  !!bToA && avg(aToB) >= SKILL_CONFIG.CLIQUE_MEAN && avg(bToA) >= SKILL_CONFIG.CLIQUE_MEAN;
 
 export interface SkillValue {
   key: SkillKey;
   label: string;
   value: number | null;
-  /** Bu kategoride işaret alan / değerlendirmeye katılan sayısı (ipucu metni için) */
-  nominations: number;
+  /** Bu kategoride puan veren farklı kişi sayısı */
   voters: number;
 }
 
-const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
-
-/** Bir oyuncunun pusulalarından yetenek değerleri. `isGoalkeeper` hangi altı kategorinin gösterileceğini belirler. */
-export function computeSkills(ballots: SkillBallot[], isGoalkeeper: boolean): SkillValue[] {
+/** Bir oyuncunun aldığı puanlardan yetenek değerleri. `isGoalkeeper` hangi altı kategorinin gösterileceğini belirler. */
+export function computeSkills(ratings: SkillRating[], isGoalkeeper: boolean): SkillValue[] {
   return skillSet(isGoalkeeper).map(({ key, label }) => {
-    let observed = 0;
-    let expected = 0;
+    let wz = 0;
+    let w = 0;
     const voters = new Set<string>();
-    const matches = new Set<string>();
-    for (const b of ballots) {
-      const k = b.candidates[key] ?? 0;
-      if (k <= 0) continue;
-      // Aday sayısı seçim hakkını aşmıyorsa (ör. maçta tek kaleci) herkesi seçmek mümkündür ve işaret bilgi taşımaz:
-      // beklenen oran 0,5'e sabitlenir; yani ortalamanın üstüne çıkmak için oy verenlerin çoğunun işaretlemesi gerekir.
-      expected += k <= SKILL_CONFIG.MAX_PICKS ? 0.5 : SKILL_CONFIG.MAX_PICKS / k;
-      if (b.picked[key]) observed += 1;
-      voters.add(b.voterKey);
-      matches.add(b.matchId);
+    for (const r of ratings) {
+      const x = r.scores[key];
+      if (typeof x !== "number") continue;
+      const z = (x - (r.norm.mean[key] ?? SKILL_CONFIG.NEUTRAL_MEAN)) / (r.norm.sd[key] ?? SKILL_CONFIG.NEUTRAL_SD);
+      const weight = r.mutualHigh ? SKILL_CONFIG.CLIQUE_WEIGHT : 1;
+      wz += weight * z;
+      w += weight;
+      voters.add(r.voterKey);
     }
-    const enough = voters.size >= SKILL_CONFIG.MIN_VOTERS && matches.size >= SKILL_CONFIG.MIN_BALLOTS;
     let value: number | null = null;
-    if (enough) {
-      const ratio = (observed + SKILL_CONFIG.PRIOR) / (expected + SKILL_CONFIG.PRIOR);
-      const spread = ratio >= 1 ? SKILL_CONFIG.SPREAD : SKILL_CONFIG.SPREAD_DOWN;
-      value = clamp(Math.round(SKILL_CONFIG.BASE + spread * Math.log2(ratio)), 40, 99);
+    if (voters.size >= SKILL_CONFIG.MIN_VOTERS) {
+      value = clamp(Math.round(SKILL_CONFIG.BASE + SKILL_CONFIG.SCALE * (wz / (w + SKILL_CONFIG.PRIOR))), 40, 99);
     }
-    return { key, label, value, nominations: observed, voters: voters.size };
+    return { key, label, value, voters: voters.size };
   });
 }
 

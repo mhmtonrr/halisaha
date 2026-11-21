@@ -27,6 +27,7 @@ import { getApplicants, getListingForMatch, type Applicant, type Listing } from 
 import { SubmitButton } from "@/components/SubmitButton";
 import { PushPrompt } from "@/components/PushControls";
 import { TeamBadge } from "@/components/TeamBadge";
+import { SkillQueueBanner } from "@/components/SkillQueueBanner";
 import { Badge, Button, Card, ErrorNote, Header, Input, SectionTitle, cx } from "@/components/ui";
 import { OvrBadge, PositionChip, shortName } from "@/components/PlayerCard";
 import { VoteForm } from "./VoteForm";
@@ -750,7 +751,7 @@ async function VotingView({
   opp: Opponent | null;
 }) {
   const { supabase } = await requireUser();
-  const [{ data: progressRaw }, { data: myVotes }, { data: myMvp }, { data: myBallot }] = await Promise.all([
+  const [{ data: progressRaw }, { data: myVotes }, { data: myMvp }] = await Promise.all([
     supabase.rpc("voting_progress", { p_match_id: matchId }),
     me
       ? supabase.from("votes").select("target_id, score").eq("match_id", matchId).eq("voter_id", me.id)
@@ -758,15 +759,7 @@ async function VotingView({
     me
       ? supabase.from("mvp_votes").select("target_id").eq("match_id", matchId).eq("voter_id", me.id).maybeSingle()
       : Promise.resolve({ data: null as { target_id: string } | null }),
-    // Yetenek pusulam (RLS: sadece kendiminkini görürüm)
-    me
-      ? supabase.from("skill_ballots").select("skill_picks(category, nominee_id)").eq("match_id", matchId).eq("voter_id", me.id).maybeSingle()
-      : Promise.resolve({ data: null as { skill_picks: { category: string; nominee_id: string }[] } | null }),
   ]);
-  const mySkillPicks: Record<string, string[]> = {};
-  for (const p of (myBallot?.skill_picks ?? []) as { category: string; nominee_id: string }[]) {
-    (mySkillPicks[p.category] ??= []).push(p.nominee_id);
-  }
   const progress = (Array.isArray(progressRaw) ? progressRaw[0] : progressRaw) as
     | { voters: number; eligible: number }
     | undefined;
@@ -794,6 +787,7 @@ async function VotingView({
         </p>
       )}
       {justVoted && <PushPrompt reason="Sonuçlar açıklanınca haber verelim mi?" />}
+      {justVoted && <SkillQueueBanner supabase={supabase} className="mb-4 block" />}
 
       {me && me.userId ? (
         <>
@@ -817,7 +811,6 @@ async function VotingView({
               }))}
             initialScores={Object.fromEntries((myVotes ?? []).map((v) => [v.target_id, v.score]))}
             initialMvp={myMvp?.target_id ?? null}
-            initialSkillPicks={mySkillPicks}
           />
         </>
       ) : (

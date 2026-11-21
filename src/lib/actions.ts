@@ -6,8 +6,8 @@ import { requireUser } from "@/lib/supabase/server";
 import { finalizeMatch, recomputePlayers } from "@/lib/finalize";
 import { settlePoll } from "@/lib/polls";
 import { later, notify } from "@/lib/notify";
-import { SKILL_KEYS } from "@/lib/skills";
-import { recomputeSkillsForMatch } from "@/lib/skills-data";
+import { skillSet } from "@/lib/skills";
+import { recomputeSkillsForVoter } from "@/lib/skills-data";
 import { text } from "@/lib/notify-rules";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { groupMemberIds, groupName, linkedMatches, matchAccountIds } from "@/lib/recipients";
@@ -659,22 +659,6 @@ export async function submitVotes(fd: FormData) {
     if (mvpError) fail(back, "MVP oyu kaydedilemedi");
   }
 
-  // Yetenek işaretleri (isteğe bağlı): sadece kullanıcı bölüme dokunduysa pusula gönderilir. Oy kapanmadan önce
-  // yazılır; hata asıl oylamayı bozmaz.
-  if (str(fd, "skillsTouched") === "1") {
-    const picks: Record<string, string[]> = {};
-    for (const key of SKILL_KEYS) {
-      const ids = fd.getAll(`skill_${key}`).map(String).filter(Boolean);
-      if (ids.length) picks[key] = ids;
-    }
-    const { error: skillError } = await supabase.rpc("submit_skill_ballot", { p_match_id: matchId, p_picks: picks });
-    if (!skillError) {
-      later(async () => {
-        await recomputeSkillsForMatch(createAdminClient(), matchId);
-      });
-    }
-  }
-
   // Herkes oy verdiyse sonuçları hemen açıkla
   const { data: progress } = await supabase.rpc("voting_progress", { p_match_id: matchId });
   const p = Array.isArray(progress) ? progress[0] : progress;
@@ -1153,4 +1137,28 @@ export async function setNotificationPref(key: string, value: boolean) {
   if (!["votes", "matches", "offers", "chat"].includes(key)) return;
   await supabase.from("notification_prefs").upsert({ user_id: user.id, [key]: value, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
   revalidatePath("/profil");
+}
+
+// ---------------------------------------------------------------------------
+// Yetenek değerlendirmesi
+// ---------------------------------------------------------------------------
+
+/** Birlikte oynadığın bir oyuncuyu 6 yetenekte 1-10 puanla; boş bırakılan "bilmiyorum" demektir */
+export async function submitSkillRating(fd: FormData) {
+  const { supabase, user } = await requireUser();
+  const playerId = str(fd, "playerId");
+  const keeper = str(fd, "keeper") === "1";
+  const scores: Record<string, number | null> = {};
+  for (const { key } of skillSet(keeper)) {
+    const raw = str(fd, `score_${key}`);
+    scores[key] = raw === "" ? null : Number(raw);
+  }
+  const { error } = await supabase.rpc("submit_skill_rating", { p_target_player: playerId, p_scores: scores });
+  if (error) fail("/yetenek", rpcMessage(error, "Değerlendirme kaydedilemedi"));
+  // Oy verenin normalizasyonu değiştiği için tüm hedefleri yeniden hesaplanır; yanıttan sonra
+  later(async () => {
+    await recomputeSkillsForVoter(createAdminClient(), user.id);
+  });
+  revalidatePath("/yetenek");
+  redirect("/yetenek?saved=1");
 }

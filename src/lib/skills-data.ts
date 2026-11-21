@@ -1,8 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { SKILL_KEYS, computeSkills, type SkillBallot, type SkillKey } from "@/lib/skills";
+import { computeSkills, isMutualHigh, voterNorm, type Scores, type SkillRating } from "@/lib/skills";
 
-type GpRow = { id: string; user_id: string | null; position: string | null };
 const IN_CHUNK = 100;
 const PAGE = 1000;
 
@@ -29,140 +28,85 @@ async function fetchIn<T>(
   return rows;
 }
 
-interface MpRow {
-  match_id: string;
-  player_id: string;
-  position: string | null;
-  is_goalkeeper: boolean | null;
+interface RatingRow {
+  voter_id: string;
+  target_user: string | null;
+  target_player: string | null;
+  scores: Scores;
 }
 
+const COLS = "voter_id, target_user, target_player, scores";
+
 /**
- * Verilen oyuncuların (ve aynı kişinin diğer grup satırlarının) yeteneklerini oy pusulalarından yeniden hesaplayıp
- * `player_skills`'e yazar. Kimlik: hesap sahibinde user_id, misafirde group_players.id (rating'le aynı).
- * Bağlı (rakip takımla ortak) maçta iki kadro tek havuzdur: pusula havuzdaki herkesi kapsar.
+ * Verilen oyuncuların (ve aynı kişinin diğer grup satırlarının) yeteneklerini aldıkları değerlendirmelerden
+ * yeniden hesaplayıp `player_skills`'e yazar. Kimlik: hesap sahibinde user_id, misafirde group_players.id.
+ * Oy verenin normalizasyonu (herkese ne kadar cömert puan verdiği) onun TÜM değerlendirmelerinden çıkar.
  */
 export async function recomputeSkills(admin: SupabaseClient, playerIds: string[]): Promise<void> {
   const ids = [...new Set(playerIds)];
   if (!ids.length) return;
 
-  // 1) Kişi kimlikleri ve kişinin tüm satırları
-  const seed = await fetchIn<GpRow>(ids, (part, from, to) =>
-    admin.from("group_players").select("id, user_id, position").in("id", part).range(from, to),
+  // 1) Kişiler ve tüm grup satırları
+  const seed = await fetchIn<{ id: string; user_id: string | null }>(ids, (part, from, to) =>
+    admin.from("group_players").select("id, user_id").in("id", part).range(from, to),
   );
   const userIds = [...new Set(seed.map((p) => p.user_id).filter((x): x is string => !!x))];
   const siblings = userIds.length
-    ? await fetchIn<GpRow>(userIds, (part, from, to) =>
-        admin.from("group_players").select("id, user_id, position").in("user_id", part).range(from, to),
+    ? await fetchIn<{ id: string; user_id: string | null }>(userIds, (part, from, to) =>
+        admin.from("group_players").select("id, user_id").in("user_id", part).range(from, to),
       )
     : [];
-  const people = new Map<string, Set<string>>(); // anahtar → satır id'leri
-  const keyOf = new Map<string, string>(); // satır id → anahtar
-  const gpPos = new Map<string, string | null>(); // satır id → profil mevkisi
+  const people = new Map<string, { userId: string | null; rows: Set<string> }>();
   for (const p of [...seed, ...siblings]) {
     const key = p.user_id ?? p.id;
-    keyOf.set(p.id, key);
-    gpPos.set(p.id, p.position);
-    (people.get(key) ?? people.set(key, new Set()).get(key)!).add(p.id);
+    const cur = people.get(key) ?? people.set(key, { userId: p.user_id, rows: new Set() }).get(key)!;
+    cur.rows.add(p.id);
   }
-  const allRows = [...keyOf.keys()];
+  const allRows = [...people.values()].flatMap((p) => [...p.rows]);
+  const allUsers = [...people.values()].map((p) => p.userId).filter((x): x is string => !!x);
 
-  // 2) Kişilerin maçları ve bağlı (rakip) maçlar
-  const own = await fetchIn<MpRow>(allRows, (part, from, to) =>
-    admin.from("match_players").select("match_id, player_id, position, is_goalkeeper").in("player_id", part).range(from, to),
+  // 2) Bu kişilere verilen değerlendirmeler (hesap: target_user; misafir veya sonradan hesaba aktarılan: target_player)
+  const received = [
+    ...(await fetchIn<RatingRow>(allUsers, (part, from, to) =>
+      admin.from("skill_ratings").select(COLS).in("target_user", part).range(from, to),
+    )),
+    ...(await fetchIn<RatingRow>(allRows, (part, from, to) =>
+      admin.from("skill_ratings").select(COLS).in("target_player", part).range(from, to),
+    )),
+  ];
+
+  // 3) Normalizasyon ve klik için: bu oy verenlerin ve hedef hesapların verdiği TÜM değerlendirmeler
+  const voterIds = [...new Set([...received.map((r) => r.voter_id), ...allUsers])];
+  const given = await fetchIn<RatingRow>(voterIds, (part, from, to) =>
+    admin.from("skill_ratings").select(COLS).in("voter_id", part).range(from, to),
   );
-  const ownMatchIds = [...new Set(own.map((r) => r.match_id))];
-  const matchRows = await fetchIn<{ id: string; challenge_id: string | null }>(ownMatchIds, (part, from, to) =>
-    admin.from("matches").select("id, challenge_id").in("id", part).range(from, to),
-  );
-  const challengeIds = [...new Set(matchRows.map((m) => m.challenge_id).filter((x): x is string => !!x))];
-  const linked = challengeIds.length
-    ? await fetchIn<{ id: string; challenge_id: string | null }>(challengeIds, (part, from, to) =>
-        admin.from("matches").select("id, challenge_id").in("challenge_id", part).range(from, to),
-      )
-    : [];
-  // Havuz: aynı challenge_id'li maçlar tek havuz, bağsız maç kendi havuzu
-  const poolOf = new Map<string, string>();
-  for (const m of [...matchRows, ...linked]) poolOf.set(m.id, m.challenge_id ?? m.id);
-  const poolMatches = new Map<string, string[]>();
-  for (const [mid, pool] of poolOf) (poolMatches.get(pool) ?? poolMatches.set(pool, []).get(pool)!).push(mid);
-  const allMatchIds = [...poolOf.keys()];
+  const givenBy = new Map<string, RatingRow[]>();
+  for (const r of given) (givenBy.get(r.voter_id) ?? givenBy.set(r.voter_id, []).get(r.voter_id)!).push(r);
+  const normOf = new Map<string, ReturnType<typeof voterNorm>>();
+  const norm = (voter: string) =>
+    normOf.get(voter) ?? normOf.set(voter, voterNorm((givenBy.get(voter) ?? []).map((r) => r.scores))).get(voter)!;
 
-  // 3) Havuzlardaki kadrolar, pusulalar, işaretler
-  const [rosterRows, ballotRows] = await Promise.all([
-    fetchIn<MpRow>(allMatchIds, (part, from, to) =>
-      admin.from("match_players").select("match_id, player_id, position, is_goalkeeper").in("match_id", part).range(from, to),
-    ),
-    fetchIn<{ id: string; match_id: string; voter_id: string }>(allMatchIds, (part, from, to) =>
-      admin.from("skill_ballots").select("id, match_id, voter_id").in("match_id", part).range(from, to),
-    ),
-  ]);
-  const ballotIds = ballotRows.map((b) => b.id);
-  const pickRows = await fetchIn<{ ballot_id: string; category: string; nominee_id: string }>(ballotIds, (part, from, to) =>
-    admin.from("skill_picks").select("ballot_id, category, nominee_id").in("ballot_id", part).range(from, to),
-  );
-
-  // Kadrodaki herkesin kimlik anahtarı (rakip kadrolar dahil)
-  const unknown = [...new Set([...rosterRows.map((r) => r.player_id), ...ballotRows.map((b) => b.voter_id)])].filter((id) => !keyOf.has(id));
-  const extra = await fetchIn<GpRow>(unknown, (part, from, to) =>
-    admin.from("group_players").select("id, user_id, position").in("id", part).range(from, to),
-  );
-  const identity = new Map(keyOf);
-  for (const p of extra) {
-    identity.set(p.id, p.user_id ?? p.id);
-    gpPos.set(p.id, p.position);
-  }
-
-  const picksByBallot = new Map<string, { category: string; nominee_id: string }[]>();
-  for (const p of pickRows) (picksByBallot.get(p.ballot_id) ?? picksByBallot.set(p.ballot_id, []).get(p.ballot_id)!).push(p);
-  const rosterByPool = new Map<string, MpRow[]>();
-  for (const r of rosterRows) {
-    const pool = poolOf.get(r.match_id)!;
-    (rosterByPool.get(pool) ?? rosterByPool.set(pool, []).get(pool)!).push(r);
-  }
-  const ballotsByPool = new Map<string, typeof ballotRows>();
-  for (const b of ballotRows) {
-    const pool = poolOf.get(b.match_id)!;
-    (ballotsByPool.get(pool) ?? ballotsByPool.set(pool, []).get(pool)!).push(b);
-  }
-
-  /** Maçtaki mevki: maç satırı, yoksa kaleci işareti, yoksa profil mevkisi (maç sayfası ve RPC'yle aynı kural) */
-  const isKeeperRow = (r: MpRow) => (r.position ?? (r.is_goalkeeper ? "GK" : (gpPos.get(r.player_id) ?? ""))) === "GK";
-  const FIELD_KEYS = SKILL_KEYS.slice(0, 6);
-  const KEEPER_KEYS = SKILL_KEYS.slice(6);
-
-  // 4) Her kişi için pusulaları kur ve değerleri hesapla
+  // 4) Kişi başına değerlendirmeleri kur, hesapla
   const writes: { player_id: string; skills: Record<string, number | null>; voters: number; ballots: number }[] = [];
-  for (const [key, rowIds] of people) {
-    // Kişinin içinde olduğu havuzlar ve o havuzdaki sınıfı (kaleci/saha)
-    const pools = new Map<string, boolean>(); // havuz → kaleci mi
-    for (const r of own) if (rowIds.has(r.player_id)) pools.set(poolOf.get(r.match_id)!, isKeeperRow(r));
-
-    const ballots: SkillBallot[] = [];
-    for (const [pool, keeper] of pools) {
-      const roster = rosterByPool.get(pool) ?? [];
-      const classKeys = keeper ? KEEPER_KEYS : FIELD_KEYS;
-      for (const b of ballotsByPool.get(pool) ?? []) {
-        const voterKey = identity.get(b.voter_id) ?? b.voter_id;
-        if (voterKey === key) continue;
-        // Oy verenin seçebileceği aday sayısı: kadro, kendisi hariç, kişinin sınıfında
-        const k = new Set(
-          roster.filter((r) => identity.get(r.player_id) !== voterKey && isKeeperRow(r) === keeper).map((r) => identity.get(r.player_id) ?? r.player_id),
-        ).size;
-        const picked: Partial<Record<SkillKey, boolean>> = {};
-        const candidates: Partial<Record<SkillKey, number>> = {};
-        for (const c of classKeys) candidates[c] = k;
-        for (const p of picksByBallot.get(b.id) ?? []) {
-          if (rowIds.has(p.nominee_id) && (classKeys as string[]).includes(p.category)) picked[p.category as SkillKey] = true;
-        }
-        ballots.push({ voterKey, matchId: b.match_id, picked, candidates });
-      }
+  const seen = new Set<string>();
+  for (const [, person] of people) {
+    const ratings: SkillRating[] = [];
+    seen.clear();
+    for (const r of received) {
+      const mine = (r.target_user && r.target_user === person.userId) || (r.target_player && person.rows.has(r.target_player));
+      if (!mine || seen.has(r.voter_id)) continue; // aynı oy veren iki kez sayılmaz (misafir + sonradan hesap)
+      seen.add(r.voter_id);
+      const back = person.userId ? (givenBy.get(person.userId) ?? []).find((g) => g.target_user === r.voter_id) : undefined;
+      ratings.push({
+        voterKey: r.voter_id,
+        scores: r.scores,
+        norm: norm(r.voter_id),
+        mutualHigh: isMutualHigh(r.scores, back?.scores),
+      });
     }
-
     const skills: Record<string, number | null> = {};
-    for (const keeper of [false, true]) for (const s of computeSkills(ballots, keeper)) skills[s.key] = s.value;
-    const voters = new Set(ballots.map((b) => b.voterKey)).size;
-    const matches = new Set(ballots.map((b) => b.matchId)).size;
-    for (const id of rowIds) writes.push({ player_id: id, skills, voters, ballots: matches });
+    for (const keeper of [false, true]) for (const s of computeSkills(ratings, keeper)) skills[s.key] = s.value;
+    for (const id of person.rows) writes.push({ player_id: id, skills, voters: ratings.length, ballots: ratings.length });
   }
 
   for (const part of chunks(writes, 200)) {
@@ -173,15 +117,18 @@ export async function recomputeSkills(admin: SupabaseClient, playerIds: string[]
   }
 }
 
-/** Bir maç havuzundaki (iki bağlı maç dahil) tüm oyuncular: pusula sonrası hepsinin değeri değişir */
-export async function recomputeSkillsForMatch(admin: SupabaseClient, matchId: string): Promise<void> {
-  const { data: m } = await admin.from("matches").select("challenge_id").eq("id", matchId).maybeSingle();
-  const matchIds = [matchId];
-  if (m?.challenge_id) {
-    const { data: linked } = await admin.from("matches").select("id").eq("challenge_id", m.challenge_id);
-    for (const l of linked ?? []) if (!matchIds.includes(l.id)) matchIds.push(l.id);
-  }
-  const { data: roster, error } = await admin.from("match_players").select("player_id").in("match_id", matchIds);
+/**
+ * Bir oy verenin değerlendirdiği herkesin değeri yeniden hesaplanır: oy verenin normalizasyonu (cömertliği)
+ * yeni puanla değişir ve hedeflerin hepsini etkiler.
+ */
+export async function recomputeSkillsForVoter(admin: SupabaseClient, voterId: string): Promise<void> {
+  const { data, error } = await admin.from("skill_ratings").select("target_user, target_player").eq("voter_id", voterId);
   if (error) throw error;
-  await recomputeSkills(admin, (roster ?? []).map((r) => r.player_id));
+  const users = (data ?? []).map((r) => r.target_user).filter((x): x is string => !!x);
+  const players = (data ?? []).map((r) => r.target_player).filter((x): x is string => !!x);
+  const viaUser = await fetchIn<{ id: string }>(users, (part, from, to) =>
+    admin.from("group_players").select("id").in("user_id", part).range(from, to),
+  );
+  await recomputeSkills(admin, [...players, ...viaUser.map((r) => r.id)]);
 }
+

@@ -116,7 +116,7 @@ export function SquadGrid({ groupId, players }: { groupId: string; players: Squa
         </div>
       )}
       <p className="mt-6 text-center text-xs text-muted">
-        HIZ hız · ŞUT şut · PAS pas · DRİ top sürme · DEF savunma · FİZ fizik (kalecide REF refleks · ATL atılma · HAV havadan top · YER yer tutma · DAĞ dağıtım · İLT iletişim). Değerler maç sonrası oylamayla oluşur; “–” henüz yeterli oy yok demek.
+        HIZ hız · ŞUT şut · PAS pas · DRİ top sürme · DEF savunma · FİZ fizik (kalecide REF refleks · ATL atılma · HAV havadan top · YER yer tutma · DAĞ dağıtım · İLT iletişim). Değerler, birlikte oynayanların 1-10 puanlarından oluşur; “–” henüz yeterli puan yok demek.
       </p>
     </>
   );

@@ -114,8 +114,7 @@ export default async function PlayerPage({
           );
         })}
         <p className="text-[11px] text-muted">
-          Maç sonrası oylamada takım arkadaşları ve rakipler “en iyi kim?” diye işaretler. En az 2 maç ve 2 farklı oy veren olunca değer görünür.
-        </p>
+          Birlikte en az 2 maç oynayanlar (rakipler dahil) 1-10 puanlar; kimin ne verdiği görünmez. En az 2 farklı kişi puan verince değer görünür.</p>
       </Card>
 
       <SectionTitle>Performans göstergeleri</SectionTitle>
