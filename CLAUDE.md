@@ -241,7 +241,10 @@ silinir. İzin kartı (`PushPrompt`) anlamlı anda çıkar: oy verince, çağrı
 `npx web-push generate-vapid-keys`; özel anahtarı asla commit etme/yazdırma), isteğe bağlı `VAPID_SUBJECT` (varsayılan site adresi; kişisel e-posta koyma),
 `CRON_SECRET` (hatırlatma cron'u için; yoksa `/api/cron/vote-reminders` kapalıdır, Vercel Cron `vercel.json` ile günde 1 kez 18:00 TR çağırır).
 Test: `scripts/e2e/notifications.mjs` (sunucu `CRON_SECRET=e2e-secret` ile başlatılmalı) ve gerçek kütüphane/VAPID imzalı
-`NODE_USE_ENV_PROXY=1 npx vite-node --config scripts/recompute.vite.config.mjs scripts/e2e/push-delivery.ts`. Gerçek cihaza teslim sadece elle denenebilir.
+`NODE_USE_ENV_PROXY=1 npx vite-node --config scripts/recompute.vite.config.mjs scripts/e2e/push-delivery.ts`. Gerçek cihaza teslim sadece elle denenebilir. **Tanılama**: profil → Ayarlar → Bildirimler'de cihaz "açık ✓" ise **"Test bildirimi gönder"** (`sendTestNotification` → `sendTestPush`) abonelik/VAPID/push servisini uçtan uca dener ve nedeni açıklar
+(`explainPushFailure`: 401/403 = VAPID çifti uyuşmuyor, 404/410 = geçersiz abonelik…); abonelik başarısızsa gerçek tarayıcı hatası gösterilir (`explainSubscribeError`: AbortError = push servisine ulaşılamadı, Brave ayarı…).
+Gönderim hataları artık Vercel kayıtlarına `[push] <kod> <mesaj>` olarak düşer. Hatırlatma: **kişi kendi işleminden bildirim almaz** (kendi sohbet mesajı sana push göndermez); test için ikinci hesap veya test düğmesi gerekir.
+Aboneliğin sunucuya kaydı `push_subscriptions` tablosundan kontrol edilir (0 satır = cihaz hiç abone olmamış).
 Tuzak: `web-push` adlandırılmış içe aktarımla kullanılır (varsayılan dışa aktarımı yok; derleme uyarısı verir ve üretimde çöker).
 
 **Oyuncu kartı ve yetenek değerlendirmesi (migration 0018 + 0019)**: kart (`PlayerCard`/`CardFace`, saha için `compact`) FIFA kalkanıdır: rating, mevki,

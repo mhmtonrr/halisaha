@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { finalizeMatch, recomputePlayers } from "@/lib/finalize";
 import { settlePoll } from "@/lib/polls";
-import { later, notify } from "@/lib/notify";
+import { later, notify, sendTestPush } from "@/lib/notify";
 import { skillSet } from "@/lib/skills";
 import { extractInviteCode, kindMatches, parseKind } from "@/lib/invite";
 import { recomputeSkillsForVoter } from "@/lib/skills-data";
@@ -1259,6 +1259,12 @@ export async function savePushSubscription(sub: { endpoint: string; p256dh: stri
     p_user_agent: userAgent.slice(0, 300),
   });
   return { ok: !error, error: error ? rpcMessage(error, "Abonelik kaydedilemedi") : undefined };
+}
+
+/** Bu hesabın cihazlarına test bildirimi: abonelik, anahtarlar ve push servisi uçtan uca denenir */
+export async function sendTestNotification() {
+  const { user } = await requireUser();
+  return sendTestPush(user.id);
 }
 
 export async function removePushSubscription(endpoint: string) {

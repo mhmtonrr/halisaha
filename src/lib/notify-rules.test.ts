@@ -4,6 +4,8 @@ import {
   DEFAULT_PREFS,
   PREF_OF,
   allowed,
+  explainPushFailure,
+  explainSubscribeError,
   planRecipients,
   sendToAll,
   text,
@@ -122,16 +124,16 @@ describe("push gönderimi sonucu", () => {
       if (s.endpoint.endsWith("/d")) throw Object.assign(new Error("server"), { statusCode: 500 });
     };
     const r = await sendToAll(subs, "{}", send);
-    expect(r).toEqual({ sent: 1, dead: ["https://push/b", "https://push/c"], failed: 1 });
+    expect(r).toMatchObject({ sent: 1, dead: ["https://push/b", "https://push/c"], failed: 1 });
   });
   it("abonelik yoksa boş sonuç", async () => {
-    expect(await sendToAll([], "{}", async () => {})).toEqual({ sent: 0, dead: [], failed: 0 });
+    expect(await sendToAll([], "{}", async () => {})).toMatchObject({ sent: 0, dead: [], failed: 0 });
   });
   it("ağ hatası (statusCode yok) ölü sayılmaz", async () => {
     const r = await sendToAll(subs.slice(0, 1), "{}", async () => {
       throw new Error("ECONNRESET");
     });
-    expect(r).toEqual({ sent: 0, dead: [], failed: 1 });
+    expect(r).toMatchObject({ sent: 0, dead: [], failed: 1 });
   });
 });
 
@@ -160,5 +162,37 @@ describe("maçtan çekilme metinleri", () => {
     const denied = text.withdrawalDecided("g1", "m1", false, "Cum 21:00");
     expect(denied.title).toContain("reddedildi");
     expect(denied.body).toContain("kadroda kalıyorsun");
+  });
+});
+
+describe("push hata açıklamaları", () => {
+  it("sendToAll hata ayrıntısını toplar, ölü abonelikleri ayırır", async () => {
+    const subs = [
+      { endpoint: "https://a", p256dh: "p", auth: "a" },
+      { endpoint: "https://b", p256dh: "p", auth: "a" },
+      { endpoint: "https://c", p256dh: "p", auth: "a" },
+    ];
+    const r = await sendToAll(subs, "{}", async (s) => {
+      if (s.endpoint === "https://b") throw Object.assign(new Error("gone"), { statusCode: 410 });
+      if (s.endpoint === "https://c") throw Object.assign(new Error("denied"), { statusCode: 403, body: "unauthorized vapid" });
+    });
+    expect(r.sent).toBe(1);
+    expect(r.dead).toEqual(["https://b"]);
+    expect(r.failed).toBe(1);
+    expect(r.errors.map((e) => e.statusCode)).toEqual([410, 403]);
+    expect(r.errors[1].message).toBe("unauthorized vapid");
+  });
+  it("401/403 anahtar uyuşmazlığı, 410 geçersiz abonelik, ağ hatası ayrı açıklanır", () => {
+    expect(explainPushFailure({ statusCode: 403, message: "x" })).toContain("VAPID_PRIVATE_KEY");
+    expect(explainPushFailure({ statusCode: 410, message: "x" })).toContain("geçersiz");
+    expect(explainPushFailure({ statusCode: 503, message: "x" })).toContain("geçici");
+    expect(explainPushFailure({ message: "Request timed out" })).toContain("ulaşılamadı");
+    expect(explainPushFailure({ statusCode: 400, message: "bad" })).toContain("(400)");
+  });
+  it("tarayıcı abonelik hataları neden ve çözümle açıklanır", () => {
+    expect(explainSubscribeError("AbortError", "Registration failed - push service error")).toContain("Brave");
+    expect(explainSubscribeError("NotAllowedError", "denied")).toContain("izin");
+    expect(explainSubscribeError("InvalidAccessError", "key")).toContain("anahtar");
+    expect(explainSubscribeError(undefined, undefined)).toContain("bilinmeyen");
   });
 });

@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   planRecipients,
   sendToAll,
+  explainPushFailure,
   CHAT_MERGE_MINUTES,
   type Content,
   type NotificationType,
@@ -94,6 +95,8 @@ export async function notify(
       const payload = JSON.stringify({ title: content.title, body: content.body, url: content.url, tag: content.tag ?? type, type });
       const result = await sendToAll((subs ?? []) as Subscription[], payload, opts.sender ?? defaultSender);
       sent = result.sent;
+      // Başarısız gönderimleri iz bırakmadan yutma: Vercel kayıtlarında görünsün
+      for (const f of result.errors) console.error("[push]", f.statusCode ?? "-", f.message);
       // Push servisinin "artık yok" dediği abonelikler silinir
       if (result.dead.length) await admin.from("push_subscriptions").delete().in("endpoint", result.dead);
     }
@@ -111,5 +114,38 @@ export function later(fn: () => Promise<void>) {
     after(run);
   } catch {
     void run();
+  }
+}
+
+export interface TestPushResult {
+  ok: boolean;
+  message: string;
+}
+
+/**
+ * Kullanıcının kendi cihazlarına test bildirimi gönderir ve sonucu açıklar (bildirim kutusuna yazmaz).
+ * Aboneliğin, sunucu anahtarlarının ve push servisinin uçtan uca çalışıp çalışmadığını gösterir.
+ */
+export async function sendTestPush(userId: string): Promise<TestPushResult> {
+  try {
+    if (!pushConfigured()) {
+      return { ok: false, message: "Sunucuda VAPID anahtarları eksik (NEXT_PUBLIC_VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY). Vercel'e ekledikten sonra yeniden dağıtım gerekir." };
+    }
+    const admin = createAdminClient();
+    const { data: subs } = await admin.from("push_subscriptions").select("endpoint, p256dh, auth").eq("user_id", userId);
+    if (!subs?.length) {
+      return { ok: false, message: "Bu hesapta kayıtlı cihaz yok. Önce bu cihazda “Bildirimleri aç”a bas; kayıt tamamlanınca burada “açık ✓” yazar." };
+    }
+    const payload = JSON.stringify({ title: "🔔 Test bildirimi", body: "Bildirimler bu cihazda çalışıyor.", url: "/profil?sekme=ayarlar", tag: "test" });
+    const result = await sendToAll(subs as Subscription[], payload, defaultSender);
+    if (result.dead.length) await admin.from("push_subscriptions").delete().in("endpoint", result.dead);
+    for (const f of result.errors) console.error("[push-test]", f.statusCode ?? "-", f.message);
+    if (result.sent > 0) {
+      return { ok: true, message: `Gönderildi (${result.sent} cihaz). Birkaç saniye içinde gelmezse telefonun pil tasarrufu/rahatsız etme modunu ve tarayıcının bildirim iznini kontrol et.` };
+    }
+    return { ok: false, message: explainPushFailure(result.errors[0] ?? { message: "bilinmeyen hata" }) };
+  } catch (e) {
+    console.error("[push-test]", e instanceof Error ? e.message : e);
+    return { ok: false, message: "Test gönderilemedi (sunucu hatası)." };
   }
 }

@@ -181,24 +181,59 @@ export interface Subscription {
 
 export type PushSender = (sub: Subscription, payload: string) => Promise<void>;
 
-/** Her aboneliğe gönderir; hata hiçbir zaman fırlatılmaz. Dönen: gönderilen sayısı ve silinecek (ölü) endpoint'ler. */
+export interface PushFailure {
+  /** Push servisinin HTTP kodu (yoksa ağ/zaman aşımı hatası) */
+  statusCode?: number;
+  message: string;
+}
+
+/** Her aboneliğe gönderir; hata hiçbir zaman fırlatılmaz. Dönen: gönderilen sayısı, silinecek (ölü) endpoint'ler ve hata ayrıntıları. */
 export async function sendToAll(
   subs: Subscription[],
   payload: string,
   send: PushSender,
-): Promise<{ sent: number; dead: string[]; failed: number }> {
+): Promise<{ sent: number; dead: string[]; failed: number; errors: PushFailure[] }> {
   const results = await Promise.allSettled(subs.map((s) => send(s, payload)));
   let sent = 0;
   let failed = 0;
   const dead: string[] = [];
+  const errors: PushFailure[] = [];
   results.forEach((r, i) => {
     if (r.status === "fulfilled") {
       sent++;
-    } else if (isDeadSubscription((r.reason as { statusCode?: number } | undefined)?.statusCode)) {
-      dead.push(subs[i].endpoint);
-    } else {
-      failed++;
+      return;
     }
+    const reason = r.reason as { statusCode?: number; message?: string; body?: string } | undefined;
+    errors.push({ statusCode: reason?.statusCode, message: String(reason?.body || reason?.message || reason).slice(0, 200) });
+    if (isDeadSubscription(reason?.statusCode)) dead.push(subs[i].endpoint);
+    else failed++;
   });
-  return { sent, dead, failed };
+  return { sent, dead, failed, errors };
+}
+
+/** Push servisinin hata kodunu kullanıcıya/yöneticiye anlaşılır Türkçe nedene çevirir */
+export function explainPushFailure(f: PushFailure): string {
+  const code = f.statusCode;
+  if (code === 401 || code === 403) {
+    return `Push servisi anahtarları reddetti (${code}). Vercel'deki VAPID_PRIVATE_KEY ile NEXT_PUBLIC_VAPID_PUBLIC_KEY aynı çiftten olmalı; değiştirdiysen yeniden dağıt ve bildirimleri bu cihazda kapatıp yeniden aç.`;
+  }
+  if (code === 404 || code === 410) return "Bu cihazın aboneliği artık geçersiz. Bildirimleri bu cihazda kapatıp yeniden aç.";
+  if (code === 413) return "Bildirim içeriği çok büyük (413).";
+  if (code === 429) return "Push servisi çok fazla istek nedeniyle sınırladı (429); biraz sonra tekrar dene.";
+  if (code && code >= 500) return `Push servisi geçici olarak hata veriyor (${code}); biraz sonra tekrar dene.`;
+  if (/timeout|timed out|ETIMEDOUT|ECONN|ENOTFOUND|fetch failed/i.test(f.message)) return "Push servisine ulaşılamadı (ağ/zaman aşımı); biraz sonra tekrar dene.";
+  return `Gönderilemedi${code ? ` (${code})` : ""}: ${f.message}`;
+}
+
+/** Tarayıcıda abone olurken alınan hatayı (DOMException adı + mesaj) anlaşılır nedene çevirir */
+export function explainSubscribeError(name: string | undefined, message: string | undefined): string {
+  const detail = [name, message].filter(Boolean).join(": ").slice(0, 160);
+  if (name === "NotAllowedError") return `Tarayıcı bildirim iznini vermedi. Site ayarlarından bildirimlere izin ver. (${detail})`;
+  if (name === "AbortError" || /push service/i.test(message ?? "")) {
+    return `Tarayıcı push servisine bağlanamadı. Brave kullanıyorsan Ayarlar → Gizlilik → “Google push mesajlaşma hizmetlerini kullan”ı aç; VPN/reklam engelleyici de engelleyebilir. (${detail})`;
+  }
+  if (name === "InvalidAccessError" || name === "InvalidCharacterError") return `Bildirim anahtarı geçersiz görünüyor; yeniden dağıtımın bittiğinden emin ol. (${detail})`;
+  if (name === "SecurityError") return `Güvenli bağlantı gerekli (https). (${detail})`;
+  if (name === "NotSupportedError") return `Bu tarayıcı push bildirimini desteklemiyor. (${detail})`;
+  return `Bildirimler açılamadı. (${detail || "bilinmeyen hata"})`;
 }

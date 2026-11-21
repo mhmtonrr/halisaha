@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { removePushSubscription, savePushSubscription, setNotificationPref } from "@/lib/actions";
-import { PREF_LABEL, type PrefKey, type Prefs } from "@/lib/notify-rules";
+import { removePushSubscription, savePushSubscription, sendTestNotification, setNotificationPref } from "@/lib/actions";
+import { PREF_LABEL, explainSubscribeError, type PrefKey, type Prefs } from "@/lib/notify-rules";
 import { detectStatus, subscribeThisDevice, unsubscribeThisDevice, type PushStatus } from "@/lib/push-client";
 import { Button, Card, cx } from "@/components/ui";
 
@@ -25,12 +25,13 @@ function usePush() {
     try {
       const sub = await subscribeThisDevice();
       const res = await savePushSubscription(sub, navigator.userAgent);
-      if (!res.ok) throw new Error(res.error ?? "Abonelik kaydedilemedi");
+      if (!res.ok) throw new Error(`kayıt:${res.error ?? "bilinmeyen hata"}`);
       setStatus("on");
     } catch (e) {
       const denied = e instanceof Error && e.message === "denied";
       if (denied) setStatus("denied");
-      else setError("Bildirimler açılamadı. Biraz sonra tekrar dene.");
+      else if (e instanceof Error && e.message.startsWith("kayıt:")) setError(`Abonelik sunucuya kaydedilemedi. (${e.message.slice(6)})`);
+      else setError(explainSubscribeError(e instanceof Error ? e.name : undefined, e instanceof Error ? e.message : String(e)));
     } finally {
       setBusy(false);
     }
@@ -111,6 +112,20 @@ export function PushSettings({ prefs }: { prefs: Prefs }) {
   const { status, busy, error, enable, disable } = usePush();
   const [values, setValues] = useState<Prefs>(prefs);
   const [, startTransition] = useTransition();
+  const [test, setTest] = useState<{ ok: boolean; message: string } | null>(null);
+  const [testing, setTesting] = useState(false);
+
+  async function runTest() {
+    setTesting(true);
+    setTest(null);
+    try {
+      setTest(await sendTestNotification());
+    } catch {
+      setTest({ ok: false, message: "Test gönderilemedi. Bağlantını kontrol et." });
+    } finally {
+      setTesting(false);
+    }
+  }
 
   const toggle = (key: PrefKey) => {
     const next = !values[key];
@@ -141,9 +156,16 @@ export function PushSettings({ prefs }: { prefs: Prefs }) {
           </Button>
         )}
         {status === "on" && (
-          <Button variant="secondary" className="w-full" onClick={disable} disabled={busy} type="button">
-            {busy ? "Kapatılıyor…" : "Bu cihazda kapat"}
-          </Button>
+          <div className="space-y-2">
+            <Button className="w-full" onClick={runTest} disabled={testing} type="button">
+              {testing ? "Gönderiliyor…" : "Test bildirimi gönder"}
+            </Button>
+            {test && <p className={cx("rounded-lg p-2 text-xs", test.ok ? "bg-accent/10 text-accent" : "bg-red-950/60 text-red-300")}>{test.message}</p>}
+            <Button variant="secondary" className="w-full" onClick={disable} disabled={busy} type="button">
+              {busy ? "Kapatılıyor…" : "Bu cihazda kapat"}
+            </Button>
+            <p className="text-[11px] text-muted">Not: kendi yazdığın sohbet mesajı sana bildirim göndermez; başka birinin bildirimi için o kişinin cihazında bildirimler açık olmalı.</p>
+          </div>
         )}
       </div>
       <div className="space-y-1 border-t border-line pt-3">
