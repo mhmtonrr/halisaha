@@ -114,6 +114,7 @@ try {
   await bP.click('button[aria-label="Menüyü aç"]');
   const dlg = bP.locator('[role="dialog"]');
   await dlg.waitFor();
+  await dlg.locator("text=E2E Davet Grubu").waitFor({ timeout: 10000 });
   t = await dlg.innerText();
   check("menüde 'Takımlarım' ve 'Gruplarım' ayrı başlıklar (birleşik başlık yok)", has(t, "Takımlarım") && has(t, "Gruplarım") && !has(t, "Takımlarım ve gruplarım"));
   check("menüde takım ve grup kendi başlığı altında, katıl/kur bağlantılarıyla", has(t, "E2E Davet Takımı") && has(t, "E2E Davet Grubu") && has(t, "Takıma katıl") && has(t, "Gruba katıl") && has(t, "Takım kur") && has(t, "Grup kur"));

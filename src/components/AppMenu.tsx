@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { useUnreadCount } from "./NotificationBadge";
 import { TeamBadge } from "./TeamBadge";
 import { initials } from "./PlayerCard";
+import { loadMenu } from "@/lib/actions";
 import type { MenuData } from "@/lib/menu-data";
 
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
@@ -143,11 +144,11 @@ function GroupSection({
   );
 }
 
-function Drawer({ data, onClose }: { data: MenuData; onClose: () => void }) {
+function Drawer({ data, onClose }: { data: MenuData | null; onClose: () => void }) {
   const unread = useUnreadCount();
   const [openGroup, setOpenGroup] = useState<string | null>(null);
-  const teams = data.groups.filter((g) => g.kind === "team");
-  const communities = data.groups.filter((g) => g.kind !== "team");
+  const teams = data?.groups.filter((g) => g.kind === "team") ?? [];
+  const communities = data?.groups.filter((g) => g.kind !== "team") ?? [];
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -176,14 +177,23 @@ function Drawer({ data, onClose }: { data: MenuData; onClose: () => void }) {
         <div className="flex-1 space-y-1 overflow-y-auto px-3 pb-4">
           <Link href="/profil" className="mb-2 flex items-center gap-3 rounded-2xl border border-line bg-pitch-900/80 p-3 hover:border-accent/50">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gold-1 to-gold-2 text-sm font-black text-[#3b2a05]">
-              {initials(data.name)}
+              {data ? initials(data.name) : "…"}
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate font-bold">{data.name}</span>
-              <span className="block text-xs text-muted">
-                Rating {data.overall}
-                {data.city ? ` · ${data.city}` : ""}
-              </span>
+              {data ? (
+                <>
+                  <span className="block truncate font-bold">{data.name}</span>
+                  <span className="block text-xs text-muted">
+                    Rating {data.overall}
+                    {data.city ? ` · ${data.city}` : ""}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="block h-4 w-32 animate-pulse rounded bg-pitch-700" />
+                  <span className="mt-1.5 block h-3 w-24 animate-pulse rounded bg-pitch-800" />
+                </>
+              )}
             </span>
             <span className="text-muted">›</span>
           </Link>
@@ -213,7 +223,7 @@ function Drawer({ data, onClose }: { data: MenuData; onClose: () => void }) {
           <NavLink
             href="/yetenek"
             label="Yetenek değerlendirmesi"
-            badge={data.skillCount}
+            badge={data?.skillCount}
             icon={
               <>
                 <circle cx="12" cy="12" r="9" />
@@ -284,11 +294,15 @@ function Drawer({ data, onClose }: { data: MenuData; onClose: () => void }) {
   );
 }
 
-/** Menü bağlamı ve çekmece; layout'ta tüm sayfaları sarar. `data` null ise menü yok (giriş yapılmamış). */
-export function AppMenuShell({ data, children }: { data: MenuData | null; children: ReactNode }) {
+/**
+ * Menü bağlamı ve çekmece; layout'ta tüm sayfaları sarar. Veri sunucu action'ıyla (loadMenu) sayfa yüklenince boşta
+ * ısıtılır ve çekmece her açılışta arkada tazelenir; böylece layout her sayfada 4-5 sorgu beklemez.
+ */
+export function AppMenuShell({ children }: { children: ReactNode }) {
   const path = usePathname();
   const [open, setOpen] = useState(false);
-  const available = !!data && !HIDDEN.some((h) => path.startsWith(h));
+  const [data, setData] = useState<MenuData | null>(null);
+  const available = !HIDDEN.some((h) => path.startsWith(h));
 
   // Sayfa değişince çekmece kapanır (render sırasında durum ayarı: effect'te setState'ten kaçınır)
   const [lastPath, setLastPath] = useState(path);
@@ -297,10 +311,36 @@ export function AppMenuShell({ data, children }: { data: MenuData | null; childr
     if (open) setOpen(false);
   }
 
+  const refresh = useCallback(() => {
+    loadMenu().then(
+      (d) => d && setData(d),
+      () => {
+        // menü verisi alınamazsa iskelet kalır; sayfa çalışmaya devam eder
+      },
+    );
+  }, []);
+
+  // Giriş sayfalarında çekme; diğerlerinde ilk boşta bir kez ısıt
+  useEffect(() => {
+    if (!available || data) return;
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback;
+    const t = idle ? idle(refresh) : window.setTimeout(refresh, 800);
+    return () => {
+      if (!idle) window.clearTimeout(t);
+    };
+    // data değişince tekrar çalışmasın: sadece erişilebilirlik değişince
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [available]);
+
+  const openMenu = () => {
+    setOpen(true);
+    refresh();
+  };
+
   return (
-    <MenuContext.Provider value={{ available, open: () => setOpen(true) }}>
+    <MenuContext.Provider value={{ available, open: openMenu }}>
       {children}
-      {available && open && data && <Drawer data={data} onClose={() => setOpen(false)} />}
+      {available && open && <Drawer data={data} onClose={() => setOpen(false)} />}
     </MenuContext.Provider>
   );
 }

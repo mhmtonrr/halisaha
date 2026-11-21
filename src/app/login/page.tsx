@@ -2,7 +2,7 @@ import Link from "next/link";
 import { LoginForm } from "./LoginForm";
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/supabase/server";
 
 export default async function LoginPage({
   searchParams,
@@ -11,9 +11,7 @@ export default async function LoginPage({
 }) {
   const { next, error } = await searchParams;
   // Zaten giriş yapmışsa giriş ekranını gösterme
-  const {
-    data: { user },
-  } = await (await createClient()).auth.getUser();
+  const user = await getAuthUser();
   if (user) redirect(next?.startsWith("/") && !next.startsWith("//") ? next : "/");
   return (
     <main className="flex min-h-dvh flex-col justify-center py-10">

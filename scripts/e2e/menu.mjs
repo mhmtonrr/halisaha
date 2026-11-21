@@ -37,6 +37,8 @@ try {
   await page.click('button[aria-label="Menüyü aç"]');
   const dlg = page.locator('[role="dialog"]');
   await dlg.waitFor();
+  // Menü verisi çekmece açılırken/boşta sunucu action'ıyla gelir: iskelet yerini kullanıcıya bırakana dek bekle
+  await dlg.locator("text=Menü Kullanıcı").waitFor({ timeout: 10000 });
   let t = (await dlg.innerText()).toLocaleLowerCase("tr");
   check("çekmece: profil özeti", t.includes("menü kullanıcı") && t.includes("rating"));
   check("çekmece: bölümler", ["ana sayfa", "keşfet", "bildirimler", "yetenek değerlendirmesi", "i̇statistiklerim", "ayarlar", "takım kur", "grup kur", "gizlilik politikası", "çıkış yap"].every((x) => t.includes(x) || (x === "i̇statistiklerim" && t.includes("istatistiklerim"))));

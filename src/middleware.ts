@@ -31,9 +31,9 @@ export async function middleware(request: NextRequest) {
     },
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // JWT yerelde doğrulanır (asimetrik anahtar); sadece süresi dolmuşsa oturum yenilenir. getUser() her istekte Auth sunucusuna giderdi.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const user = claimsData?.claims?.sub ? claimsData.claims : null;
 
   if (!user && !PUBLIC_PATHS.some((p) => path.startsWith(p))) {
     const url = request.nextUrl.clone();

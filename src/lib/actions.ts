@@ -10,6 +10,7 @@ import { skillSet } from "@/lib/skills";
 import { extractInviteCode, kindMatches, parseKind } from "@/lib/invite";
 import { recomputeSkillsForVoter } from "@/lib/skills-data";
 import { text } from "@/lib/notify-rules";
+import { loadMenuData } from "@/lib/menu-data";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { groupMemberIds, groupName, linkedMatches, matchAccountIds } from "@/lib/recipients";
 import { balanceTeams, pickVariant, type TeamCandidate } from "@/lib/teams";
@@ -1259,6 +1260,11 @@ export async function savePushSubscription(sub: { endpoint: string; p256dh: stri
     p_user_agent: userAgent.slice(0, 300),
   });
   return { ok: !error, error: error ? rpcMessage(error, "Abonelik kaydedilemedi") : undefined };
+}
+
+/** ☰ çekmecesinin verisi: her sayfada değil, menü açılırken/ilk boşta çekilir (layout'u yavaşlatmasın) */
+export async function loadMenu() {
+  return loadMenuData();
 }
 
 /** Bu hesabın cihazlarına test bildirimi: abonelik, anahtarlar ve push servisi uçtan uca denenir */

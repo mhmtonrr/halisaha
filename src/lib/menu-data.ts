@@ -1,5 +1,5 @@
 import "server-only";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { getMemberships, type Role } from "@/lib/teams-data";
 import { getSkillQueue } from "@/lib/skill-queue";
 
@@ -23,10 +23,7 @@ export interface MenuData {
 /** ☰ çekmecesinin verisi; giriş yapmamış veya karşılamayı bitirmemiş kullanıcıda null (menü görünmez) */
 export async function loadMenuData(): Promise<MenuData | null> {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const [supabase, user] = await Promise.all([createClient(), getAuthUser()]);
     if (!user) return null;
     const { data: profile } = await supabase.from("profiles").select("display_name, city, onboarded_at").eq("id", user.id).maybeSingle();
     if (!profile?.onboarded_at) return null;

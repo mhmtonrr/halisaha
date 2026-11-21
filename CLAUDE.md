@@ -295,6 +295,12 @@ Yapılmadı: onaydan sonra çağrının yedek listesinden otomatik öneri (kapta
 Yetenek değerlendirmesi (bekleyen sayısı), İstatistiklerim, Ayarlar, **Takımlarım ve gruplarım** (her biri açılır: ana sayfa, kadro, sohbet, takımda teklifler/istatistik, oyuncular), Takım/Grup kur, Gizlilik,
 **Çıkış yap** (`POST /auth/signout`). **Alt çubuk kaldı** (kullanıcı kararı). Layout her istekte `loadMenuData()` çağırır (giriş yoksa null → menü hiç görünmez); çekmece sayfa değişince/Escape/karartma ile kapanır.
 
+**Hız (kullanıcı raporu: "uygulama yavaş")**: ölçüm `node scripts/perf/ttfb.mjs [adres]` (geçici kullanıcıyla sayfa TTFB'si; ilk ölçüm 0,7-1,7 sn). Kök neden: Vercel fonksiyonları `iad1` (ABD) çalışıyordu, Supabase Frankfurt;
+her sorgu/kimlik çağrısı okyanus aşıyordu. Yapılanlar: `vercel.json` `regions: ["fra1"]` (Supabase ile aynı bölge); **JWT yerelde doğrulanır** (`getClaims`, ES256 JWKS; middleware ve `getAuthUser`/`requireUser`) — `getUser()` her istekte
+3 kez Auth'a gidiyordu; `createClient`/`getAuthUser`/onboarding sorgusu `React.cache` ile **istek başına tek**; ☰ menü verisi layout'ta değil, `loadMenu` server action'ıyla boşta/açılışta (layout sorgusuz);
+`next.config.ts` `staleTimes.dynamic = 20` (ziyaret edilen sayfalar istemcide 20 sn önbellekte; sunucu eylemi `revalidatePath` ve `router.refresh` geçersiz kılar). **Tuzak: kök `loading.tsx` ekleme** — verili kullanıcıda
+`?sekme=` gibi aynı sayfa arama-parametresi gezintisinin URL'sini asla tamamlatmadı (e2e `profile`); menü artık veri beklediği için testlerde çekmece içeriği `waitFor` ile beklenir.
+
 **Sohbet** (group_messages/chat_reads): Realtime postgres_changes, RLS'e uyar (sadece üyeler; takım sohbeti de
 sadece oyunculara). İstemci abone olmadan önce `realtime.setAuth(token)` çağırır ve (yeniden) bağlanınca
 kaçırılanları çeker — bunu kaldırma, yoksa mesajlar ara sıra düşmüyor. Etkinlik kartları DB tetikleyicileriyle
