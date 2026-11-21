@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { BottomNav } from "@/components/BottomNav";
+import { NavTracker } from "@/components/NavHistory";
 
 export const metadata: Metadata = {
   title: "Halısaha Performans",
@@ -19,6 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="tr">
       <body className="antialiased">
         <div className="mx-auto w-full max-w-lg px-4 pb-28">{children}</div>
+        <NavTracker />
         <BottomNav />
       </body>
     </html>

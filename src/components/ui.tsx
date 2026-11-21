@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ComponentProps, ReactNode } from "react";
+import { BackLink } from "./NavHistory";
 
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -88,9 +89,9 @@ export function Header({ title, back, right }: { title: ReactNode; back?: string
   return (
     <header className="flex items-center gap-2 py-4">
       {back && (
-        <Link href={back} aria-label="Geri" className="-ml-2 rounded-lg p-2 text-muted hover:bg-pitch-800">
+        <BackLink fallback={back}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6" /></svg>
-        </Link>
+        </BackLink>
       )}
       <h1 className="min-w-0 flex-1 truncate text-lg font-bold">{title}</h1>
       {right}

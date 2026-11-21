@@ -104,12 +104,19 @@ try {
 
   // 6) Ortak ekran: rakip kadro görünür
   await A1.goto(`${BASE}/g/${teamA}/m/${mA}`);
-  check("Kartal kaptanı rakip kadroyu görür", (await A1.locator("text=Rakip kadro · E2E Aslanlar").count()) > 0 && (await A1.locator("text=Berk").count()) > 0);
+  check("Kartal kaptanı rakip kadroyu karşılaşma kartında görür", (await A1.locator("text=Berk K.").count()) > 0 && (await A1.locator("text=Rakip kadro").count()) === 0);
   check("karşılaşma kartında iki takım", (await A1.locator("text=VS").count()) > 0);
   await shot(A1, "35-ortak-mac-planli");
   await A2.goto(`${BASE}/g/${teamA}/m/${mA}`);
-  check("oyuncu rakip kadroyu görür", (await A2.locator("text=Rakip kadro").count()) > 0);
+  check("oyuncu rakip kadroyu görür", (await A2.locator("text=Buse O.").count()) > 0);
   check("oyuncuda skor formu yok", (await A2.locator('button:has-text("Skoru kaydet")').count()) === 0);
+
+  // 6b) Geri oku geldiği sayfaya döner (sabit üst sayfaya değil)
+  await A1.goto(BASE + "/"); await A1.goto(`${BASE}/g/${teamA}/teklifler`); await A1.goto(`${BASE}/g/${teamA}/m/${mA}`);
+  await A1.click('a[aria-label="Geri"]'); await A1.waitForURL(`${BASE}/g/${teamA}/teklifler`);
+  check("geri oku maç ekranından teklifler sayfasına döndü (geldiği yer)", true);
+  await A1.click('a[aria-label="Geri"]'); await A1.waitForURL(BASE + "/");
+  check("bir sonraki geri ana sayfaya döndü", true);
 
   // 7) Skor: uyuşmazlık → düzeltme → eşleşme
   const submitScore = async (page, gid, mid, a, b) => {
@@ -148,7 +155,7 @@ try {
 
   // 9) Sonuç: iki takımın puanları, rakip puanlar kendi kartlarını etkilemez
   await A1.goto(`${BASE}/g/${teamA}/m/${mA}`);
-  check("sonuç ekranında rakip takımın oyuncu puanları", (await A1.locator("text=Rakip kadro · E2E Aslanlar").count()) > 0 && (await A1.locator("text=Berk Kaptan").count()) > 0);
+  check("sonuç ekranında rakip takımın oyuncu puanları", (await A1.locator("text=Rakip takım sonuçları · E2E Aslanlar").count()) > 0 && (await A1.locator("text=Berk Kaptan").count()) > 0);
   await shot(A1, "38-ortak-mac-sonuc");
   const { data: ratedA } = await admin.from("player_ratings").select("player_id").in("player_id", [a1, a2, b1, b2]);
   check("her oyuncunun rating'i kendi grubunda", ratedA.length === 4);

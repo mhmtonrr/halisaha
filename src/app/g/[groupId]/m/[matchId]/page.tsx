@@ -315,7 +315,7 @@ async function PlannedView({
           Kadro boş. {canManage ? "Aşağıdan oyuncuları ekle; rakip takım da bu ekrandan kadronu görebilir." : "Kaptan veya yetkililer kadroyu belirler."}
         </Card>
       )}
-      {external ? (
+      {linked ? null : external ? (
         <Card className="p-3">
           <div className="mb-2 flex items-baseline justify-between font-bold">
             <span>Kadromuz ({all.length})</span>
@@ -743,7 +743,7 @@ async function ResultsView({
 // Takımlar arası maç: karşılaşma kartı, skor onayı, rakip kadro
 // ---------------------------------------------------------------------------
 
-/** İki takım yan yana: ad, takım rating'i (en iyi 7), maçtaki kadro sayısı */
+/** İki takım yan yana: üstte ad ve takım rating'i (en iyi 7), altında iki sütunda oyuncular ve ratingleri */
 function VersusCard({
   mine,
   opp,
@@ -756,26 +756,44 @@ function VersusCard({
     { id: opp.team.id, name: opp.team.name, color: opp.team.color, roster: opp.roster, self: false },
   ];
   return (
-    <Card className="mb-4 grid grid-cols-[1fr_auto_1fr] items-start gap-2 py-4">
-      {sides.map((t, i) => (
-        <div key={t.id} className={cx("contents")}>
-          {i === 1 && <span className="mt-3 text-sm font-bold text-muted">VS</span>}
-          <div className="flex min-w-0 flex-col items-center gap-1.5 text-center">
-            <TeamBadge name={t.name} color={t.color} size="md" />
-            {t.self ? (
-              <span className="max-w-full truncate text-sm font-bold">{t.name}</span>
-            ) : (
-              <Link href={`/g/${t.id}`} className="max-w-full truncate text-sm font-bold hover:text-accent">
-                {t.name}
-              </Link>
-            )}
-            <div className="flex items-center gap-1.5">
-              <OvrBadge overall={teamRating(t.roster.map((p) => p.overall))} className={cx("h-7 w-7 text-xs", t.roster.length === 0 && "opacity-40")} />
-              <span className="text-xs text-muted">{t.roster.length} kişi</span>
+    <Card className="mb-4 overflow-hidden p-0">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-2 px-3 py-4">
+        {sides.map((t, i) => (
+          <div key={t.id} className="contents">
+            {i === 1 && <span className="mt-3 text-sm font-bold text-muted">VS</span>}
+            <div className="flex min-w-0 flex-col items-center gap-1.5 text-center">
+              <TeamBadge name={t.name} color={t.color} size="md" />
+              {t.self ? (
+                <span className="max-w-full truncate text-sm font-bold">{t.name}</span>
+              ) : (
+                <Link href={`/g/${t.id}`} className="max-w-full truncate text-sm font-bold hover:text-accent">
+                  {t.name}
+                </Link>
+              )}
+              <div className="flex items-center gap-1.5">
+                <OvrBadge overall={teamRating(t.roster.map((p) => p.overall))} className={cx("h-7 w-7 text-xs", t.roster.length === 0 && "opacity-40")} />
+                <span className="text-xs text-muted">{t.roster.length} kişi</span>
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
+      <div className="grid grid-cols-2 divide-x divide-line border-t border-line">
+        {sides.map((t) => (
+          <ul key={t.id} className="min-w-0 space-y-1.5 p-3">
+            {t.roster.length === 0 && <li className="py-2 text-center text-xs text-muted">Kadro bekleniyor</li>}
+            {t.roster.map((p) => (
+              <li key={p.id}>
+                <Link href={`/g/${t.id}/p/${p.id}`} className="flex items-center gap-1.5 rounded-md transition hover:bg-pitch-800">
+                  <OvrBadge overall={p.overall} className="h-7 w-7 shrink-0 text-xs" />
+                  <span className="min-w-0 flex-1 truncate text-sm">{shortName(p.name)}</span>
+                  <PositionChip position={p.position} />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ))}
+      </div>
     </Card>
   );
 }
@@ -835,9 +853,9 @@ function PlayedView({
   );
 }
 
-/** Rakip takımın kadrosu (ve maç kapanınca oyuncu puanları) */
+/** Maç kapanınca rakip takımın oyuncu puanları (kadro zaten karşılaşma kartında) */
 function OpponentSection({ opp }: { opp: Opponent }) {
-  const closed = opp.match.status === "closed";
+  if (opp.match.status !== "closed") return null;
   return (
     <>
       <SectionTitle
@@ -847,30 +865,9 @@ function OpponentSection({ opp }: { opp: Opponent }) {
           </Link>
         }
       >
-        Rakip kadro · {opp.team.name}
+        Rakip takım sonuçları · {opp.team.name}
       </SectionTitle>
-      {closed ? (
-        <ResultsView groupId={opp.team.id} matchId={opp.match.id} roster={opp.roster} external />
-      ) : opp.roster.length === 0 ? (
-        <Card className="text-center text-sm text-muted">Rakip takım henüz kadrosunu belirlemedi.</Card>
-      ) : (
-        <Card className="p-0">
-          <ul className="divide-y divide-line">
-            {opp.roster.map((p) => (
-              <li key={p.id}>
-                <Link
-                  href={`/g/${opp.team.id}/p/${p.id}`}
-                  className="flex items-center gap-3 px-3 py-2.5 transition hover:bg-pitch-800"
-                >
-                  <OvrBadge overall={p.overall} className="h-8 w-8 text-sm" />
-                  <span className="min-w-0 flex-1 truncate font-medium">{p.name}</span>
-                  <PositionChip position={p.position} />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
+      <ResultsView groupId={opp.team.id} matchId={opp.match.id} roster={opp.roster} external />
       <p className="mt-2 text-center text-xs text-muted">
         Her takım kendi oyuncularını puanlar; rakip oyuncuların puanları senin kartlarını etkilemez.
       </p>
