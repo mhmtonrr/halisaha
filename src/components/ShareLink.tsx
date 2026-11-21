@@ -13,8 +13,9 @@ export function ShareLink({ path, title, className }: { path: string; title: str
         await navigator.share({ title, text: title, url });
         return;
       }
-    } catch {
-      // Kullanıcı paylaşımı kapattıysa sessizce panoya kopyalamaya düş
+    } catch (e) {
+      // Kullanıcı paylaşım penceresini kapattıysa (AbortError) hiçbir şey yapma; başka bir hatada panoya düş
+      if (e instanceof DOMException && e.name === "AbortError") return;
     }
     try {
       await navigator.clipboard.writeText(url);

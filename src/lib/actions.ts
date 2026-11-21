@@ -534,22 +534,29 @@ export async function submitResult(fd: FormData) {
   const back = `/g/${groupId}/m/${matchId}`;
   if (fd.get("scoreA") === "" || fd.get("scoreB") === "") fail(back, "Skoru girin");
 
-  // Gelmeyen oyuncular önce işaretlenir: kadrodan çıkar, hesabı olanlar güvenilirlik için kaydedilir
-  const noShows = [...new Set(fd.getAll("noshow").map(String).filter(Boolean))];
-  if (noShows.length) {
-    const { error: nsError } = await supabase.rpc("mark_no_shows", { p_match: matchId, p_players: noShows });
-    if (nsError) fail(back, rpcMessage(nsError, "Gelmeyenler işaretlenemedi"));
-  }
-  const [roster, { data: cur }] = await Promise.all([
+  const [roster, { data: cur }, { data: allowed }] = await Promise.all([
     loadRoster(supabase, matchId),
-    supabase.from("matches").select("challenge_id").eq("id", matchId).single(),
+    supabase.from("matches").select("challenge_id, status").eq("id", matchId).single(),
+    supabase.rpc("can_manage_match", { p_match_id: matchId }),
   ]);
-  if (roster.length < 2) fail(back, "Sonuç girmek için kadroda en az 2 oyuncu kalmalı");
-  const linked = !!cur?.challenge_id;
-  if (linked && roster.length < 2) fail(back, "Skoru girmeden önce kadroya en az 2 oyuncu ekleyin");
+  if (!cur) fail(back, "Maç bulunamadı");
+  if (!allowed) fail(back, "Sonucu sadece maçı oluşturan veya yetkililer girer");
+  const linked = !!cur.challenge_id;
 
+  // Geri alınamayan işlemlerden ÖNCE her şey doğrulanır. Gelmeyenler (kadrodan çıkar, güvenilirlik kaydı yazılır)
+  // en son, maç durumu güncellenmeden hemen önce işaretlenir.
+  const rosterIds = new Set(roster.map((r) => r.player_id));
+  const noShows = [...new Set(fd.getAll("noshow").map(String).filter((id) => rosterIds.has(id)))];
+  if (noShows.length && cur.status !== "planned") fail(back, "Gelmeyenler sadece planlanmış maçta işaretlenir");
+  const present = roster.filter((r) => !noShows.includes(r.player_id));
+  if (present.length < 2) {
+    fail(back, noShows.length ? "Gelmeyenler çıkarılınca kadroda en az 2 oyuncu kalmalı" : "Sonuç girmek için kadroda en az 2 oyuncu olmalı");
+  }
+  if (cur.status !== "planned" && !(linked && cur.status === "played")) fail(back, "Bu maçın sonucu zaten girildi");
+
+  // Gelmeyenlerin istatistiği yazılmaz (kadrodan çıkacaklar)
   const updates = await Promise.all(
-    roster.map((r) =>
+    present.map((r) =>
       supabase
         .from("match_players")
         .update({
@@ -562,6 +569,11 @@ export async function submitResult(fd: FormData) {
     ),
   );
   if (updates.some((u) => u.error)) fail(back, "İstatistikler kaydedilemedi");
+
+  if (noShows.length) {
+    const { error: nsError } = await supabase.rpc("mark_no_shows", { p_match: matchId, p_players: noShows });
+    if (nsError) fail(back, rpcMessage(nsError, "Gelmeyenler işaretlenemedi"));
+  }
 
   const deadline = new Date(Date.now() + VOTING_HOURS * 3600 * 1000).toISOString();
   const { data, error } = await supabase

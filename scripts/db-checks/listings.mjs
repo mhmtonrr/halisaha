@@ -164,11 +164,4 @@ ok("kaptan gelmeyeni görür; yabancı göremez", (await q(`select count(*)::int
 await as(4);
 ok("başkasının 'gelmedi' kaydı görünmez", (await q(`select count(*)::int c from match_no_shows`))[0].c === 0);
 await as(1);
-const rel = (await q(`select * from player_reliability($1)`, [U(5)]))[0];
-ok("güvenilirlik: 1 gelmedi", rel.no_shows === 1 && rel.played === 0);
-await db.exec("reset role");
-await db.query(`update matches set status='closed', score_a=1, score_b=0 where id=$1`, [mT]);
-await as(1);
-const rel3 = (await q(`select * from player_reliability($1)`, [U(3)]))[0];
-ok("kapanmış maçta oynayan oyuncunun 'oynadı' sayısı artar (u3: 1 maç, 0 gelmedi)", rel3.played === 1 && rel3.no_shows === 0);
-await db.query(`update matches set status='planned' where id=$1`, [mT]).catch(() => {});
+ok("player_reliability herkese açık sızıntı olmasın diye kaldırıldı", await fails(`select * from player_reliability($1)`, [U(5)]));

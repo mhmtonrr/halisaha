@@ -618,7 +618,7 @@ async function PlannedView({
           </details>
 
           <SectionTitle>Maç bitti mi? Sonucu gir</SectionTitle>
-          <ResultForm groupId={groupId} matchId={matchId} all={all} external={external} labels={labels} linked={linked} />
+          <ResultForm groupId={groupId} matchId={matchId} all={all} external={external} labels={labels} linked={linked} allowNoShow />
 
           <form action={deleteMatch} className="mt-8 text-center">
             <Hidden groupId={groupId} matchId={matchId} />
@@ -645,6 +645,7 @@ function ResultForm({
   labels,
   linked,
   score,
+  allowNoShow = false,
 }: {
   groupId: string;
   matchId: string;
@@ -653,6 +654,8 @@ function ResultForm({
   labels: Labels;
   linked: boolean;
   score?: { a: number | null; b: number | null };
+  /** "Gelmedi" işareti sadece planlanmış maçta (skor düzeltmesinde gösterilmez) */
+  allowNoShow?: boolean;
 }) {
   return (
     <form action={submitResult} className="space-y-3">
@@ -691,10 +694,12 @@ function ResultForm({
                 {!external && <span className={cx("h-2 w-2 shrink-0 rounded-full", TEAM[p.team].bg)} />}
                 <span className="truncate">{p.name}</span>
               </span>
-              <label className="mt-0.5 flex w-fit cursor-pointer items-center gap-1 text-[11px] text-muted has-checked:text-red-300">
-                <input type="checkbox" name="noshow" value={p.id} className="accent-red-400" />
-                gelmedi
-              </label>
+              {allowNoShow && (
+                <label className="mt-0.5 flex w-fit cursor-pointer items-center gap-1 text-[11px] text-muted has-checked:text-red-300">
+                  <input type="checkbox" name="noshow" value={p.id} className="accent-red-400" />
+                  gelmedi
+                </label>
+              )}
             </span>
             {(["goals", "assists", "saves"] as const).map((k) => (
               <input

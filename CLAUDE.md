@@ -67,7 +67,7 @@ src/lib/authErrors.ts    Supabase Auth hatalarının Türkçesi
 src/lib/supabase/        server.ts (requireUser + karşılama yönlendirmesi), client.ts, admin.ts
 src/middleware.ts        Oturum yenileme, girişsiz yönlendirme, x-pathname başlığı
 src/app/                 Sayfalar (aşağıda)
-supabase/migrations/     0001..0015 SQL (sırayla; hepsi canlıya uygulandı)
+supabase/migrations/     0001..0016 SQL (sırayla; hepsi canlıya uygulandı)
 scripts/db-checks/       PGlite ile RLS/yetki kontrolleri (npm run db:check)
 scripts/e2e/             Canlı veritabanına karşı Playwright akış testleri
 scripts/recompute-all.ts Tüm ratingleri baştan hesaplar (vite-node ile, aşağıda)
@@ -113,8 +113,15 @@ olarak yazılır ve o maçın kadrosuna girer; takımın asıl kadrosunda değil
 görünür (maç ekranı ve kadro sayfası da `isSquadMember`/`isGuestLike` ayrımını kullanır). Oy verir/oylanır, genel ratingi geçerlidir.
 Gereken sayı dolunca ilan `filled` olur. Ödünç oyuncu davet koduyla katılırsa kalıcı üye olur (`join_group` upsert). Oyuncu ilan
 kabulünü/durumunu ana sayfada görür (canlı). **Güvenilirlik**: maç sonucu girerken kaptan "gelmedi" işaretler (`mark_no_shows`: kadrodan
-çıkarır, hesabı olanı `match_no_shows`'a yazar); `player_reliability` oynadığı (oylama/kapanışa ulaşmış) maç ve gelmediği maç sayısını verir,
-`reliability()` yüzdeyi ve etiketi üretir (3 kayıttan azında "Yeni"). Tuzak: `returns table` içinde `position` sütun adı olamaz (`chosen_position`).
+çıkarır, hesabı olanı `match_no_shows`'a yazar; sadece planlanmış maçta, yani skor düzeltmesinde "gelmedi" kutusu görünmez). `listing_applicants`
+oynadığı (oylama/kapanışa ulaşmış) maç ve gelmediği maç sayısını verir (kimlik doğrulamasız genel bir güvenilirlik sorgusu bilerek yok),
+`reliability()` yüzdeyi ve etiketi üretir (3 kayıttan azında "Yeni"). `submitResult` sırası: önce her şeyi doğrula (yetki, skor, "gelmedi"
+çıkınca kalan ≥2, durum), sonra istatistikleri yaz, "gelmedi"yi en son (maç durumu güncellenmeden hemen önce) işaretle; geri alınamayan işlem
+doğrulanabilir bir hatadan önce yapılmaz.
+**İlan yaşam döngüsü (0016)**: maç planlanmış olmaktan çıkınca (sonuç/oylama/iptal) açık ilan **kapanır** (tetikleyici); 5 açık ilan sınırı sadece
+planlanmış ve gelecekteki maçları sayar; bekleyen 10 başvuru sınırı yeniden başvuruda da işler; kabul edilmiş ödünç oyuncu maç kadrosundan çıkarılırsa
+(`match_players` silinmesi) başvurusu `withdrawn` olur ve dolu ilan yeniden açılır; mevkisiz başvuran da kabul edilir (kaleci sayılmaz).
+Ödünç oyuncu `getMemberships`'te yok ama oynadığı maç oylamaya geçince ana sayfada "Oyunu bekliyorlar (ödünç)" kartı görür. Tuzak: `returns table` içinde `position` sütun adı olamaz (`chosen_position`).
 Tuzak: canlı yenilenen sunucu bileşeninde `<details open={koşul}>` her yenilemede kullanıcının açtığını kapatır → `AutoOpenDetails`
 (sadece ilk yüklemede açar).
 

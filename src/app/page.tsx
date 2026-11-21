@@ -59,6 +59,31 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
   const adminTeamIds = memberships.filter((m) => m.group.kind === "team" && m.role !== "member").map((m) => m.group.id);
   const [incoming, myApplications] = await Promise.all([countIncoming(supabase, adminTeamIds), getMyApplications(supabase, user.id)]);
 
+  // Ödünç oynadığım maçlar (takımın üyesi değilim, ama maçın kadrosundayım): oylamaya geçince oy vermem gerekir
+  const { data: loanRows } = await supabase.from("group_players").select("id, group_id, groups(name)").eq("user_id", user.id).eq("is_loan", true);
+  const loans = loanRows ?? [];
+  await Promise.all([...new Set(loans.map((l) => l.group_id))].map((id) => finalizeExpired(id)));
+  const loanIds = loans.map((l) => l.id);
+  const [{ data: loanMatchRows }, { data: loanVoteRows }] = loanIds.length
+    ? await Promise.all([
+        supabase
+          .from("match_players")
+          .select("player_id, matches!inner(id, group_id, played_at, kind, opponent_name, status)")
+          .in("player_id", loanIds)
+          .eq("matches.status", "voting"),
+        supabase.from("votes").select("match_id").in("voter_id", loanIds),
+      ])
+    : [{ data: [] }, { data: [] }];
+  const loanVoted = new Set((loanVoteRows ?? []).map((v) => v.match_id));
+  type LoanMatch = { id: string; group_id: string; played_at: string; kind: string; opponent_name: string | null; status: string };
+  const loanToVote = (loanMatchRows ?? []).flatMap((r) => {
+    const m = (Array.isArray(r.matches) ? r.matches[0] : r.matches) as LoanMatch | null;
+    if (!m || loanVoted.has(m.id)) return [];
+    const loan = loans.find((l) => l.id === r.player_id);
+    const g = Array.isArray(loan?.groups) ? loan?.groups[0] : loan?.groups;
+    return [{ ...m, teamName: (g as { name: string } | null | undefined)?.name ?? "Takım" }];
+  });
+
   const voted = new Set((myVotes ?? []).map((v) => v.match_id));
   const myPlayerIds = new Set(memberships.map((m) => m.playerId));
   const byGroup = new Map(memberships.map((m) => [m.group.id, m]));
@@ -175,6 +200,22 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
           </Link>
         );
       })}
+
+      {/* Ödünç oynadığım ve oylamaya geçen maçlar */}
+      {loanToVote.map((m) => (
+        <Link key={m.id} href={`/g/${m.group_id}/m/${m.id}`}>
+          <Card className="mb-3 flex items-center gap-3 border-amber-400/40 bg-amber-400/10">
+            <span className="text-2xl">🗳️</span>
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold">Oyunu bekliyorlar!</div>
+              <div className="truncate text-xs text-muted">
+                {m.teamName} (ödünç) · {m.kind === "external" ? `vs ${m.opponent_name}` : "kendi aramızda"} · {formatDate(m.played_at)}
+              </div>
+            </div>
+            <span className="text-amber-300">›</span>
+          </Card>
+        </Link>
+      ))}
 
       {/* Oy bekleyen maçlar: en önemli eylem */}
       {toVote.map((m) => (

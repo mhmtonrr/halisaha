@@ -172,6 +172,7 @@ try {
   await A1.goto(`${BASE}/g/${teamA}/m/${mA}`);
   check("Kartal kaptanı rakip kadroyu karşılaşma kartında görür", (await A1.locator("text=Berk K.").count()) > 0 && (await A1.locator("text=Rakip kadro").count()) === 0);
   check("karşılaşma kartında iki takım", (await A1.locator("text=VS").count()) > 0);
+  check("planlanmış maçta sonuç formunda 'gelmedi' kutusu var", (await A1.locator('input[name="noshow"]').count()) > 0);
   await shot(A1, "35-ortak-mac-planli");
   await A2.goto(`${BASE}/g/${teamA}/m/${mA}`);
   check("oyuncu rakip kadroyu görür", (await A2.locator("text=Buse O.").count()) > 0);
@@ -195,6 +196,7 @@ try {
   };
   check("ilk skor: rakip bekleniyor", (await submitScore(A1, teamA, mA, 4, 2)) === "waiting");
   check("bekleme bilgisi görünüyor", (await A1.locator("text=Rakibin skor girmesi bekleniyor").count()) > 0);
+  check("skor düzeltme ekranında 'gelmedi' kutusu yok (sadece planlanmış maçta)", (await A1.locator('input[name="noshow"]').count()) === 0);
   await shot(A1, "36-skor-bekleniyor");
   check("uyuşmayan skor: mismatch", (await submitScore(B1, teamB, mB, 2, 3)) === "mismatch");
   check("uyuşmazlık metni iki skoru gösterir", (await B1.locator("text=Skorlar uyuşmuyor").count()) > 0);

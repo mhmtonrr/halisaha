@@ -145,6 +145,20 @@ try {
   await outP.goto(`${BASE}/kesfet`);
   check("dolan ilan Keşfet'ten kalktı", (await outP.locator("text=E2E İlan Takımı · 2 oyuncu").count()) === 0);
 
+  // 8a) Atomiklik: kadroyu 2'nin altına düşürecek "gelmedi" hata verir ve HİÇBİR şeyi değiştirmez
+  await capP.goto(`${BASE}/g/${T}/m/${mid}`);
+  await capP.fill('input[name="scoreA"]', "3"); await capP.fill('input[name="scoreB"]', "1");
+  const nsBoxes = capP.locator('input[name="noshow"]');
+  const rosterSize = await nsBoxes.count();
+  for (let i = 0; i < rosterSize - 1; i++) await nsBoxes.nth(i).check(); // geriye 1 kişi kalır
+  await capP.click('button:has-text("oylamayı başlat")');
+  await capP.waitForURL(/error=/);
+  check("kalan 2'den azsa hata mesajı", (await capP.locator("main").innerText()).includes("en az 2 oyuncu kalmalı"));
+  check("hata durumunda kadro ve 'gelmedi' kayıtları değişmedi (atomik)",
+    (await admin.from("match_players").select("player_id").eq("match_id", mid)).data.length === rosterSize
+    && (await admin.from("match_no_shows").select("user_id").eq("match_id", mid)).data.length === 0
+    && (await admin.from("matches").select("status").eq("id", mid).single()).data.status === "planned");
+
   // 8) Sonuç girerken "gelmedi": Mert gelmedi → kadrodan çıkar, kayıt tutulur
   await capP.goto(`${BASE}/g/${T}/m/${mid}`);
   await capP.fill('input[name="scoreA"]', "3"); await capP.fill('input[name="scoreB"]', "1");
@@ -155,9 +169,14 @@ try {
   const { data: ns } = await admin.from("match_no_shows").select("user_id").eq("match_id", mid);
   check("gelmeyen oyuncu 'gelmedi' olarak kaydedildi", ns.length === 1 && ns[0].user_id === mem.id);
   check("gelmeyen kadrodan çıkarıldı (oylanmaz)", (await admin.from("match_players").select("player_id").eq("match_id", mid).eq("player_id", await gpT(mem))).data.length === 0);
-  const { data: rel } = await admin.rpc("player_reliability", { p_user: mem.id });
-  void rel;
   check("maç oylamaya geçti", (await admin.from("matches").select("status").eq("id", mid).single()).data.status === "voting");
+  check("açık ilan, maç oylamaya geçince kapandı (kısa süre doldu ilanı zaten dolu: durum filled/closed)", ["filled", "closed"].includes((await admin.from("player_listings").select("status").eq("id", L.id).single()).data.status));
+  // Ödünç oyuncunun (takım üyesi olmasa da) oy kartı ana sayfasında çıkar
+  await appP.goto(BASE + "/");
+  check("ödünç oyuncunun ana sayfasında 'oyunu bekliyorlar' (ödünç) kartı var", (await appP.locator("text=Oyunu bekliyorlar").count()) > 0 && (await appP.locator("text=(ödünç)").count()) > 0);
+  await appP.locator("text=Oyunu bekliyorlar").first().click();
+  await appP.waitForURL(/\/m\//);
+  check("karta tıklayınca maç ekranında oy formu açılır", (await appP.locator('input[type="range"]').count()) > 0);
 } catch (e) {
   failed++;
   console.log("  ✗ ÇÖKTÜ:", e.message);
