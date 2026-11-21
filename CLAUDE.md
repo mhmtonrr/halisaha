@@ -63,6 +63,10 @@ public/sw.js             Service worker: push'u gösterir, tıklayınca aynı si
 src/lib/skills.ts        Yetenek itibarı: 12 kategori (saha HIZ/ŞUT/PAS/DRİ/DEF/FİZ, kaleci REF/ATL/HAV/YER/DAĞ/İLT), 1-10 puanlardan 40-99 değer (saf, testli)
 src/lib/skills-data.ts   Değerlendirmelerden kişinin yeteneklerini hesaplayıp player_skills'e yazar (service role; recomputeSkills / recomputeSkillsForVoter)
 src/lib/skill-queue.ts   Değerlendirmeni bekleyen oyuncular (skill_queue RPC)
+src/lib/profile-stats.ts Kişinin TÜM grup/takım maçlarından istatistik özeti: toplamlar, form, seri, rakip/iç, grup bazında, mevki (saf, testli)
+src/lib/profile-data.ts  Kişi bazlı veri (service role): loadPerson, loadPersonMatches, canViewStats, loadProfileForViewer
+src/lib/fetch-in.ts      Büyük `in (...)` sorgularını parçalayıp sayfalayan yardımcı
+src/components/profile/ProfileView.tsx  Sekmeli profil (Genel/İstatistik/Maçlar/Ayarlar); /profil ve /oyuncu/[id] aynı bileşeni kullanır
 src/lib/team-stats.ts    Takım karnesi, form, seri, rakip bazlı geçmiş, oyuncu liderleri (saf, testli)
 src/lib/challenges-data.ts  Maç teklifleri sorguları (gelen/giden, bekleyen sayısı)
 src/lib/data.ts          Ortak sorgular, mevki/ayak sabitleri, tarih yardımcıları (TR saati)
@@ -76,7 +80,7 @@ src/lib/authErrors.ts    Supabase Auth hatalarının Türkçesi
 src/lib/supabase/        server.ts (requireUser + karşılama yönlendirmesi), client.ts, admin.ts
 src/middleware.ts        Oturum yenileme, girişsiz yönlendirme, x-pathname başlığı
 src/app/                 Sayfalar (aşağıda)
-supabase/migrations/     0001..0019 SQL (sırayla; hepsi canlıya uygulandı)
+supabase/migrations/     0001..0020 SQL (sırayla; hepsi canlıya uygulandı)
 scripts/db-checks/       PGlite ile RLS/yetki kontrolleri (npm run db:check)
 scripts/e2e/             Canlı veritabanına karşı Playwright akış testleri
 scripts/recompute-all.ts Tüm ratingleri baştan hesaplar (vite-node ile, aşağıda)
@@ -84,7 +88,7 @@ scripts/recompute-all.ts Tüm ratingleri baştan hesaplar (vite-node ile, aşağ
 
 Sayfalar: `/login` (e-posta+şifre, Google, şifremi unuttum) · `/hosgeldin` (ilk giriş: ad, il/ilçe, mevki…)
 · `/` ana sayfa · `/kesfet` takım sıralaması · `/profil` · `/takim-kur` · `/grup-kur` · `/sifre-yenile`
-· `/yetenek` (yetenek değerlendirmesi) · `/join/[code]` · `/g/[id]` grup/takım · `/g/[id]/{players,kadro,sohbet,matches/new,cagri/yeni,cagri/[pollId],m/[matchId],p/[playerId]}`
+· `/yetenek` (yetenek değerlendirmesi) · `/oyuncu/[userId]` (başkasının profili) · `/join/[code]` · `/g/[id]` grup/takım · `/g/[id]/{players,kadro,sohbet,matches/new,cagri/yeni,cagri/[pollId],m/[matchId],p/[playerId]}`
 · takımlara özel: `/g/[id]/teklif` (bu takıma maç teklif et) · `/g/[id]/teklifler` (gelen/giden/kabul edilen) · `/g/[id]/istatistik` (herkese açık)
 
 ## Alan modeli ve kurallar
@@ -248,6 +252,15 @@ bir gönderim, o oy verenin puanladığı herkesi yeniden hesaplatır (`recomput
 (rating gibi); misafirde kendi satırı. Kaleci kuralı her yerde aynı: `match_players.position`, yoksa `is_goalkeeper`, yoksa profil mevkisi.
 Test: `skills.test.ts`, `db-checks/skill-ratings.mjs`, `e2e/skills.mjs`. (Geçmiş: 0018'de "maçta kim öne çıktı?" işaretleme modeli (A) yapılmıştı; kullanıcı B istediği için 0019 ile kaldırıldı.)
 
+**Profil ve istatistik (migration 0020)**: `/profil` sekmelidir (`?sekme=genel|istatistik|maclar|ayarlar`), başkasının profili `/oyuncu/[userId]` (Ayarlar sekmesi yok; kendi
+kimliğine giderse `/profil`'e yönlenir). Aynı `ProfileView`. **Genel**: kart, güvenilirlik, yetenek çubukları, oyuncu bilgisi, takımlar (başkasında sadece herkese açık takımlar). **İstatistik**:
+toplamlar, G/B/M, form + son 10 puanlı maç grafiği, seri, ortalamalar, rakip/iç ayrımı, takım-grup bazında, mevki, güvenilirlik. **Maçlar**: son 50 maç. Veri **tüm grup ve takımlardan** (oylamada +
+kapanmış maçlar; grup sayfasındaki istatistik hâlâ sadece kapanmış maçlardır) service role ile okunur (`profile-data.ts`), **görünürlük kontrolü çağıranın sorumluluğu** (`canViewStats`).
+**Görünürlük (kullanıcı kararı)**: `profiles.stats_visibility` = `teammates` (varsayılan: ödünç olmayan ortak grup/takım) veya `public` (giriş yapmış herkes); ayar Ayarlar sekmesinde
+(`updateStatsVisibility`). Kart (rating, yetenekler, bölge) her zaman herkese görünür; sadece istatistik ve maç geçmişi ayara bağlı. Başkasının maç geçmişinde özel topluluğun adı ve maç bağlantısı
+sadece o grubun üyelerine görünür ("Özel grup"); takımlar herkese açık. "Gruplarımdaki kartlarım" kaldırıldı (rating ve yetenekler genel olduğundan kartlar aynı). Tuzak: başlıklar CSS ile BÜYÜK harf;
+e2e'de metin karşılaştırması Türkçe küçük harfe göre yapılır. Test: `profile-stats.test.ts`, `db-checks/stats-visibility.mjs`, `e2e/profile.mjs`.
+
 **Sohbet** (group_messages/chat_reads): Realtime postgres_changes, RLS'e uyar (sadece üyeler; takım sohbeti de
 sadece oyunculara). İstemci abone olmadan önce `realtime.setAuth(token)` çağırır ve (yeniden) bağlanınca
 kaçırılanları çeker — bunu kaldırma, yoksa mesajlar ara sıra düşmüyor. Etkinlik kartları DB tetikleyicileriyle
@@ -287,7 +300,7 @@ Uçtan uca (canlı Supabase'e karşı; test kullanıcıları/grupları oluşturu
 (NODE_USE_ENV_PROXY=1 npx next start -p 3000 > /tmp/server.log 2>&1 &)
 NODE_USE_ENV_PROXY=1 NO_PROXY=localhost,127.0.0.1 node scripts/e2e/chat.mjs /tmp/shots
 ```
-Senaryolar: `skills`, `positions-external`, `auth-onboarding`, `teams-polls`, `regions-community`, `chat`, `challenges`, `guest-match`, `realtime`, `member-poll`, `listings`, `notifications`.
+Senaryolar: `profile`, `skills`, `positions-external`, `auth-onboarding`, `teams-polls`, `regions-community`, `chat`, `challenges`, `guest-match`, `realtime`, `member-poll`, `listings`, `notifications`.
 Ekran görüntülerine bak (390px genişlik, telefon) — görsel sorunlar çoğu zaman sadece orada yakalanıyor.
 Port doluysa: `fuser -k 3000/tcp`. Arayüzden kayıt (signUp) test etme: onay maili gönderir, limit saatte 2.
 

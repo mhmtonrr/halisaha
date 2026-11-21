@@ -75,9 +75,20 @@ function profileArgs(fd: FormData) {
 export async function updateProfile(fd: FormData) {
   const { supabase } = await requireUser();
   const { error } = await supabase.rpc("update_my_profile", profileArgs(fd));
-  if (error) fail("/profil", error.message);
+  if (error) fail("/profil?sekme=ayarlar", error.message);
   revalidatePath("/", "layout");
-  redirect("/profil?saved=1");
+  redirect("/profil?sekme=ayarlar&saved=1");
+}
+
+/** İstatistik ve maç geçmişini kimin görebileceği: "teammates" (ortak grup/takım) veya "public" (herkes) */
+export async function updateStatsVisibility(fd: FormData) {
+  const { supabase, user } = await requireUser();
+  const value = str(fd, "visibility");
+  if (value !== "teammates" && value !== "public") fail("/profil?sekme=ayarlar", "Geçersiz seçim");
+  const { error } = await supabase.from("profiles").update({ stats_visibility: value }).eq("id", user.id);
+  if (error) fail("/profil?sekme=ayarlar", "Ayar kaydedilemedi");
+  revalidatePath("/profil");
+  redirect("/profil?sekme=ayarlar&saved=1");
 }
 
 /** İlk girişteki karşılama formu */

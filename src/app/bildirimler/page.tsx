@@ -36,7 +36,7 @@ export default async function NotificationsPage() {
         title="Bildirimler"
         back="/"
         right={
-          <Link href="/profil#bildirimler" className="rounded-lg px-2 py-1 text-sm text-accent hover:bg-pitch-800">
+          <Link href="/profil?sekme=ayarlar#bildirimler" className="rounded-lg px-2 py-1 text-sm text-accent hover:bg-pitch-800">
             Ayarlar
           </Link>
         }
@@ -45,7 +45,7 @@ export default async function NotificationsPage() {
         <Card className="space-y-2 text-center text-sm text-muted">
           <div className="text-3xl">🔔</div>
           <p>Henüz bildirimin yok. Oylama, maç çağrısı, teklif ve ilan gelişmeleri burada görünür.</p>
-          <Link href="/profil#bildirimler" className="text-accent">
+          <Link href="/profil?sekme=ayarlar#bildirimler" className="text-accent">
             Push bildirimlerini aç ›
           </Link>
         </Card>

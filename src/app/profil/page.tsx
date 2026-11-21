@@ -1,115 +1,61 @@
-import Link from "next/link";
 import { requireUser } from "@/lib/supabase/server";
-import { updateProfile } from "@/lib/actions";
-import { DEFAULT_OVERALL } from "@/lib/rating";
-import { one, type Position } from "@/lib/data";
-import { formatRegion } from "@/lib/regions";
-import { Button, Card, ErrorNote, Header, SectionTitle } from "@/components/ui";
-import { ProfileFields, type ProfileValues } from "@/components/ProfileFields";
-import { OvrBadge, PlayerCard } from "@/components/PlayerCard";
-import { PushSettings } from "@/components/PushControls";
-import { cardSkills } from "@/lib/skills";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { loadProfileForViewer } from "@/lib/profile-data";
 import { DEFAULT_PREFS } from "@/lib/notify-rules";
+import { ErrorNote, Header } from "@/components/ui";
+import type { ProfileValues } from "@/components/ProfileFields";
+import { ProfileView, parseTab } from "@/components/profile/ProfileView";
+import { SettingsPanel } from "./SettingsPanel";
 
 export default async function ProfilePage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; saved?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; sekme?: string }>;
 }) {
-  const { error, saved } = await searchParams;
+  const { error, saved, sekme } = await searchParams;
   const { supabase, user } = await requireUser();
+  const tab = parseTab(sekme, true);
 
-  const [{ data: profile }, { data: memberships }, { data: prefsRow }] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("display_name, city, district, birth_year, preferred_position, secondary_positions, preferred_foot, shirt_number, bio")
-      .eq("id", user.id)
-      .single(),
-    supabase
-      .from("group_players")
-      .select("id, group_id, groups(name, kind, color), player_ratings(overall, matches_played), player_skills(skills)")
-      .eq("user_id", user.id)
-      .eq("is_loan", false),
-    supabase.from("notification_prefs").select("votes, matches, offers, chat").eq("user_id", user.id).maybeSingle(),
+  const [data, { data: form }, { data: prefsRow }] = await Promise.all([
+    loadProfileForViewer(createAdminClient(), user.id, user.id),
+    // Form değerleri (doğum yılı dahil) kendi satırından
+    tab === "ayarlar"
+      ? supabase
+          .from("profiles")
+          .select("display_name, city, district, birth_year, preferred_position, secondary_positions, preferred_foot, shirt_number, bio")
+          .eq("id", user.id)
+          .single()
+      : Promise.resolve({ data: null }),
+    tab === "ayarlar"
+      ? supabase.from("notification_prefs").select("votes, matches, offers, chat").eq("user_id", user.id).maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
-
-  const position = (profile?.preferred_position ?? null) as Position | null;
-  type G = { name: string; kind: string; color: string | null };
-  const teamMembership = (memberships ?? []).find((m) => one(m.groups as G | G[] | null)?.kind === "team");
-  const teamGroup = one((teamMembership?.groups ?? null) as G | G[] | null);
-  const storedSkills = one(
-    (memberships?.[0]?.player_skills ?? null) as { skills: Record<string, number | null> } | { skills: Record<string, number | null> }[] | null,
-  )?.skills;
-  const played = (memberships ?? []).reduce(
-    (n, m) => Math.max(n, one(m.player_ratings as { matches_played: number } | { matches_played: number }[] | null)?.matches_played ?? 0),
-    0,
-  );
-  const best = Math.max(
-    DEFAULT_OVERALL,
-    ...(memberships ?? []).map((m) => one(m.player_ratings as { overall: number } | { overall: number }[] | null)?.overall ?? 0),
-  );
+  if (!data) throw new Error("Profil bulunamadı");
 
   return (
     <main>
       <Header title="Profilim" back="/" />
       <ErrorNote message={error} />
-      {saved && (
-        <p className="mb-4 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">Profil kaydedildi ✓</p>
-      )}
-
-      <PlayerCard
-        name={profile?.display_name ?? ""}
-        overall={best}
-        position={position}
-        shirtNumber={profile?.shirt_number}
-        skills={cardSkills(storedSkills, position === "GK")}
-        city={profile?.city}
-        district={profile?.district}
-        team={teamGroup ? { name: teamGroup.name, color: teamGroup.color } : null}
-        unrated={played === 0}
+      {saved && <p className="mb-4 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">Kaydedildi ✓</p>}
+      <ProfileView
+        base="/profil"
+        tab={tab}
+        person={data.person}
+        isMe
+        stats={data.stats}
+        matches={data.matches}
+        noShows={data.noShows}
+        viewerGroups={data.viewerGroups}
+        settings={
+          form && (
+            <SettingsPanel
+              values={form as ProfileValues}
+              visibility={data.person.profile.statsVisibility}
+              prefs={{ ...DEFAULT_PREFS, ...(prefsRow ?? {}) }}
+            />
+          )
+        }
       />
-      <p className="mt-2 text-center text-xs text-muted">
-        {formatRegion(profile?.city ?? null, profile?.district ?? null)}
-        {profile?.city ? " · " : ""}Kartında en yüksek grup puanın görünür.
-      </p>
-
-      <form action={updateProfile} className="mt-6 space-y-4">
-        <Card className="space-y-4">
-          <ProfileFields values={profile as ProfileValues} full />
-        </Card>
-        <Button className="w-full">Kaydet</Button>
-        <p className="text-center text-xs text-muted">
-          Adın ve ana mevkin tüm gruplarında güncellenir. Maça özel mevkini maçı kuran kişi değiştirebilir.
-        </p>
-      </form>
-
-      <div id="bildirimler" className="scroll-mt-4">
-        <SectionTitle>Bildirimler</SectionTitle>
-        <PushSettings prefs={{ ...DEFAULT_PREFS, ...(prefsRow ?? {}) }} />
-      </div>
-
-      {(memberships?.length ?? 0) > 0 && (
-        <>
-          <SectionTitle>Gruplarımdaki kartlarım</SectionTitle>
-          <Card className="p-0">
-            <ul className="divide-y divide-line">
-              {memberships!.map((m) => {
-                const r = one(m.player_ratings as { overall: number; matches_played: number } | { overall: number; matches_played: number }[] | null);
-                const g = one(m.groups as { name: string } | { name: string }[] | null);
-                return (
-                  <li key={m.id}>
-                    <Link href={`/g/${m.group_id}/p/${m.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-pitch-800">
-                      <OvrBadge overall={r?.overall ?? DEFAULT_OVERALL} />
-                      <span className="flex-1">{g?.name}</span>
-                      <span className="text-xs text-muted">{r?.matches_played ?? 0} maç ›</span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </Card>
-        </>
-      )}
     </main>
   );
 }

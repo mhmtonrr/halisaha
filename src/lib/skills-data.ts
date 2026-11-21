@@ -1,32 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { chunks, fetchIn } from "@/lib/fetch-in";
 import { computeSkills, isMutualHigh, voterNorm, type Scores, type SkillRating } from "@/lib/skills";
-
-const IN_CHUNK = 100;
-const PAGE = 1000;
-
-const chunks = <T,>(xs: T[], size: number): T[][] => {
-  const out: T[][] = [];
-  for (let i = 0; i < xs.length; i += size) out.push(xs.slice(i, i + size));
-  return out;
-};
-
-/** `in (...)` sorgusunu parçalara bölüp sayfalayarak hepsini çeker */
-async function fetchIn<T>(
-  ids: string[],
-  build: (part: string[], from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
-): Promise<T[]> {
-  const rows: T[] = [];
-  for (const part of chunks(ids, IN_CHUNK)) {
-    for (let from = 0; ; from += PAGE) {
-      const { data, error } = await build(part, from, from + PAGE - 1);
-      if (error) throw error;
-      rows.push(...(data ?? []));
-      if (!data || data.length < PAGE) break;
-    }
-  }
-  return rows;
-}
 
 interface RatingRow {
   voter_id: string;

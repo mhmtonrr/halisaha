@@ -104,7 +104,7 @@ export default async function ManagePage({
       </Card>
 
       {me && (
-        <Link href="/profil">
+        <Link href="/profil?sekme=ayarlar">
           <Card className="mb-4 flex items-center justify-between transition hover:border-accent/50">
             <span className="text-sm">Mevkini, ayağını ve forma numaranı profilinden düzenle</span>
             <span className="text-muted">›</span>

@@ -5,7 +5,7 @@ import { FOOT_NAME, POSITION_NAME, byRanking, formatDate, getGroupSummaries, typ
 import { Badge, Card, Header, LinkButton, SectionTitle, cx } from "@/components/ui";
 import { PlayerCard, PositionChip } from "@/components/PlayerCard";
 import { formatRegion } from "@/lib/regions";
-import { skillSet } from "@/lib/skills";
+import { SkillBars } from "@/components/SkillBars";
 import { ROLE_LABEL, type GroupKind, type Role } from "@/lib/teams-data";
 
 // Özellikler 40 (hiç yok) ile 99 arasında; çubuk bu aralığa göre dolar
@@ -62,7 +62,7 @@ export default async function PlayerPage({
         back={`/g/${groupId}/kadro`}
         right={
           isMe ? (
-            <LinkButton href="/profil" variant="ghost">
+            <LinkButton href="/profil?sekme=ayarlar" variant="ghost">
               Düzenle
             </LinkButton>
           ) : undefined
@@ -87,6 +87,13 @@ export default async function PlayerPage({
         {player.role !== "member" && <Badge tone={player.role === "captain" ? "warn" : "default"}>{roleLabels[player.role as Role]}</Badge>}
       </div>
       {player.bio && <p className="mt-3 text-center text-sm italic text-muted">“{player.bio}”</p>}
+      {player.user_id && (
+        <div className="mt-3 text-center">
+          <Link href={isMe ? "/profil?sekme=istatistik" : `/oyuncu/${player.user_id}`} className="text-sm text-accent underline">
+            Tüm gruplardaki istatistikleri gör ›
+          </Link>
+        </div>
+      )}
 
       {player.matches_played === 0 && (
         <p className="mt-4 text-center text-sm text-muted">
@@ -96,25 +103,10 @@ export default async function PlayerPage({
 
       <SectionTitle>Yetenekler</SectionTitle>
       <Card className="space-y-3">
-        {skillSet(player.position === "GK").map((sk) => {
-          const v = player.skills.find((x) => x.key === sk.key)?.value ?? null;
-          return (
-            <div key={sk.key}>
-              <div className="mb-1 flex items-baseline justify-between text-sm">
-                <span>
-                  <b className="mr-2 inline-block w-9 text-xs text-muted">{sk.key}</b>
-                  {sk.label}
-                </span>
-                <span className="text-lg font-black tabular-nums">{v ?? "–"}</span>
-              </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-pitch-950">
-                {v !== null && <div className={cx("h-full rounded-full", barColor(v))} style={{ width: `${barWidth(v)}%` }} />}
-              </div>
-            </div>
-          );
-        })}
+        <SkillBars skills={player.skills} keeper={player.position === "GK"} />
         <p className="text-[11px] text-muted">
-          Birlikte en az 2 maç oynayanlar (rakipler dahil) 1-10 puanlar; kimin ne verdiği görünmez. En az 2 farklı kişi puan verince değer görünür.</p>
+          Birlikte en az 2 maç oynayanlar (rakipler dahil) 1-10 puanlar; kimin ne verdiği görünmez. En az 2 farklı kişi puan verince değer görünür.
+        </p>
       </Card>
 
       <SectionTitle>Performans göstergeleri</SectionTitle>
