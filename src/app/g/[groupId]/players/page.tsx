@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
-import { addGuest, claimGuest, removePlayer, setMemberRole, setPosition, updateTeam } from "@/lib/actions";
+import { claimGuest, removePlayer, setMemberRole, setPosition, updateTeam } from "@/lib/actions";
 import { getGroupSummaries, type Position } from "@/lib/data";
 import { ROLE_LABEL, type GroupKind, type Role } from "@/lib/teams-data";
-import { Badge, Button, Card, ErrorNote, Header, Input, SectionTitle } from "@/components/ui";
+import { Badge, Button, Card, ErrorNote, Header, SectionTitle } from "@/components/ui";
 import { OvrBadge, PositionChip } from "@/components/PlayerCard";
 import { TeamFields } from "@/components/TeamFields";
 
@@ -93,7 +93,7 @@ export default async function ManagePage({
 
       <Card className="mb-4 text-sm text-muted">
         <b className="text-white">{labels.captain}</b> rolleri yönetir ve {isTeam ? "kaptanlığı" : "kuruculuğu"} devredebilir.{" "}
-        <b className="text-white">{labels.admin}</b>ler maç kurar, kadroyu ve mevkileri düzenler, misafir ekler.{" "}
+        <b className="text-white">{labels.admin}</b>ler maç kurar, kadroyu ve mevkileri düzenler; misafir oyuncuyu maç ekranından ekler.{" "}
         <b className="text-white">{labels.member}</b>ler oynar ve oy verir.
       </Card>
 
@@ -184,21 +184,6 @@ export default async function ManagePage({
 
       {canManage && (
         <>
-          <SectionTitle>Misafir oyuncu ekle</SectionTitle>
-          <Card>
-            <p className="mb-3 text-sm text-muted">
-              Uygulamayı kullanmayan biri maça gelirse misafir olarak ekle. Oylanır ama oy veremez.
-            </p>
-            <form action={addGuest} className="space-y-2">
-              <input type="hidden" name="groupId" value={groupId} />
-              <Input name="name" placeholder="İsim" required minLength={2} />
-              <div className="flex gap-2">
-                <PositionSelect name="position" />
-                <Button className="flex-1">Ekle</Button>
-              </div>
-            </form>
-          </Card>
-
           {guests.length > 0 && (
             <>
               <SectionTitle>Misafirlerin mevkisi</SectionTitle>

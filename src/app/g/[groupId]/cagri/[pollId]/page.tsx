@@ -159,7 +159,7 @@ export default async function PollPage({
         <Card className="mt-4 space-y-2 border-accent/30">
           <div className="text-sm font-semibold">Yetkili işlemleri</div>
           <p className="text-xs text-muted">
-            {approvedCount} oyuncu onaylı. Onayladıkların maç oluştururken seçili gelir; misafir ekleyebilirsin.
+            {approvedCount} oyuncu onaylı. Onayladıkların maç oluştururken seçili gelir; misafir oyuncuyu maç ekranından ekleyebilirsin.
           </p>
           <div className="grid grid-cols-2 gap-2">
             <form action={approveFirstResponders}>

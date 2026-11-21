@@ -44,7 +44,7 @@ export default async function NewMatchPage({
       <Header title="Yeni maç" back={poll ? `/g/${groupId}/cagri/${poll.id}` : `/g/${groupId}`} />
       {poll && (
         <p className="mb-4 rounded-xl bg-accent/10 p-3 text-sm text-accent">
-          Maç çağrısından onaylanan {preselected.length} oyuncu seçili geldi. Misafir ekleyebilir ya da değiştirebilirsin.
+          Maç çağrısından onaylanan {preselected.length} oyuncu seçili geldi. Kadroyu değiştirebilirsin; misafir oyuncuyu maç oluşunca maç ekranından ekleyebilirsin.
         </p>
       )}
       <ErrorNote message={error} />
