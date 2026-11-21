@@ -2,7 +2,7 @@
 
 (CLAUDE.md'den taşındı; ilgili konuda çalışırken oku. Konu değişirse sadece bu dosyayı güncelle.)
 
-**Kart tasarımı (kullanıcı şablonu)**: tam kart `FullCard` (PlayerCard.tsx): zemin `public/cards/{gold,silver,bronze}.webp` (640x925, şeffaf kenar; kullanıcının ürettiği boş şablonlar, üzerinde metin/logo yok), üstüne canlı metin yüzde konumlarla: sol üst rating/mevki/takım rozeti, sağda fotoğraf (`photoUrl`; yoksa silüet), ad kuşağı, 6 yetenek, alt koyu şeritte plaka | ilçe. Her öğe kendi yazı boyutunu taşır (`em` birikmesi olmasın). Seviye: **≤64 bronz, 65-74 gümüş, ≥75 altın** (`tierOf`); maçsız oyuncu gri (gümüş zemin + grayscale). Saha (`compact`) kartı eski sade düzende. Middleware `/cards/` yolunu atlar. Sıradaki: fotoğraf yükleme + tarayıcıda arka plan kaldırma (parça 2).
+**Kart tasarımı (kullanıcı şablonu)**: tam kart `FullCard` (PlayerCard.tsx): zemin `public/cards/{gold,silver,bronze}.webp` (640x925, şeffaf kenar; kullanıcının ürettiği boş şablonlar, üzerinde metin/logo yok), üstüne canlı metin yüzde konumlarla: sol üst rating/mevki/takım rozeti, sağda fotoğraf (`photoUrl`; yoksa silüet), ad kuşağı, 6 yetenek, alt koyu şeritte plaka | ilçe. Her öğe kendi yazı boyutunu taşır (`em` birikmesi olmasın). Seviye: **≤64 bronz, 65-74 gümüş, ≥75 altın** (`tierOf`); maçsız oyuncu gri (gümüş zemin + grayscale). Saha (`compact`) kartı eski sade düzende. Middleware `/cards/` yolunu atlar. **Sıradaki iş = Parça 2 (kullanıcı kararları, onaylandı)**: oyuncu kart fotoğrafı. Bkz. aşağıdaki "Parça 2 planı".
 
 **Oyuncu kartı ve yetenek değerlendirmesi (migration 0018 + 0019)**: kart (`PlayerCard`/`CardFace`, saha için `compact`) FIFA kalkanıdır: rating, mevki,
 **il plaka kodu + ilçe** (bayrak yerine; `plateOf`), takım rozeti (sadece profilde), 6 yetenek (Türkçe kısaltma). Maçı olmayan oyuncunun kartı gri ("new" seviye);
@@ -51,3 +51,13 @@ her sorgu/kimlik çağrısı okyanus aşıyordu. Yapılanlar: `vercel.json` `reg
 
 **Bölge**: il `PROVINCES` listesinden, ilçe `canonicalDistrict(il, ilçe)` ile sunucuda doğrulanır.
 Formlarda `RegionSelect` (il seçilince ilçeler) kullan.
+
+
+## Parça 2 planı: kart fotoğrafı (kullanıcı onaylı kararlar)
+
+- Oyuncu fotoğraf yükler; kartta `photoUrl` olarak görünür (`FullCard` hazır, yoksa silüet). Yükleme **hoş geldin ekranında isteğe bağlı** ve sonradan **Profil → Ayarlar**'da.
+- **Arka plan kaldırma tarayıcıda** (`@imgly/background-removal`, ücretsiz, fotoğraf sunucuya ham gitmez; model ~40 MB, sadece yükleme ekranı açılınca `dynamic import`, model dosyaları üçüncü taraf CDN'den iner, repoya konmaz). Yedek: işlem başarısız/cihaz yetersizse düz kırpma. Kullanıcı **şeffaf PNG** yüklerse işlem atlanır.
+- Akış: seç → arka plan kaldır → kart üzerinde **canlı önizleme** → "Kaydet" / "Başka fotoğraf". Sonuç şeffaf **WebP (~100-200 KB, kırpılmış/küçültülmüş)** olarak Supabase Storage'a (yeni migration: avatar deposu, oyuncu sadece kendi dosyasını yazar/siler, herkes okur; sunucuda tür ve boyut doğrulanır). Oyuncu kendi fotoğrafını silebilir.
+- Telif/KVKK: fotoğraf sadece kendi kartında; üçüncü taraf servise gitmez. Seçilen alternatifler: ücretli API (remove.bg) ve sunucuda işleme **reddedildi**.
+- Takım rozeti tasarımı ayrı, sonraki geliştirme (kart şimdilik takım baş harflerini gösterir).
+- Önerilen model/efor: opus + high (depolama güvenliği + model entegrasyonu); `/clear` sonrası "Parça 2'ye geç" yeter, bu bölümü oku.
