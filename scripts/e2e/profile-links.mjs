@@ -47,10 +47,8 @@ try {
   await page.goto(`${BASE}/g/${G}/m/${closed}`);
   check("sonuçlanmış maçta satırlar zaten oyuncu bağlantısı (iç içe bağlantı yok)", (await page.locator(`a[href="/g/${G}/p/${bG}"]`).count()) >= 1 && (await page.locator("a a").count()) === 0);
   await page.locator(`a[href="/g/${G}/p/${bG}"]`).first().click();
-  await page.waitForURL(new RegExp(`/g/${G}/p/${bG}`));
-  check("bağlantı oyuncu sayfasını açar; oradan tüm istatistiklere geçilir", has(await page.locator("body").innerText(), "Tüm gruplardaki istatistikleri gör"));
-  await page.click("text=Tüm gruplardaki istatistikleri gör");
-  await page.waitForURL(new RegExp(`/oyuncu/${b.id}`));
+  // Hesabı olan oyuncunun tek genel profili var: grup içi bağlantı doğrudan /oyuncu/[id]'ye varır
+  check("kart/satır tıklanınca genel profil açılır (ayrı grup sayfası yok)", await page.waitForURL(new RegExp(`/oyuncu/${b.id}`)).then(() => true, () => false) && !has(await page.locator("body").innerText(), "Tüm gruplardaki istatistikleri gör"));
   const t = await page.locator("body").innerText();
   check("/oyuncu/[id] profili: kart görünür, takım arkadaşı olduğu için istatistik de açık", has(t, "Mert Üye") && has(t, "İstatistik") && !has(t, "🔒"));
 } catch (e) {

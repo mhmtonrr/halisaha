@@ -11,6 +11,7 @@ Büyük tasarım kararlarını kodlamadan önce kullanıcıyla netleştir; küç
 1. **Her görevin ilk yanıtının başında tek satır öneri ver**: `Öneri: model <haiku|sonnet|opus>, efor <low|medium|high>; parçalama: <gerekmez|şu parçalara böl>; /clear: <şimdi gerekmez|bitince>`.
    Ölçüt: tek dosya/metin/stil/küçük hata → haiku veya sonnet + low; birkaç dosya, UI+veri → sonnet + medium; migration/RLS, puanlama, çok dosyalı özellik → sonnet/opus + high (önce plan).
    Kullanıcı `/model` ve `/effort` ile ayarlar; mevcut ayar uygunsa "değiştirmene gerek yok" de.
+   **Öneri satırından sonra DUR**: kullanıcı ayarı yapıp "devam" diyene kadar hiçbir araç çağırma, işe başlama (ayar zaten uygunsa "değiştirmene gerek yok" dedikten sonra da onay bekle).
 2. **Parçalama**: iş 5+ dosyaya, veya migration + UI + test birlikte dokunuyorsa kullanıcıya parçaları öner (örn. 1 veri/DB, 2 UI, 3 test), her parça sonunda commit+push; hepsini tek seferde yapma.
 3. **/clear uyarısı**: konu değişince, bir parça commit+push edilince, veya bağlam şiştiğinde (çok dosya okundu / uzun build-test çıktısı gördün) "şimdi /clear at" diye açıkça söyle. Gereksiz yere clear önerme.
 4. **Kapsam**: sadece istenen değişikliği yap; istenmemiş refactor/özellik/doküman ekleme. Ek iş gerekiyorsa önce söyle.

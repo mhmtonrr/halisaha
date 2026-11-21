@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { FOOT_NAME, POSITION_NAME, byRanking, formatDate, getGroupSummaries, type Position } from "@/lib/data";
 import { Badge, Card, Header, LinkButton, SectionTitle, cx } from "@/components/ui";
@@ -31,6 +31,8 @@ export default async function PlayerPage({
   const roleLabels = ROLE_LABEL[(group?.kind ?? "community") as GroupKind];
   const player = players.find((p) => p.id === playerId);
   if (!player) notFound();
+  // Hesabı olan oyuncunun tek, genel profili var (kart/istatistik tüm gruplardan); bu sayfa sadece hesapsız misafirler için
+  if (player.user_id) redirect(player.user_id === user.id ? "/profil" : `/oyuncu/${player.user_id}`);
 
   const t = player.totals;
   const ranked = players.filter((p) => p.matches_played > 0).sort(byRanking);
@@ -87,13 +89,6 @@ export default async function PlayerPage({
         {player.role !== "member" && <Badge tone={player.role === "captain" ? "warn" : "default"}>{roleLabels[player.role as Role]}</Badge>}
       </div>
       {player.bio && <p className="mt-3 text-center text-sm italic text-muted">“{player.bio}”</p>}
-      {player.user_id && (
-        <div className="mt-3 text-center">
-          <Link href={isMe ? "/profil?sekme=istatistik" : `/oyuncu/${player.user_id}`} className="text-sm text-accent underline">
-            Tüm gruplardaki istatistikleri gör ›
-          </Link>
-        </div>
-      )}
 
       {player.matches_played === 0 && (
         <p className="mt-4 text-center text-sm text-muted">
