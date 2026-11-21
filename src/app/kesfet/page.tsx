@@ -1,13 +1,12 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/supabase/server";
-import { joinGroup } from "@/lib/actions";
 import { canonicalDistrict, isProvince } from "@/lib/regions";
 import { RegionSelect } from "@/components/RegionSelect";
 import { findTeams } from "@/lib/teams-data";
 import { getOpenListings } from "@/lib/listings-data";
 import { formatDate } from "@/lib/data";
 import { LiveRefresh } from "@/components/LiveRefresh";
-import { Button, Card, ErrorNote, Header, Input, SectionTitle, cx } from "@/components/ui";
+import { Button, Card, ErrorNote, Header, Input, LinkButton, SectionTitle, cx } from "@/components/ui";
 import { OvrBadge } from "@/components/PlayerCard";
 import { TeamBadge } from "@/components/TeamBadge";
 
@@ -112,12 +111,14 @@ export default async function DiscoverPage({
       <p className="mt-2 text-center text-xs text-muted">Takım puanı: kadronun en iyi 7 oyuncusunun ortalaması. Soluk puanlı takımlar henüz puanlı maç oynamadı.</p>
 
       <SectionTitle>Davet kodun mu var?</SectionTitle>
-      <Card>
-        <form action={joinGroup} className="flex gap-2">
-          <Input name="code" placeholder="Davet kodu veya linki" required />
-          <Button variant="secondary">Katıl</Button>
-        </form>
-      </Card>
+      <div className="grid grid-cols-2 gap-2">
+        <LinkButton href="/katil?tur=takim" variant="secondary" className="w-full">
+          Takıma katıl
+        </LinkButton>
+        <LinkButton href="/katil?tur=grup" variant="secondary" className="w-full">
+          Gruba katıl
+        </LinkButton>
+      </div>
     </main>
   );
 }

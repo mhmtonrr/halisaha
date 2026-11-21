@@ -7,6 +7,7 @@ import { finalizeMatch, recomputePlayers } from "@/lib/finalize";
 import { settlePoll } from "@/lib/polls";
 import { later, notify } from "@/lib/notify";
 import { skillSet } from "@/lib/skills";
+import { extractInviteCode, kindMatches, parseKind } from "@/lib/invite";
 import { recomputeSkillsForVoter } from "@/lib/skills-data";
 import { text } from "@/lib/notify-rules";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -194,13 +195,28 @@ export async function regenerateInvite(fd: FormData) {
   revalidatePath(`/g/${groupId}`);
 }
 
+/**
+ * Davet koduyla takıma/gruba katıl. Kod, kullanıcının seçtiği türle (takım/grup) uyuşmalı; tam link
+ * yapıştırılırsa içindeki kod alınır. Zaten üyeyse doğrudan grubuna gider.
+ */
 export async function joinGroup(fd: FormData) {
   const { supabase } = await requireUser();
-  let code = str(fd, "code");
-  // Tam link yapıştırılırsa sondaki kodu al
-  code = code.split("/").filter(Boolean).pop() ?? "";
+  const code = extractInviteCode(str(fd, "code"));
+  const kind = parseKind(str(fd, "tur"));
+  const back = `/katil${kind ? `?tur=${kind}` : ""}`;
+  if (!code) fail(back, "Davet kodunu yaz");
+  const { data: pv } = await supabase.rpc("invite_preview", { p_code: code });
+  const info = (Array.isArray(pv) ? pv[0] : pv) as { group_id: string; kind: "team" | "community"; already_member: boolean } | undefined;
+  if (!info) fail(back, "Davet kodu geçersiz ya da yenilenmiş. Kaptandan/kurucudan güncel kodu iste.");
+  if (!kindMatches(kind, info.kind)) {
+    // Yanlış bölümden girildi: doğru bölüme, kod dolu ve önizlemeyle yönlendir
+    const right = info.kind === "team" ? "takim" : "grup";
+    fail(`/katil?tur=${right}&kod=${encodeURIComponent(code)}`, info.kind === "team" ? "Bu kod bir takıma ait; aşağıdan takıma katılabilirsin." : "Bu kod bir gruba ait; aşağıdan gruba katılabilirsin.");
+  }
+  if (info.already_member) redirect(`/g/${info.group_id}`);
   const { data, error } = await supabase.rpc("join_group", { p_invite_code: code });
-  if (error) fail("/kesfet", "Davet kodu geçersiz");
+  if (error || !data) fail(back, rpcMessage(error ?? {}, "Katılınamadı"));
+  revalidatePath("/", "layout");
   redirect(`/g/${data}`);
 }
 

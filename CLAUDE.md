@@ -65,6 +65,7 @@ src/lib/skills-data.ts   Değerlendirmelerden kişinin yeteneklerini hesaplayıp
 src/lib/skill-queue.ts   Değerlendirmeni bekleyen oyuncular (skill_queue RPC)
 src/lib/profile-stats.ts Kişinin TÜM grup/takım maçlarından istatistik özeti: toplamlar, form, seri, rakip/iç, grup bazında, mevki (saf, testli)
 src/lib/profile-data.ts  Kişi bazlı veri (service role): loadPerson, loadPersonMatches, canViewStats, loadProfileForViewer
+src/lib/invite.ts        Davet kodu: linkten/yazıdan kodu çıkarma, XXXXX-XXXXX biçimi, tür eşleşmesi (saf, testli)
 src/lib/fetch-in.ts      Büyük `in (...)` sorgularını parçalayıp sayfalayan yardımcı
 src/components/profile/ProfileView.tsx  Sekmeli profil (Genel/İstatistik/Maçlar/Ayarlar); /profil ve /oyuncu/[id] aynı bileşeni kullanır
 src/lib/team-stats.ts    Takım karnesi, form, seri, rakip bazlı geçmiş, oyuncu liderleri (saf, testli)
@@ -81,7 +82,7 @@ src/lib/authErrors.ts    Supabase Auth hatalarının Türkçesi
 src/lib/supabase/        server.ts (requireUser + karşılama yönlendirmesi), client.ts, admin.ts
 src/middleware.ts        Oturum yenileme, girişsiz yönlendirme, x-pathname başlığı
 src/app/                 Sayfalar (aşağıda)
-supabase/migrations/     0001..0022 SQL (sırayla; hepsi canlıya uygulandı)
+supabase/migrations/     0001..0023 SQL (sırayla; hepsi canlıya uygulandı)
 scripts/db-checks/       PGlite ile RLS/yetki kontrolleri (npm run db:check)
 scripts/e2e/             Canlı veritabanına karşı Playwright akış testleri
 scripts/recompute-all.ts Tüm ratingleri baştan hesaplar (vite-node ile, aşağıda)
@@ -89,7 +90,7 @@ scripts/recompute-all.ts Tüm ratingleri baştan hesaplar (vite-node ile, aşağ
 
 Sayfalar: `/login` (e-posta+şifre, Google, şifremi unuttum) · `/hosgeldin` (ilk giriş: ad, il/ilçe, mevki…)
 · `/` ana sayfa · `/kesfet` takım sıralaması · `/profil` · `/takim-kur` · `/grup-kur` · `/sifre-yenile`
-· `/yetenek` (yetenek değerlendirmesi) · `/oyuncu/[userId]` (başkasının profili) · `/join/[code]` · `/g/[id]` grup/takım · `/g/[id]/{players,kadro,sohbet,matches/new,cagri/yeni,cagri/[pollId],m/[matchId],p/[playerId]}`
+· `/yetenek` (yetenek değerlendirmesi) · `/oyuncu/[userId]` (başkasının profili) · `/katil` (davet koduyla takıma/gruba katıl; `?tur=takim|grup`) · `/join/[code]` · `/g/[id]` grup/takım · `/g/[id]/{players,kadro,sohbet,matches/new,cagri/yeni,cagri/[pollId],m/[matchId],p/[playerId]}`
 · takımlara özel: `/g/[id]/teklif` (bu takıma maç teklif et) · `/g/[id]/teklifler` (gelen/giden/kabul edilen) · `/g/[id]/istatistik` (herkese açık)
 
 ## Alan modeli ve kurallar
@@ -156,6 +157,11 @@ puanına (`teamRating`), Keşfet sıralamasına, takım liderlerine ve istatisti
 **Davet kodu gizli**: `groups.invite_code` sütununa SELECT yetkisi yok (takımlar herkese açık olduğu için).
 Kod `group_invite_code()` RPC ile alınır (takımda captain/admin, grupta her üye). **`groups`'tan seçerken
 sütunları açıkça yaz, `select *` ve `invite_code` kullanma** — yetki hatası verir.
+**Katılma (migration 0023, kullanıcı isteği)**: link (`/join/KOD`) yanında **elle yazılan kod**: yeni kodlar 10 karakter, karışan O/0/I/1/L yok (`new_invite_code()`, sütun varsayılanı), ekranda `XXXXX-XXXXX`;
+eski 12 karakterli kodlar geçerli. `join_group` büyük/küçük harf, boşluk ve tireyi yok sayar (`norm_invite`). Grup/takım sayfasında kod büyük gösterilir + "Kopyala" + link "Paylaş" + yetkiliye "Yeni kod oluştur"
+(`regenerate_invite`, eski kod/link ölür). **`/katil?tur=takim|grup`**: kod yazılır (tam link de olur) → `invite_preview` RPC'siyle önizleme (ad, tür, bölge, oyuncu sayısı, zaten üye mi) → "Takıma/Gruba katıl" (`joinGroup`).
+Seçilen tür kodla uyuşmazsa doğru bölüme yönlendirilir. Giriş noktaları: ana sayfada Takımlarım/Gruplarım başlıklarında "Takıma/Gruba katıl", menüde ayrı Takımlarım ve Gruplarım bölümleri (her birinde katıl/kur), Keşfet.
+Bilinen: kod tahmini için oran sınırı yok (31^10 ≈ 8e14 olasılık; oturum açmak gerekir).
 
 **Maç**: `kind` internal (kendi aramızda, A/B takımı) / external (rakibe karşı; tüm kadro A, score_a=biz).
 Durum: planned → voting (skor girilince, 24 saat) → closed. Takımlar arası maçta planned → played (skor onayı) → voting. Maça özel mevki `match_players.position`.
@@ -322,7 +328,7 @@ Uçtan uca (canlı Supabase'e karşı; test kullanıcıları/grupları oluşturu
 (NODE_USE_ENV_PROXY=1 npx next start -p 3000 > /tmp/server.log 2>&1 &)
 NODE_USE_ENV_PROXY=1 NO_PROXY=localhost,127.0.0.1 node scripts/e2e/chat.mjs /tmp/shots
 ```
-Senaryolar: `withdrawal`, `leave`, `menu`, `profile`, `skills`, `positions-external`, `auth-onboarding`, `teams-polls`, `regions-community`, `chat`, `challenges`, `guest-match`, `realtime`, `member-poll`, `listings`, `notifications`.
+Senaryolar: `invite`, `withdrawal`, `leave`, `menu`, `profile`, `skills`, `positions-external`, `auth-onboarding`, `teams-polls`, `regions-community`, `chat`, `challenges`, `guest-match`, `realtime`, `member-poll`, `listings`, `notifications`.
 Ekran görüntülerine bak (390px genişlik, telefon) — görsel sorunlar çoğu zaman sadece orada yakalanıyor.
 Port doluysa: `fuser -k 3000/tcp`. Arayüzden kayıt (signUp) test etme: onay maili gönderir, limit saatte 2.
 

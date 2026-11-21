@@ -265,23 +265,37 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
         </>
       )}
 
-      <SectionTitle action={<LinkButton href="/takim-kur" variant="ghost" className="min-h-8 px-2 text-accent">+ Takım kur</LinkButton>}>
+      <SectionTitle
+        action={
+          <span className="flex items-center">
+            <LinkButton href="/katil?tur=takim" variant="ghost" className="min-h-8 px-2 text-accent">Takıma katıl</LinkButton>
+            <LinkButton href="/takim-kur" variant="ghost" className="min-h-8 px-2 text-accent">+ Kur</LinkButton>
+          </span>
+        }
+      >
         Takımlarım
       </SectionTitle>
       {teams.length === 0 ? (
         <Card className="text-center text-sm text-muted">
-          Henüz bir takımda değilsin. Takımını kur ya da kaptanından davet linki iste.
+          Henüz bir takımda değilsin. Takımını kur ya da kaptanından davet kodunu iste ve &quot;Takıma katıl&quot; ile gir.
         </Card>
       ) : (
         <div className="space-y-2">{teams.map((m) => <MembershipRow key={m.playerId} m={m} unread={unread.get(m.group.id) ?? 0} />)}</div>
       )}
 
-      <SectionTitle action={<LinkButton href="/grup-kur" variant="ghost" className="min-h-8 px-2 text-accent">+ Grup kur</LinkButton>}>
+      <SectionTitle
+        action={
+          <span className="flex items-center">
+            <LinkButton href="/katil?tur=grup" variant="ghost" className="min-h-8 px-2 text-accent">Gruba katıl</LinkButton>
+            <LinkButton href="/grup-kur" variant="ghost" className="min-h-8 px-2 text-accent">+ Kur</LinkButton>
+          </span>
+        }
+      >
         Gruplarım
       </SectionTitle>
       {groups.length === 0 ? (
         <Card className="text-center text-sm text-muted">
-          Gruplar arkadaş toplulukların içindir: kendi aranızda maç kurup puanlaşırsınız.
+          Gruplar arkadaş toplulukların içindir: kendi aranızda maç kurup puanlaşırsınız. Kurucudan davet kodunu iste ve &quot;Gruba katıl&quot; ile gir.
         </Card>
       ) : (
         <div className="space-y-2">{groups.map((m) => <MembershipRow key={m.playerId} m={m} unread={unread.get(m.group.id) ?? 0} />)}</div>

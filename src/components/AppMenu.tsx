@@ -67,9 +67,87 @@ function NavLink({ href, label, badge, icon }: { href: string; label: string; ba
   );
 }
 
+/** Çekmecede takımlar ve gruplar ayrı başlıklar: liste (açılır kısayollarla) + katıl/kur bağlantıları */
+function GroupSection({
+  title,
+  items,
+  openId,
+  onToggle,
+  empty,
+  joinHref,
+  joinLabel,
+  createHref,
+  createLabel,
+}: {
+  title: string;
+  items: MenuData["groups"];
+  openId: string | null;
+  onToggle: (id: string) => void;
+  empty: string;
+  joinHref: string;
+  joinLabel: string;
+  createHref: string;
+  createLabel: string;
+}) {
+  return (
+    <>
+      <div className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-muted">{title}</div>
+      {items.length === 0 && <p className="px-3 pb-1 text-sm text-muted">{empty}</p>}
+      {items.map((g) => {
+        const isOpen = openId === g.id;
+        const links = [
+          { href: `/g/${g.id}`, label: "Ana sayfa" },
+          { href: `/g/${g.id}/kadro`, label: "Kadro" },
+          { href: `/g/${g.id}/sohbet`, label: "Sohbet" },
+          ...(g.kind === "team"
+            ? [
+                { href: `/g/${g.id}/teklifler`, label: "Maç teklifleri" },
+                { href: `/g/${g.id}/istatistik`, label: "Takım istatistikleri" },
+              ]
+            : []),
+          { href: `/g/${g.id}/players`, label: "Oyuncular" },
+        ];
+        return (
+          <div key={g.id} className="rounded-xl">
+            <button
+              type="button"
+              onClick={() => onToggle(g.id)}
+              aria-expanded={isOpen}
+              className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left hover:bg-pitch-800"
+            >
+              <TeamBadge name={g.name} color={g.color} size="sm" />
+              <span className="min-w-0 flex-1 truncate">{g.name}</span>
+              <span className={cx("text-muted transition", isOpen && "rotate-90")}>›</span>
+            </button>
+            {isOpen && (
+              <div className="mb-1 ml-6 border-l border-line pl-2">
+                {links.map((l) => (
+                  <Link key={l.href} href={l.href} className="flex min-h-10 items-center rounded-lg px-3 text-sm text-muted hover:bg-pitch-800 hover:text-white">
+                    {l.label}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      <div className="flex gap-2 px-3 pb-1 pt-1">
+        <Link href={joinHref} className="flex min-h-10 flex-1 items-center justify-center rounded-xl border border-line text-sm hover:bg-pitch-800">
+          {joinLabel}
+        </Link>
+        <Link href={createHref} className="flex min-h-10 flex-1 items-center justify-center rounded-xl border border-line text-sm hover:bg-pitch-800">
+          + {createLabel}
+        </Link>
+      </div>
+    </>
+  );
+}
+
 function Drawer({ data, onClose }: { data: MenuData; onClose: () => void }) {
   const unread = useUnreadCount();
   const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const teams = data.groups.filter((g) => g.kind === "team");
+  const communities = data.groups.filter((g) => g.kind !== "team");
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -164,53 +242,28 @@ function Drawer({ data, onClose }: { data: MenuData; onClose: () => void }) {
             }
           />
 
-          <div className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-muted">Takımlarım ve gruplarım</div>
-          {data.groups.length === 0 && <p className="px-3 pb-2 text-sm text-muted">Henüz bir takım veya grubun yok.</p>}
-          {data.groups.map((g) => {
-            const isOpen = openGroup === g.id;
-            const links = [
-              { href: `/g/${g.id}`, label: "Ana sayfa" },
-              { href: `/g/${g.id}/kadro`, label: "Kadro" },
-              { href: `/g/${g.id}/sohbet`, label: "Sohbet" },
-              ...(g.kind === "team"
-                ? [
-                    { href: `/g/${g.id}/teklifler`, label: "Maç teklifleri" },
-                    { href: `/g/${g.id}/istatistik`, label: "Takım istatistikleri" },
-                  ]
-                : []),
-              { href: `/g/${g.id}/players`, label: "Oyuncular" },
-            ];
-            return (
-              <div key={g.id} className="rounded-xl">
-                <button
-                  type="button"
-                  onClick={() => setOpenGroup(isOpen ? null : g.id)}
-                  aria-expanded={isOpen}
-                  className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left hover:bg-pitch-800"
-                >
-                  <TeamBadge name={g.name} color={g.color} size="sm" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate">{g.name}</span>
-                    <span className="block text-[11px] text-muted">{g.kind === "team" ? "Takım" : "Grup"}</span>
-                  </span>
-                  <span className={cx("text-muted transition", isOpen && "rotate-90")}>›</span>
-                </button>
-                {isOpen && (
-                  <div className="mb-1 ml-6 border-l border-line pl-2">
-                    {links.map((l) => (
-                      <Link key={l.href} href={l.href} className="flex min-h-10 items-center rounded-lg px-3 text-sm text-muted hover:bg-pitch-800 hover:text-white">
-                        {l.label}
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
-          <div className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-muted">Oluştur</div>
-          <NavLink href="/takim-kur" label="Takım kur" icon={<path d="M12 5v14M5 12h14" />} />
-          <NavLink href="/grup-kur" label="Grup kur" icon={<path d="M12 5v14M5 12h14" />} />
+          <GroupSection
+            title="Takımlarım"
+            items={teams}
+            openId={openGroup}
+            onToggle={(id) => setOpenGroup(openGroup === id ? null : id)}
+            empty="Henüz bir takımın yok."
+            joinHref="/katil?tur=takim"
+            joinLabel="Takıma katıl"
+            createHref="/takim-kur"
+            createLabel="Takım kur"
+          />
+          <GroupSection
+            title="Gruplarım"
+            items={communities}
+            openId={openGroup}
+            onToggle={(id) => setOpenGroup(openGroup === id ? null : id)}
+            empty="Henüz bir grubun yok."
+            joinHref="/katil?tur=grup"
+            joinLabel="Gruba katıl"
+            createHref="/grup-kur"
+            createLabel="Grup kur"
+          />
         </div>
 
         <div className="space-y-1 border-t border-line px-3 py-3">

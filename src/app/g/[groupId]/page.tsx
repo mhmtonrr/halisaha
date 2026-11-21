@@ -454,12 +454,12 @@ export default async function GroupPage({
         <>
           <SectionTitle>{isTeam ? "Takıma oyuncu davet et" : "Arkadaşlarını davet et"}</SectionTitle>
           <Card className="space-y-2">
-            <InviteLink code={inviteCode} groupName={group.name} />
+            <InviteLink code={inviteCode} groupName={group.name} isTeam={isTeam} />
             {canManage && (
               <form action={regenerateInvite} className="text-right">
                 <input type="hidden" name="groupId" value={groupId} />
-                <button className="text-xs text-muted hover:text-white" title="Eski link çalışmaz olur">
-                  Linki yenile
+                <button className="text-xs text-muted hover:text-white" title="Eski kod ve link çalışmaz olur">
+                  Yeni kod oluştur
                 </button>
               </form>
             )}
