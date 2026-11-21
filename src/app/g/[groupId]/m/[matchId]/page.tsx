@@ -4,7 +4,6 @@ import { requireUser } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { finalizeExpired } from "@/lib/finalize";
 import { formatDate, getGroupPlayers, getGroupSummaries, one, POSITION_NAME, POSITIONS, type Position } from "@/lib/data";
-import type { Attribute } from "@/lib/attributes";
 import {
   addToMatch,
   closeVoting,
@@ -57,7 +56,7 @@ interface RosterEntry {
   saves: number;
   overall: number;
   /** Profil kartı için: özellikler, forma numarası, geçici rating */
-  attributes: Pick<Attribute, "key" | "value">[];
+  attributes: { key: string; value: number | null }[];
   shirtNumber: number | null;
   provisional: boolean;
 }
@@ -90,7 +89,7 @@ async function fetchRoster(supabase: SupabaseClient, matchId: string, groupId: s
         assists: r.assists,
         saves: r.saves,
         overall: summary.get(r.player_id)?.overall ?? 65,
-        attributes: summary.get(r.player_id)?.attributes ?? [],
+        attributes: summary.get(r.player_id)?.skills ?? [],
         shirtNumber: summary.get(r.player_id)?.shirt_number ?? null,
         provisional: (summary.get(r.player_id)?.matches_played ?? 0) > 0 && (summary.get(r.player_id)?.confidence ?? 0) < 0.6,
       };
@@ -751,7 +750,7 @@ async function VotingView({
   opp: Opponent | null;
 }) {
   const { supabase } = await requireUser();
-  const [{ data: progressRaw }, { data: myVotes }, { data: myMvp }] = await Promise.all([
+  const [{ data: progressRaw }, { data: myVotes }, { data: myMvp }, { data: myBallot }] = await Promise.all([
     supabase.rpc("voting_progress", { p_match_id: matchId }),
     me
       ? supabase.from("votes").select("target_id, score").eq("match_id", matchId).eq("voter_id", me.id)
@@ -759,7 +758,15 @@ async function VotingView({
     me
       ? supabase.from("mvp_votes").select("target_id").eq("match_id", matchId).eq("voter_id", me.id).maybeSingle()
       : Promise.resolve({ data: null as { target_id: string } | null }),
+    // Yetenek pusulam (RLS: sadece kendiminkini görürüm)
+    me
+      ? supabase.from("skill_ballots").select("skill_picks(category, nominee_id)").eq("match_id", matchId).eq("voter_id", me.id).maybeSingle()
+      : Promise.resolve({ data: null as { skill_picks: { category: string; nominee_id: string }[] } | null }),
   ]);
+  const mySkillPicks: Record<string, string[]> = {};
+  for (const p of (myBallot?.skill_picks ?? []) as { category: string; nominee_id: string }[]) {
+    (mySkillPicks[p.category] ??= []).push(p.nominee_id);
+  }
   const progress = (Array.isArray(progressRaw) ? progressRaw[0] : progressRaw) as
     | { voters: number; eligible: number }
     | undefined;
@@ -810,6 +817,7 @@ async function VotingView({
               }))}
             initialScores={Object.fromEntries((myVotes ?? []).map((v) => [v.target_id, v.score]))}
             initialMvp={myMvp?.target_id ?? null}
+            initialSkillPicks={mySkillPicks}
           />
         </>
       ) : (

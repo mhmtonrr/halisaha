@@ -60,6 +60,8 @@ src/lib/recipients.ts    Alıcı bulma: grup üyeleri/yetkilileri, maç kadrosu,
 src/lib/reminders.ts     Oylama hatırlatması (cron): kapanmasına <24 saat kalan maçlarda oy vermeyenlere, kişi başı 1
 src/lib/push-client.ts   Tarayıcı tarafı abonelik yardımcıları; components/PushControls.tsx (izin kartı + profil ayarı)
 public/sw.js             Service worker: push'u gösterir, tıklayınca aynı site içi adresi açar (önbellek yok)
+src/lib/skills.ts        Yetenek itibarı: 12 kategori (saha HIZ/ŞUT/PAS/DRİ/DEF/FİZ, kaleci REF/ATL/HAV/YER/DAĞ/İLT), işaret sayımından 40-99 değer (saf, testli)
+src/lib/skills-data.ts   Pusulalardan kişinin yeteneklerini hesaplayıp player_skills'e yazar (service role; recomputeSkills / recomputeSkillsForMatch)
 src/lib/team-stats.ts    Takım karnesi, form, seri, rakip bazlı geçmiş, oyuncu liderleri (saf, testli)
 src/lib/challenges-data.ts  Maç teklifleri sorguları (gelen/giden, bekleyen sayısı)
 src/lib/data.ts          Ortak sorgular, mevki/ayak sabitleri, tarih yardımcıları (TR saati)
@@ -73,7 +75,7 @@ src/lib/authErrors.ts    Supabase Auth hatalarının Türkçesi
 src/lib/supabase/        server.ts (requireUser + karşılama yönlendirmesi), client.ts, admin.ts
 src/middleware.ts        Oturum yenileme, girişsiz yönlendirme, x-pathname başlığı
 src/app/                 Sayfalar (aşağıda)
-supabase/migrations/     0001..0017 SQL (sırayla; hepsi canlıya uygulandı)
+supabase/migrations/     0001..0018 SQL (sırayla; hepsi canlıya uygulandı)
 scripts/db-checks/       PGlite ile RLS/yetki kontrolleri (npm run db:check)
 scripts/e2e/             Canlı veritabanına karşı Playwright akış testleri
 scripts/recompute-all.ts Tüm ratingleri baştan hesaplar (vite-node ile, aşağıda)
@@ -230,6 +232,18 @@ Test: `scripts/e2e/notifications.mjs` (sunucu `CRON_SECRET=e2e-secret` ile başl
 `NODE_USE_ENV_PROXY=1 npx vite-node --config scripts/recompute.vite.config.mjs scripts/e2e/push-delivery.ts`. Gerçek cihaza teslim sadece elle denenebilir.
 Tuzak: `web-push` adlandırılmış içe aktarımla kullanılır (varsayılan dışa aktarımı yok; derleme uyarısı verir ve üretimde çöker).
 
+**Oyuncu kartı ve yetenek oylaması (migration 0018)**: kart (`PlayerCard`/`CardFace`, saha için `compact`) FIFA kalkanıdır: rating, mevki,
+**il plaka kodu + ilçe** (bayrak yerine; `plateOf`), takım rozeti (sadece profilde), 6 yetenek (Türkçe kısaltma). Maçı olmayan oyuncunun kartı gri ("new" seviye);
+yetenekler oy gelene dek "–". Kartın yetenekleri **sadece oylamadan** gelir; eski istatistik göstergeleri (FRM/İST/GOL/AST/GAL/MVP, `attributes.ts`) oyuncu
+sayfasında "Performans göstergeleri"dir. **Model (kullanıcı kararı, "A")**: oy formunun sonunda isteğe bağlı "Yetenekler: kim öne çıktı?" bölümü; her kategoride
+en fazla 2 kişi (kaleci kategorilerinde sadece o maçın kalecileri). Kullanıcı bölüme dokunmadıysa pusula gönderilmez (yoksa herkesin değeri haksız düşer).
+Yazma sadece `submit_skill_ballot` RPC'si (maça katılan hesap sahibi, kendine değil, havuzdaki oyuncuya; maç `voting` veya `closed` ve son 7 gün; tekrar gönderince
+yerine geçer); oylar anonim (RLS: sadece kendi pusulan). Kaleci kuralı her yerde aynı: `match_players.position`, yoksa `is_goalkeeper`, yoksa profil mevkisi.
+Hesap (`skills-data.ts`, `submitVotes` sonrası `later`): kişinin değeri = aldığı işaret / rastgele dağılsa alacağı beklenen işaret (`k` aday için `2/k`, `k ≤ 2` ise 0,5),
+ön bilgi 1 beklenen işaret, `65 + 18·log2(r)` (r<1 ise `10·log2(r)`), 40-99. **Görünme eşiği: en az 2 oylanmış maç ve 2 farklı oy veren** (`SKILL_CONFIG`), yoksa "–".
+Bağlı (rakip takımla) maçlarda iki kadro tek havuzdur (rakipler de işaretler). Sonuç `player_skills`'e kişinin tüm `group_players` satırlarına yazılır (rating gibi);
+misafirde kendi satırı. Test: `skills.test.ts`, `db-checks/skill-votes.mjs`, `e2e/skills.mjs`.
+
 **Sohbet** (group_messages/chat_reads): Realtime postgres_changes, RLS'e uyar (sadece üyeler; takım sohbeti de
 sadece oyunculara). İstemci abone olmadan önce `realtime.setAuth(token)` çağırır ve (yeniden) bağlanınca
 kaçırılanları çeker — bunu kaldırma, yoksa mesajlar ara sıra düşmüyor. Etkinlik kartları DB tetikleyicileriyle
@@ -269,7 +283,7 @@ Uçtan uca (canlı Supabase'e karşı; test kullanıcıları/grupları oluşturu
 (NODE_USE_ENV_PROXY=1 npx next start -p 3000 > /tmp/server.log 2>&1 &)
 NODE_USE_ENV_PROXY=1 NO_PROXY=localhost,127.0.0.1 node scripts/e2e/chat.mjs /tmp/shots
 ```
-Senaryolar: `positions-external`, `auth-onboarding`, `teams-polls`, `regions-community`, `chat`, `challenges`, `guest-match`, `realtime`, `member-poll`, `listings`, `notifications`.
+Senaryolar: `skills`, `positions-external`, `auth-onboarding`, `teams-polls`, `regions-community`, `chat`, `challenges`, `guest-match`, `realtime`, `member-poll`, `listings`, `notifications`.
 Ekran görüntülerine bak (390px genişlik, telefon) — görsel sorunlar çoğu zaman sadece orada yakalanıyor.
 Port doluysa: `fuser -k 3000/tcp`. Arayüzden kayıt (signUp) test etme: onay maili gönderir, limit saatte 2.
 
@@ -298,7 +312,7 @@ Port doluysa: `fuser -k 3000/tcp`. Arayüzden kayıt (signUp) test etme: onay ma
 2. ~~Takımlar arası maç teklifi + ortak maç ekranı + takım istatistikleri~~ (yapıldı; sonraki adım: karşı teklif/tarih değiştirme, takım sıralamasında W/D/L)
 3. ~~Bildirimler~~ (yapıldı: kutu + web push; kullanıcı Vercel'e VAPID anahtarlarını eklemeli, bkz. yukarı)
 4. Halısaha tesis rehberi, işletme hesapları, rezervasyon/turnuva (gelir modeli)
-5. Rozetler, yetenek oylaması (hız/şut/pas…), sohbette fotoğraf
+5. Rozetler, ~~yetenek oylaması (hız/şut/pas…)~~ (yapıldı: 0018), sohbette fotoğraf
 6. Türkiye geneli açılış öncesi: KVKK aydınlatma metni, 18 yaş altı kuralı, e-posta onayı tekrar açık
 
 ## Git

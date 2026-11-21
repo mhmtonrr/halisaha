@@ -6,6 +6,8 @@ import { requireUser } from "@/lib/supabase/server";
 import { finalizeMatch, recomputePlayers } from "@/lib/finalize";
 import { settlePoll } from "@/lib/polls";
 import { later, notify } from "@/lib/notify";
+import { SKILL_KEYS } from "@/lib/skills";
+import { recomputeSkillsForMatch } from "@/lib/skills-data";
 import { text } from "@/lib/notify-rules";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { groupMemberIds, groupName, linkedMatches, matchAccountIds } from "@/lib/recipients";
@@ -655,6 +657,22 @@ export async function submitVotes(fd: FormData) {
         { onConflict: "match_id,voter_id" },
       );
     if (mvpError) fail(back, "MVP oyu kaydedilemedi");
+  }
+
+  // Yetenek işaretleri (isteğe bağlı): sadece kullanıcı bölüme dokunduysa pusula gönderilir. Oy kapanmadan önce
+  // yazılır; hata asıl oylamayı bozmaz.
+  if (str(fd, "skillsTouched") === "1") {
+    const picks: Record<string, string[]> = {};
+    for (const key of SKILL_KEYS) {
+      const ids = fd.getAll(`skill_${key}`).map(String).filter(Boolean);
+      if (ids.length) picks[key] = ids;
+    }
+    const { error: skillError } = await supabase.rpc("submit_skill_ballot", { p_match_id: matchId, p_picks: picks });
+    if (!skillError) {
+      later(async () => {
+        await recomputeSkillsForMatch(createAdminClient(), matchId);
+      });
+    }
   }
 
   // Herkes oy verdiyse sonuçları hemen açıkla

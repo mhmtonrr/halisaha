@@ -5,7 +5,6 @@ import { useMemo, useState } from "react";
 import { PlayerCard } from "@/components/PlayerCard";
 import { cx } from "@/components/ui";
 import { POSITION_NAME, POSITIONS, type Position } from "@/lib/data";
-import type { AttributeKey } from "@/lib/attributes";
 
 interface SquadPlayer {
   id: string;
@@ -17,12 +16,14 @@ interface SquadPlayer {
   provisional: boolean;
   hasMatches: boolean;
   guest: boolean;
+  city: string | null;
+  district: string | null;
   /** Ödünç oyuncu (misafirler sekmesinde "ödünç" olarak görünür) */
   loan?: boolean;
   form: number | null;
   goals: number;
   played: number;
-  attributes: { key: AttributeKey; value: number | null }[];
+  skills: { key: string; value: number | null }[];
 }
 
 type SortKey = "overall" | "form" | "goals" | "name";
@@ -102,7 +103,10 @@ export function SquadGrid({ groupId, players }: { groupId: string; players: Squa
                 position={p.position}
                 shirtNumber={p.shirt}
                 provisional={p.provisional}
-                attributes={p.attributes}
+                skills={p.skills}
+                city={p.city}
+                district={p.district}
+                unrated={!p.hasMatches}
               />
               <div className="mt-1 text-center text-[11px] text-muted">
                 {p.played} maç{p.loan ? " · ödünç" : p.guest ? " · misafir" : ""}
@@ -112,7 +116,7 @@ export function SquadGrid({ groupId, players }: { groupId: string; players: Squa
         </div>
       )}
       <p className="mt-6 text-center text-xs text-muted">
-        FRM form · İST istikrar · GOL maç başı gol (kalecide KRT kurtarış) · AST asist · GAL galibiyet · MVP maçın adamı oranı
+        HIZ hız · ŞUT şut · PAS pas · DRİ top sürme · DEF savunma · FİZ fizik (kalecide REF refleks · ATL atılma · HAV havadan top · YER yer tutma · DAĞ dağıtım · İLT iletişim). Değerler maç sonrası oylamayla oluşur; “–” henüz yeterli oy yok demek.
       </p>
     </>
   );

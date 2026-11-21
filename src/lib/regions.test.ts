@@ -37,3 +37,12 @@ describe("regions", () => {
     expect(canonicalDistrict(null, "Kadıköy")).toBeNull();
   });
 });
+
+describe("plaka kodları", () => {
+  it("81 ilin hepsinin benzersiz plakası var", async () => {
+    const { PLATES, PROVINCES } = await import("./regions");
+    expect(PROVINCES.every((p) => PLATES[p])).toBe(true);
+    expect(new Set(Object.values(PLATES)).size).toBe(81);
+    expect(PLATES["İstanbul"]).toBe("34");
+  });
+});

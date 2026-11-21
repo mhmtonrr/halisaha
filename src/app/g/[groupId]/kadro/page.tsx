@@ -52,7 +52,9 @@ export default async function SquadPage({
           form: p.form,
           goals: p.totals.goals,
           played: p.totals.played,
-          attributes: p.attributes.map((a) => ({ key: a.key, value: a.value })),
+          skills: p.skills,
+          city: p.city,
+          district: p.district,
         }))}
       />
     </main>

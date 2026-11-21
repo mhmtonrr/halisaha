@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { submitVotes } from "@/lib/actions";
 import { Button, Card, cx } from "@/components/ui";
-import { initials, PositionChip } from "@/components/PlayerCard";
+import { initials, PositionChip, shortName } from "@/components/PlayerCard";
+import { FIELD_SKILLS, KEEPER_SKILLS, SKILL_CONFIG } from "@/lib/skills";
 import type { Position } from "@/lib/data";
 
 interface Target {
@@ -25,6 +26,7 @@ export function VoteForm({
   targets,
   initialScores,
   initialMvp,
+  initialSkillPicks = {},
   rivalLabel = "Rakipler",
 }: {
   groupId: string;
@@ -33,6 +35,8 @@ export function VoteForm({
   targets: Target[];
   initialScores: Record<string, number>;
   initialMvp: string | null;
+  /** Daha önce işaretlediğin yetenekler: kategori → oyuncu id'leri */
+  initialSkillPicks?: Record<string, string[]>;
   /** Rakip grubun başlığı (takımlar arası maçta rakip takımın adı) */
   rivalLabel?: string;
 }) {
@@ -41,6 +45,24 @@ export function VoteForm({
   );
   const [mvp, setMvp] = useState<string | null>(initialMvp);
   const [pending, setPending] = useState(false);
+  const [picks, setPicks] = useState<Record<string, string[]>>(initialSkillPicks);
+  const [touched, setTouched] = useState(false);
+
+  const togglePick = (cat: string, id: string) => {
+    setTouched(true);
+    setPicks((cur) => {
+      const list = cur[cat] ?? [];
+      if (list.includes(id)) return { ...cur, [cat]: list.filter((x) => x !== id) };
+      if (list.length >= SKILL_CONFIG.MAX_PICKS) return cur;
+      return { ...cur, [cat]: [...list, id] };
+    });
+  };
+  const fieldTargets = targets.filter((t) => t.position !== "GK");
+  const keeperTargets = targets.filter((t) => t.position === "GK");
+  const skillBlocks = [
+    { title: "Sahadaki oyuncular", skills: FIELD_SKILLS, list: fieldTargets },
+    { title: "Kaleciler", skills: KEEPER_SKILLS, list: keeperTargets },
+  ].filter((b) => b.list.length > 0);
 
   const groups = [
     { label: "Takım arkadaşların", list: targets.filter((t) => t.team === myTeam) },
@@ -115,6 +137,60 @@ export function VoteForm({
             </div>
           ),
       )}
+
+      {touched && <input type="hidden" name="skillsTouched" value="1" />}
+      {Object.entries(picks).flatMap(([cat, ids]) =>
+        ids.map((id) => <input key={`${cat}:${id}`} type="hidden" name={`skill_${cat}`} value={id} />),
+      )}
+      <details className="rounded-2xl border border-line bg-pitch-900">
+        <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold">
+          Yetenekler: kim öne çıktı? <span className="font-normal text-muted">(isteğe bağlı)</span>
+        </summary>
+        <div className="space-y-5 px-4 pb-4">
+          <p className="text-xs text-muted">
+            Her soruda en fazla {SKILL_CONFIG.MAX_PICKS} kişi seç. Kimseyi işaretlemek zorunda değilsin. İşaretler anonimdir ve
+            oyuncunun kartındaki yetenekleri (HIZ, ŞUT, PAS…) oluşturur.
+          </p>
+          {skillBlocks.map((b) => (
+            <div key={b.title} className="space-y-4">
+              {skillBlocks.length > 1 && <div className="text-xs uppercase tracking-wide text-muted">{b.title}</div>}
+              {b.skills.map((sk) => {
+                const chosen = picks[sk.key] ?? [];
+                return (
+                  <div key={sk.key}>
+                    <div className="mb-1.5 text-sm">
+                      <b className="mr-1.5 text-xs text-accent">{sk.key}</b>
+                      {sk.question}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {b.list.map((t) => {
+                        const on = chosen.includes(t.id);
+                        const full = !on && chosen.length >= SKILL_CONFIG.MAX_PICKS;
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            disabled={full}
+                            aria-pressed={on}
+                            onClick={() => togglePick(sk.key, t.id)}
+                            className={cx(
+                              "rounded-full border px-2.5 py-1 text-xs",
+                              on ? "border-accent bg-accent text-pitch-950 font-bold" : "border-line text-muted hover:bg-pitch-800",
+                              full && "opacity-40",
+                            )}
+                          >
+                            {shortName(t.name)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </details>
 
       <p className="text-center text-xs text-muted">
         Oylar anonim. Kimse kime kaç verdiğini göremez.

@@ -1,8 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { cx } from "./ui";
-import { initials, shortName, tierClass } from "./PlayerCard";
-import type { Attribute } from "@/lib/attributes";
+import { CardFace } from "./PlayerCard";
 import { POSITION_LABEL, type Position } from "@/lib/data";
 import { cardWidthPct, type Slot } from "@/lib/formations";
 
@@ -11,8 +10,8 @@ export interface PitchPlayer {
   name: string;
   overall: number;
   position: Position | null;
-  /** Profil kartındaki 6 özellik (FRM, İST, GOL/KRT, AST, GAL, MVP); yoksa tireler görünür */
-  attributes?: Pick<Attribute, "key" | "value">[];
+  /** Kartın 6 yeteneği (HIZ, ŞUT, PAS, DRİ, DEF, FİZ; kalecide REF…); oylanmadıysa tireler görünür */
+  attributes?: { key: string; value: number | null }[];
   shirtNumber?: number | null;
   /** Rating henüz yeterince oya dayanmıyor */
   provisional?: boolean;
@@ -76,7 +75,6 @@ export function SlotBox({
   );
 }
 
-const SHIELD = "polygon(50% 0, 100% 7%, 100% 88%, 50% 100%, 0 88%, 0 7%)";
 
 /**
  * Profildeki oyuncu kartının (PlayerCard) sahaya sığan hali: aynı kalkan biçimi, seviye rengi, rating, mevki,
@@ -86,56 +84,16 @@ const SHIELD = "polygon(50% 0, 100% 7%, 100% 88%, 50% 100%, 0 88%, 0 7%)";
  */
 export function PitchCard({ player, fontSize, className }: { player: PitchPlayer; fontSize?: string; className?: string }) {
   return (
-    <div
-      className={cx("relative overflow-hidden bg-gradient-to-b shadow-lg", tierClass(player.overall), className)}
-      style={{
-        width: "11em",
-        padding: "0.45em 0.5em 1em",
-        fontSize: fontSize ?? "calc(var(--cw, 20) / 11 * 1cqw)",
-        clipPath: SHIELD,
-      }}
-    >
-      <div className="flex items-start justify-between" style={{ paddingTop: "0.35em" }}>
-        <div className="text-center leading-none">
-          <div className="font-black" style={{ fontSize: "2.2em" }}>
-            {player.overall}
-          </div>
-          <div className="font-bold" style={{ fontSize: "0.85em", marginTop: "0.2em" }}>
-            {player.position ? POSITION_LABEL[player.position] : "—"}
-          </div>
-        </div>
-        <div
-          className="relative flex items-center justify-center rounded-full bg-black/10 font-black"
-          style={{ width: "2.9em", height: "2.9em", fontSize: "1em" }}
-        >
-          {initials(player.name)}
-          {player.shirtNumber != null && (
-            <span
-              className="absolute flex items-center justify-center rounded-full bg-black/25 font-black text-white"
-              style={{ width: "1.3em", height: "1.3em", right: "-0.2em", bottom: "-0.2em", fontSize: "0.6em" }}
-            >
-              {player.shirtNumber}
-            </span>
-          )}
-        </div>
-      </div>
-      <div
-        className="truncate border-b border-black/15 text-center font-extrabold uppercase"
-        style={{ marginTop: "0.4em", paddingBottom: "0.12em", fontSize: "0.82em" }}
-      >
-        {shortName(player.name)}
-      </div>
-      <div className="grid grid-cols-2" style={{ marginTop: "0.25em", columnGap: "0.3em", fontSize: "0.72em" }}>
-        {(player.attributes ?? []).map((a) => (
-          <div key={a.key} className="flex items-baseline" style={{ gap: "0.2em" }}>
-            <span className="text-right font-black tabular-nums" style={{ width: "1.7em" }}>
-              {a.value ?? "–"}
-            </span>
-            <span className="font-semibold opacity-80">{a.key}</span>
-          </div>
-        ))}
-      </div>
-    </div>
+    <CardFace
+      compact
+      name={player.name}
+      overall={player.overall}
+      position={player.position}
+      skills={player.attributes ?? []}
+      shirtNumber={player.shirtNumber}
+      fontSize={fontSize ?? "calc(var(--cw, 20) / 11 * 1cqw)"}
+      className={cx("shadow-lg", className)}
+    />
   );
 }
 

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { DEFAULT_OVERALL } from "@/lib/rating";
+import { cardSkills } from "@/lib/skills";
 import { computeAttributes, recentForm, totals, type Attribute, type MatchRecord, type PlayerTotals } from "@/lib/attributes";
 
 export type Position = "GK" | "DEF" | "MID" | "FWD";
@@ -41,6 +42,8 @@ export interface GroupPlayer {
   bio: string | null;
   city: string | null;
   district: string | null;
+  /** Oylamayla oluşan yetenek değerleri (anahtar → değer); oy yoksa boş */
+  stored_skills: Record<string, number | null>;
 }
 
 type RatingRow = { overall: number; matches_played: number; confidence: number };
@@ -68,13 +71,14 @@ export async function getGroupPlayers(supabase: SupabaseClient, groupId: string)
   const { data, error } = await supabase
     .from("group_players")
     .select(
-      "id, display_name, user_id, is_loan, role, position, player_ratings(overall, matches_played, confidence), profiles(secondary_positions, preferred_foot, shirt_number, bio, city, district)",
+      "id, display_name, user_id, is_loan, role, position, player_ratings(overall, matches_played, confidence), player_skills(skills), profiles(secondary_positions, preferred_foot, shirt_number, bio, city, district)",
     )
     .eq("group_id", groupId);
   if (error) throw error;
   return (data ?? []).map((p) => {
     const r = one(p.player_ratings as RatingRow | RatingRow[] | null);
     const prof = one(p.profiles as ProfileRow | ProfileRow[] | null);
+    const sk = one(p.player_skills as { skills: Record<string, number | null> } | { skills: Record<string, number | null> }[] | null);
     return {
       id: p.id,
       display_name: p.display_name,
@@ -91,6 +95,7 @@ export async function getGroupPlayers(supabase: SupabaseClient, groupId: string)
       bio: prof?.bio ?? null,
       city: prof?.city ?? null,
       district: prof?.district ?? null,
+      stored_skills: sk?.skills ?? {},
     };
   });
 }
@@ -157,6 +162,8 @@ export async function getGroupHistory(
 export interface PlayerSummary extends GroupPlayer {
   totals: PlayerTotals;
   attributes: Attribute[];
+  /** Kartın 6 yeteneği (oylamadan; yoksa value null) */
+  skills: { key: string; value: number | null }[];
   form: number | null;
   history: MatchRecord[];
 }
@@ -174,6 +181,7 @@ export async function getGroupSummaries(supabase: SupabaseClient, groupId: strin
       history: h,
       totals: totals(h),
       attributes: computeAttributes(h, p.position === "GK"),
+      skills: cardSkills(p.stored_skills, p.position === "GK"),
       form: recentForm(h),
     };
   });

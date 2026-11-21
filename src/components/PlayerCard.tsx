@@ -1,8 +1,9 @@
 import { cx } from "./ui";
+import { plateOf } from "@/lib/regions";
 import { POSITION_LABEL, type Position } from "@/lib/data";
 import type { Attribute } from "@/lib/attributes";
 
-type Tier = "gold" | "silver" | "bronze";
+type Tier = "gold" | "silver" | "bronze" | "new";
 
 export function tierOf(overall: number): Tier {
   // Ortalama oyuncu 65: grubun çoğu gümüş, öne çıkanlar altın, geride kalanlar bronz
@@ -15,10 +16,12 @@ const tierStyle: Record<Tier, string> = {
   gold: "from-gold-1 to-gold-2 text-[#3b2a05]",
   silver: "from-silver-1 to-silver-2 text-[#1f262d]",
   bronze: "from-bronze-1 to-bronze-2 text-[#3a1d0a]",
+  // Henüz hiç maçı olmayan oyuncu: nötr gri, ilk maçtan sonra seviye rengini alır
+  new: "from-slate-300 to-slate-500 text-slate-900",
 };
 
 /** Rating seviyesine göre kart rengi (altın/gümüş/bronz); küçük kartlar için dışa açık */
-export const tierClass = (overall: number) => tierStyle[tierOf(overall)];
+export const tierClass = (overall: number, unrated?: boolean) => tierStyle[unrated ? "new" : tierOf(overall)];
 
 export function initials(name: string) {
   return name
@@ -67,53 +70,141 @@ export function PositionChip({ position, className }: { position: Position | nul
   );
 }
 
-export function PlayerCard({
+export const SHIELD = "polygon(50% 0, 100% 7%, 100% 88%, 50% 100%, 0 88%, 0 7%)";
+
+export interface CardTeam {
+  name: string;
+  color: string | null;
+}
+
+/** Kartın arkasındaki hafif halısaha çizgileri (orta saha çizgisi ve daire) */
+function PitchLines() {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 110 160"
+      className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.13]"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.2"
+    >
+      <line x1="0" y1="82" x2="110" y2="82" />
+      <circle cx="55" cy="82" r="22" />
+      <circle cx="55" cy="82" r="1.6" fill="currentColor" />
+      <rect x="28" y="0" width="54" height="22" />
+      <rect x="28" y="138" width="54" height="22" />
+    </svg>
+  );
+}
+
+/**
+ * Kartın yüzü. Her şey `em` ile çizilir (11em genişlik); `fontSize` boyutu belirler. `compact` (saha) sürümünde
+ * bölge ve takım rozeti yoktur. Bayrak yerine il plaka kodu ve ilçe gösterilir; yetenekler oylamayla dolana dek "–".
+ */
+export function CardFace({
   name,
   overall,
   position,
-  attributes,
-  provisional,
+  skills,
   shirtNumber,
-  size = "lg",
+  city,
+  district,
+  team,
+  unrated,
+  provisional,
+  compact,
+  fontSize,
+  className,
 }: {
   name: string;
   overall: number;
   position: Position | null;
-  attributes: Pick<Attribute, "key" | "value">[];
-  provisional?: boolean;
+  skills: Pick<Attribute, "key" | "value">[] | { key: string; value: number | null }[];
   shirtNumber?: number | null;
-  size?: "lg" | "sm";
+  city?: string | null;
+  district?: string | null;
+  team?: CardTeam | null;
+  unrated?: boolean;
+  provisional?: boolean;
+  compact?: boolean;
+  fontSize?: string;
+  className?: string;
 }) {
-  const sm = size === "sm";
+  const plate = plateOf(city);
+  const half = Math.ceil(skills.length / 2);
+  const cols = [skills.slice(0, half), skills.slice(half)];
+  const noSkills = skills.every((a) => a.value === null);
   return (
     <div
-      className={cx(
-        "relative mx-auto overflow-hidden bg-gradient-to-b shadow-2xl",
-        sm ? "w-full max-w-44 p-2.5 pb-4" : "w-60 p-4 pb-6",
-        tierStyle[tierOf(overall)],
-      )}
-      style={{ clipPath: "polygon(50% 0, 100% 7%, 100% 88%, 50% 100%, 0 88%, 0 7%)" }}
+      className={cx("relative overflow-hidden bg-gradient-to-b shadow-xl", tierClass(overall, unrated), className)}
+      style={{
+        width: "11em",
+        padding: compact ? "0.45em 0.5em 1em" : "0.7em 0.8em 1.5em",
+        fontSize,
+        clipPath: SHIELD,
+      }}
     >
-      <div className={cx("flex items-start justify-between", sm ? "pt-2" : "pt-3")}>
-        <div className="text-center leading-none">
-          <div className={cx("font-black", sm ? "text-3xl" : "text-5xl")}>{overall}</div>
-          <div className={cx("mt-1 font-bold", sm ? "text-xs" : "text-sm")}>
+      {!compact && <PitchLines />}
+      <div className="relative flex items-start justify-between" style={{ paddingTop: compact ? "0.35em" : "0.9em" }}>
+        <div className="flex flex-col items-center leading-none" style={{ minWidth: compact ? undefined : "2.6em" }}>
+          <div className="font-black" style={{ fontSize: compact ? "2.2em" : "2.5em" }}>
+            {overall}
+          </div>
+          <div className="font-bold" style={{ fontSize: "0.85em", marginTop: "0.2em" }}>
             {position ? POSITION_LABEL[position] : "—"}
           </div>
+          {!compact && (
+            <>
+              <div className="bg-black/20" style={{ height: "1px", width: "1.6em", margin: "0.45em 0" }} />
+              {plate ? (
+                <>
+                  <div
+                    className="rounded border border-black/30 bg-black/10 font-black tracking-wide"
+                    style={{ fontSize: "0.95em", padding: "0.05em 0.35em" }}
+                    title={city ?? undefined}
+                  >
+                    {plate}
+                  </div>
+                  {district && (
+                    <div
+                      className="truncate text-center font-bold uppercase opacity-70"
+                      style={{ fontSize: "0.5em", marginTop: "0.35em", maxWidth: "7em" }}
+                    >
+                      {district}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="font-bold opacity-40" style={{ fontSize: "0.7em" }}>
+                  —
+                </div>
+              )}
+              {team && (
+                <span
+                  className="mt-[0.45em] inline-flex items-center justify-center rounded-md font-black text-white"
+                  style={{
+                    width: "1.9em",
+                    height: "1.9em",
+                    fontSize: "0.6em",
+                    background: team.color ?? "#1a5a36",
+                  }}
+                  title={team.name}
+                >
+                  {initials(team.name)}
+                </span>
+              )}
+            </>
+          )}
         </div>
         <div
-          className={cx(
-            "relative flex items-center justify-center rounded-full bg-black/10 font-black",
-            sm ? "h-12 w-12 text-base" : "h-20 w-20 text-2xl",
-          )}
+          className="relative flex items-center justify-center rounded-full bg-black/10 font-black"
+          style={{ width: compact ? "2.9em" : "5.2em", height: compact ? "2.9em" : "5.2em" }}
         >
-          {initials(name)}
+          <span style={{ fontSize: compact ? "1em" : "1.6em" }}>{initials(name)}</span>
           {shirtNumber != null && (
             <span
-              className={cx(
-                "absolute -bottom-1 -right-1 flex items-center justify-center rounded-full bg-black/25 font-black text-white",
-                sm ? "h-5 w-5 text-[9px]" : "h-7 w-7 text-xs",
-              )}
+              className="absolute flex items-center justify-center rounded-full bg-black/25 font-black text-white"
+              style={{ width: compact ? "1.3em" : "2.2em", height: compact ? "1.3em" : "2.2em", right: "-0.1em", bottom: "-0.1em", fontSize: compact ? "0.6em" : "0.75em" }}
             >
               {shirtNumber}
             </span>
@@ -121,26 +212,72 @@ export function PlayerCard({
         </div>
       </div>
       <div
-        className={cx(
-          "truncate border-b border-black/15 text-center font-extrabold uppercase",
-          sm ? "mt-1.5 pb-0.5 text-xs" : "mt-3 pb-1 text-lg",
-        )}
+        className="relative truncate border-b border-black/15 text-center font-extrabold uppercase"
+        style={{ marginTop: compact ? "0.4em" : "0.7em", paddingBottom: "0.12em", fontSize: compact ? "0.82em" : "1em" }}
       >
-        {sm ? shortName(name) : name}
+        {compact ? shortName(name) : name}
       </div>
-      <div className={cx("grid grid-cols-2", sm ? "mt-1 gap-x-1 text-[11px]" : "mt-2 gap-x-4 gap-y-1 px-2 text-sm")}>
-        {attributes.map((a) => (
-          <div key={a.key} className="flex items-baseline gap-1">
-            <span className={cx("text-right font-black tabular-nums", sm ? "w-5" : "w-7")}>{a.value ?? "–"}</span>
-            <span className="font-semibold opacity-80">{a.key}</span>
+      <div className="relative grid grid-cols-2" style={{ marginTop: "0.3em", fontSize: compact ? "0.72em" : "0.82em" }}>
+        {cols.map((col, i) => (
+          <div
+            key={i}
+            className={cx(i === 0 && "border-r border-black/15", "flex flex-col")}
+            style={{ paddingLeft: i === 1 ? "0.7em" : "0.2em", rowGap: compact ? 0 : "0.1em" }}
+          >
+            {col.map((a) => (
+              <div key={a.key} className="flex items-baseline" style={{ gap: "0.3em" }}>
+                <span className="text-right font-black tabular-nums" style={{ width: "1.7em" }}>
+                  {a.value ?? "–"}
+                </span>
+                <span className="font-semibold opacity-80">{a.key}</span>
+              </div>
+            ))}
           </div>
         ))}
       </div>
-      {provisional && (
-        <div className={cx("text-center font-bold uppercase opacity-70", sm ? "mt-1 text-[8px]" : "mt-2 text-[10px]")}>
-          Geçici puan
+      {!compact && (noSkills || provisional) && (
+        <div className="relative text-center font-bold uppercase opacity-60" style={{ marginTop: "0.5em", fontSize: "0.5em" }}>
+          {noSkills ? "Yetenekler oylamayla dolar" : "Geçici puan"}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Profil/liste kartı: genişliğine göre kendini ölçekler (kapsayıcı sorgusu) */
+export function PlayerCard({
+  size = "lg",
+  attributes,
+  skills,
+  ...rest
+}: {
+  name: string;
+  overall: number;
+  position: Position | null;
+  /** Karttaki 6 yetenek; yoksa "–" */
+  skills?: { key: string; value: number | null }[];
+  /** Eski ad: skills yerine geçer */
+  attributes?: { key: string; value: number | null }[];
+  provisional?: boolean;
+  shirtNumber?: number | null;
+  city?: string | null;
+  district?: string | null;
+  team?: CardTeam | null;
+  unrated?: boolean;
+  size?: "lg" | "sm";
+}) {
+  return (
+    <div
+      className={cx("mx-auto w-full", size === "sm" ? "max-w-44" : "max-w-60")}
+      style={{ containerType: "inline-size" }}
+    >
+      <CardFace
+        {...rest}
+        skills={skills ?? attributes ?? []}
+        compact={false}
+        fontSize="calc(100cqw / 11)"
+        className="w-full"
+      />
     </div>
   );
 }

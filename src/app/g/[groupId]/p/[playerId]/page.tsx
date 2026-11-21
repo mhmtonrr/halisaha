@@ -5,6 +5,7 @@ import { FOOT_NAME, POSITION_NAME, byRanking, formatDate, getGroupSummaries, typ
 import { Badge, Card, Header, LinkButton, SectionTitle, cx } from "@/components/ui";
 import { PlayerCard, PositionChip } from "@/components/PlayerCard";
 import { formatRegion } from "@/lib/regions";
+import { skillSet } from "@/lib/skills";
 import { ROLE_LABEL, type GroupKind, type Role } from "@/lib/teams-data";
 
 // Özellikler 40 (hiç yok) ile 99 arasında; çubuk bu aralığa göre dolar
@@ -74,7 +75,10 @@ export default async function PlayerPage({
         position={player.position}
         shirtNumber={player.shirt_number}
         provisional={player.matches_played > 0 && player.confidence < 0.6}
-        attributes={player.attributes}
+        skills={player.skills}
+        city={player.city}
+        district={player.district}
+        unrated={player.matches_played === 0}
       />
 
       <div className="mt-4 flex flex-wrap justify-center gap-2">
@@ -90,7 +94,31 @@ export default async function PlayerPage({
         </p>
       )}
 
-      <SectionTitle>Özellikler</SectionTitle>
+      <SectionTitle>Yetenekler</SectionTitle>
+      <Card className="space-y-3">
+        {skillSet(player.position === "GK").map((sk) => {
+          const v = player.skills.find((x) => x.key === sk.key)?.value ?? null;
+          return (
+            <div key={sk.key}>
+              <div className="mb-1 flex items-baseline justify-between text-sm">
+                <span>
+                  <b className="mr-2 inline-block w-9 text-xs text-muted">{sk.key}</b>
+                  {sk.label}
+                </span>
+                <span className="text-lg font-black tabular-nums">{v ?? "–"}</span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-pitch-950">
+                {v !== null && <div className={cx("h-full rounded-full", barColor(v))} style={{ width: `${barWidth(v)}%` }} />}
+              </div>
+            </div>
+          );
+        })}
+        <p className="text-[11px] text-muted">
+          Maç sonrası oylamada takım arkadaşları ve rakipler “en iyi kim?” diye işaretler. En az 2 maç ve 2 farklı oy veren olunca değer görünür.
+        </p>
+      </Card>
+
+      <SectionTitle>Performans göstergeleri</SectionTitle>
       <Card className="space-y-3">
         {player.attributes.map((a) => (
           <div key={a.key}>

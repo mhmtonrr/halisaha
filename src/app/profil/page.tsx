@@ -8,6 +8,7 @@ import { Button, Card, ErrorNote, Header, SectionTitle } from "@/components/ui";
 import { ProfileFields, type ProfileValues } from "@/components/ProfileFields";
 import { OvrBadge, PlayerCard } from "@/components/PlayerCard";
 import { PushSettings } from "@/components/PushControls";
+import { cardSkills } from "@/lib/skills";
 import { DEFAULT_PREFS } from "@/lib/notify-rules";
 
 export default async function ProfilePage({
@@ -26,13 +27,23 @@ export default async function ProfilePage({
       .single(),
     supabase
       .from("group_players")
-      .select("id, group_id, groups(name), player_ratings(overall, matches_played)")
+      .select("id, group_id, groups(name, kind, color), player_ratings(overall, matches_played), player_skills(skills)")
       .eq("user_id", user.id)
       .eq("is_loan", false),
     supabase.from("notification_prefs").select("votes, matches, offers, chat").eq("user_id", user.id).maybeSingle(),
   ]);
 
   const position = (profile?.preferred_position ?? null) as Position | null;
+  type G = { name: string; kind: string; color: string | null };
+  const teamMembership = (memberships ?? []).find((m) => one(m.groups as G | G[] | null)?.kind === "team");
+  const teamGroup = one((teamMembership?.groups ?? null) as G | G[] | null);
+  const storedSkills = one(
+    (memberships?.[0]?.player_skills ?? null) as { skills: Record<string, number | null> } | { skills: Record<string, number | null> }[] | null,
+  )?.skills;
+  const played = (memberships ?? []).reduce(
+    (n, m) => Math.max(n, one(m.player_ratings as { matches_played: number } | { matches_played: number }[] | null)?.matches_played ?? 0),
+    0,
+  );
   const best = Math.max(
     DEFAULT_OVERALL,
     ...(memberships ?? []).map((m) => one(m.player_ratings as { overall: number } | { overall: number }[] | null)?.overall ?? 0),
@@ -51,7 +62,11 @@ export default async function ProfilePage({
         overall={best}
         position={position}
         shirtNumber={profile?.shirt_number}
-        attributes={[]}
+        skills={cardSkills(storedSkills, position === "GK")}
+        city={profile?.city}
+        district={profile?.district}
+        team={teamGroup ? { name: teamGroup.name, color: teamGroup.color } : null}
+        unrated={played === 0}
       />
       <p className="mt-2 text-center text-xs text-muted">
         {formatRegion(profile?.city ?? null, profile?.district ?? null)}
