@@ -29,6 +29,8 @@ export interface GroupPlayer {
   display_name: string;
   /** Kartta görünen ad (profildeki kopya); boşsa display_name kullanılır */
   card_name: string | null;
+  /** Kart fotoğrafı (profildeki kopya); misafirde/yoksa null */
+  photo_url: string | null;
   user_id: string | null;
   /** Ödünç oyuncu: hesabı var, bir maça başvuruyla alındı ama takımın asıl kadrosunda değil */
   is_loan: boolean;
@@ -83,7 +85,7 @@ export async function getGroupPlayers(
   let query = supabase
     .from("group_players")
     .select(
-      "id, display_name, card_name, user_id, is_loan, left_at, role, position, player_ratings(overall, matches_played, confidence), player_skills(skills), profiles(secondary_positions, preferred_foot, shirt_number, bio, city, district)",
+      "id, display_name, card_name, photo_url, user_id, is_loan, left_at, role, position, player_ratings(overall, matches_played, confidence), player_skills(skills), profiles(secondary_positions, preferred_foot, shirt_number, bio, city, district)",
     )
     .eq("group_id", groupId);
   if (!opts.includeLeft) query = query.is("left_at", null);
@@ -97,6 +99,7 @@ export async function getGroupPlayers(
       id: p.id,
       display_name: p.display_name,
       card_name: (p.card_name as string | null) ?? null,
+      photo_url: (p.photo_url as string | null) ?? null,
       user_id: p.user_id,
       is_loan: !!p.is_loan,
       left_at: (p.left_at as string | null) ?? null,

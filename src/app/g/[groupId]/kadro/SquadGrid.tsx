@@ -10,6 +10,7 @@ interface SquadPlayer {
   id: string;
   name: string;
   cardName?: string | null;
+  photoUrl?: string | null;
   overall: number;
   position: Position | null;
   secondary: Position[];
@@ -101,6 +102,7 @@ export function SquadGrid({ groupId, players }: { groupId: string; players: Squa
                 size="sm"
                 name={p.name}
                 cardName={p.cardName}
+                photoUrl={p.photoUrl}
                 overall={p.overall}
                 position={p.position}
                 shirtNumber={p.shirt}

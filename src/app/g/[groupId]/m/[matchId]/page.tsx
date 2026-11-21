@@ -48,6 +48,7 @@ interface RosterEntry {
   id: string;
   name: string;
   cardName: string | null;
+  photoUrl: string | null;
   userId: string | null;
   position: Position | null;
   team: Team;
@@ -83,6 +84,7 @@ async function fetchRoster(supabase: SupabaseClient, matchId: string, groupId: s
         id: r.player_id,
         name: gp?.display_name ?? "?",
         cardName: summary.get(r.player_id)?.card_name ?? null,
+        photoUrl: summary.get(r.player_id)?.photo_url ?? null,
         userId: gp?.user_id ?? null,
         // Maça özel mevki; yoksa oyuncunun genel mevkisi
         position: (r.position as Position | null) ?? (r.is_goalkeeper ? "GK" : (gp?.position ?? null)),
@@ -110,6 +112,7 @@ const toPitch = (r: RosterEntry): PitchPlayer => ({
   id: r.id,
   name: r.name,
   cardName: r.cardName,
+  photoUrl: r.photoUrl,
   overall: r.overall,
   position: r.position,
   attributes: r.attributes,

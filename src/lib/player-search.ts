@@ -16,6 +16,8 @@ export interface PlayerCandidate {
   name: string;
   /** Kartta görünen ad (isteğe bağlı) */
   cardName?: string | null;
+  /** Kart fotoğrafı (isteğe bağlı) */
+  photoUrl?: string | null;
   city: string | null;
   district: string | null;
   position: Position | null;

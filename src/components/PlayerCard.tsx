@@ -136,10 +136,14 @@ function FullCard({
       className={cx("relative", className)}
       style={{
         width: "11em", height: "15.9em", fontSize, color: t.text,
-        backgroundImage: `url(/cards/${t.img}.webp)`, backgroundSize: "100% 100%",
-        filter: `${t.filter ? t.filter + " " : ""}drop-shadow(0 0.35em 0.5em rgba(0,0,0,.45))`,
+        filter: "drop-shadow(0 0.35em 0.5em rgba(0,0,0,.45))",
       }}
     >
+      {/* zemin ayrı katmanda: maçsız kartın gri filtresi fotoğrafı etkilemesin */}
+      <div
+        className="absolute inset-0"
+        style={{ backgroundImage: `url(/cards/${t.img}.webp)`, backgroundSize: "100% 100%", filter: t.filter }}
+      />
       {/* sol üst: rating, mevki, takım rozeti */}
       <div className="absolute flex flex-col items-center leading-none" style={{ left: "6%", top: "9%", width: "30%" }}>
         <div className="font-black" style={{ fontSize: "2.35em", letterSpacing: "-0.02em" }}>{overall}</div>
@@ -312,7 +316,12 @@ export function CardFace({
           className="relative flex items-center justify-center rounded-full bg-black/10 font-black"
           style={{ width: compact ? "2.9em" : "5.2em", height: compact ? "2.9em" : "5.2em" }}
         >
-          <span style={{ fontSize: compact ? "1em" : "1.6em" }}>{initials(name)}</span>
+          {photoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={photoUrl} alt={name} className="h-full w-full rounded-full object-cover object-top" draggable={false} />
+          ) : (
+            <span style={{ fontSize: compact ? "1em" : "1.6em" }}>{initials(name)}</span>
+          )}
           {shirtNumber != null && (
             <span
               className="absolute flex items-center justify-center rounded-full bg-black/25 font-black text-white"

@@ -10,6 +10,8 @@ export interface PitchPlayer {
   name: string;
   /** Kartta görünen ad (isteğe bağlı) */
   cardName?: string | null;
+  /** Kart fotoğrafı (şeffaf kesim); yoksa baş harfler */
+  photoUrl?: string | null;
   overall: number;
   position: Position | null;
   /** Kartın 6 yeteneği (HIZ, ŞUT, PAS, DRİ, DEF, FİZ; kalecide REF…); oylanmadıysa tireler görünür */
@@ -90,6 +92,7 @@ export function PitchCard({ player, fontSize, className }: { player: PitchPlayer
       compact
       name={player.name}
       cardName={player.cardName}
+      photoUrl={player.photoUrl}
       overall={player.overall}
       position={player.position}
       skills={player.attributes ?? []}

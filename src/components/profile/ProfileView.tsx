@@ -98,6 +98,7 @@ function GeneralPanel({
       <PlayerCard
         name={p.displayName}
         cardName={p.cardName}
+        photoUrl={p.photoUrl}
         overall={person.overall}
         position={p.position}
         shirtNumber={p.shirt}

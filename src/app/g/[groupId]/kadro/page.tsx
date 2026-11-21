@@ -42,6 +42,7 @@ export default async function SquadPage({
           id: p.id,
           name: p.display_name,
           cardName: p.card_name,
+          photoUrl: p.photo_url,
           overall: p.overall,
           position: p.position,
           secondary: p.secondary_positions,

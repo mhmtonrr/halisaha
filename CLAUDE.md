@@ -184,7 +184,7 @@ Port doluysa: `fuser -k 3000/tcp`. Arayüzden kayıt (signUp) test etme: onay ma
 2. ~~Takımlar arası maç teklifi + ortak maç ekranı + takım istatistikleri~~ (yapıldı; sonraki adım: karşı teklif/tarih değiştirme, takım sıralamasında W/D/L)
 3. ~~Bildirimler~~ (yapıldı: kutu + web push; kullanıcı Vercel'e VAPID anahtarlarını eklemeli, bkz. yukarı)
 4. Halısaha tesis rehberi, işletme hesapları, rezervasyon/turnuva (gelir modeli)
-5. **Sıradaki (sırayla): ~~a) kart adı alanı~~ (yapıldı: 0025), b) kart fotoğrafı yükleme + arka plan kaldırma (docs/profil-kart-kesfet-menu.md → "Parça 2 planı")**; sonra takım rozeti tasarımı. Rozetler, ~~yetenek oylaması (hız/şut/pas…)~~ (yapıldı: 0019), sohbette fotoğraf
+5. **Sıradaki (sırayla): ~~a) kart adı alanı~~ (yapıldı: 0025), ~~b) kart fotoğrafı yükleme + arka plan kaldırma~~ (yapıldı: 0026, kartlara bağlandı; gerçek model telefonda denenmeli)**; sıradaki: takım rozeti tasarımı. Rozetler, ~~yetenek oylaması (hız/şut/pas…)~~ (yapıldı: 0019), sohbette fotoğraf
 6. Türkiye geneli açılış öncesi: KVKK aydınlatma metni, 18 yaş altı kuralı, e-posta onayı tekrar açık
 
 ## Git

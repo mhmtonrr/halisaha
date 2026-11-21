@@ -20,6 +20,7 @@ function MiniCard({ c, children }: { c: PlayerCandidate; children?: React.ReactN
         size="sm"
         name={c.name}
         cardName={c.cardName}
+        photoUrl={c.photoUrl}
         overall={c.overall}
         position={c.position}
         skills={cardSkills(c.skills, c.position === "GK")}
