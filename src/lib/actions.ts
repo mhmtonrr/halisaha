@@ -7,6 +7,7 @@ import { finalizeMatch, recomputePlayers } from "@/lib/finalize";
 import { balanceTeams, pickVariant, type TeamCandidate } from "@/lib/teams";
 import { getGroupPlayers, parseLocalDateTime, POSITIONS, type Position } from "@/lib/data";
 import { canonicalDistrict, isProvince } from "@/lib/regions";
+import { getFormation, inferSize, isValidSize, validAssignment, type Role } from "@/lib/formations";
 
 const VOTING_HOURS = 24;
 const asPosition = (v: string): Position | null => (POSITIONS.includes(v as Position) ? (v as Position) : null);
@@ -21,6 +22,12 @@ function rpcMessage(error: { message?: string; code?: string }, fallback: string
   // P0001: raise exception ile bizim yazdığımız mesaj
   return error.code === "P0001" && error.message ? error.message : fallback;
 }
+
+/** Formdan kişi sayısı (5-11); geçersizse null */
+const sizeOf = (fd: FormData, key = "size") => {
+  const n = Number(fd.get(key));
+  return isValidSize(n) ? n : null;
+};
 
 const str = (fd: FormData, key: string) => String(fd.get(key) ?? "").trim();
 const int = (fd: FormData, key: string) => {
@@ -300,6 +307,7 @@ export async function createMatch(fd: FormData) {
       created_by: user.id,
       kind: external ? "external" : "internal",
       opponent_name: external ? opponent.slice(0, 60) : null,
+      team_size: sizeOf(fd),
     })
     .select("id")
     .single();
@@ -709,8 +717,11 @@ export async function createChallenge(fd: FormData) {
   if (!from) fail(back, "Hangi takımınızla teklif göndereceğinizi seçin");
   const when = str(fd, "playedAt");
   if (!when) fail(back, "Maç zamanını seçin");
+  const size = sizeOf(fd);
+  if (!size) fail(`${back}?from=${from}`, "Kaç kişilik oynanacağını seçin (5-11)");
 
   const { error } = await supabase.rpc("create_challenge", {
+    p_size: size,
     p_from: from,
     p_to: to,
     p_at: parseLocalDateTime(when),
@@ -747,4 +758,78 @@ export async function cancelChallenge(fd: FormData) {
   if (error) fail(back, rpcMessage(error, "Teklif iptal edilemedi"));
   revalidatePath(back);
   redirect(back);
+}
+
+// ---------------------------------------------------------------------------
+// Diziliş (sürükle-bırak editörü)
+// ---------------------------------------------------------------------------
+
+/**
+ * Bir takımın dizilişini kaydeder: formasyon + oyuncu → slot atamaları. Sahaya dizilen oyuncunun maçtaki
+ * mevkisi slotun rolü olur. Sadece planlanmış maçta; yetkiyi RLS yapar (kaptan/yetkili/maçı kuran).
+ */
+export async function setLineup(fd: FormData) {
+  const { supabase } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const matchId = str(fd, "matchId");
+  const team = str(fd, "team") === "B" ? "B" : "A";
+  const back = `/g/${groupId}/m/${matchId}`;
+
+  const { data: match } = await supabase
+    .from("matches")
+    .select("status, kind, team_size, challenge_id")
+    .eq("id", matchId)
+    .single();
+  if (!match) fail(back, "Maç bulunamadı");
+  if (match.status !== "planned") fail(back, "Diziliş sadece planlanmış maçta değiştirilir");
+  // Rakibe karşı maçta sadece A (bizim takım) vardır
+  if (match.kind === "external" && team === "B") fail(back, "Geçersiz takım");
+
+  const roster = (await loadRoster(supabase, matchId)).filter((r) => r.team === team);
+  const size = match.team_size ?? inferSize(roster.length);
+  const formation = getFormation(size, str(fd, "formation"));
+  if (!formation) fail(back, "Geçersiz diziliş");
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(str(fd, "lineup") || "{}");
+  } catch {
+    fail(back, "Diziliş okunamadı");
+  }
+  const rosterIds = new Set(roster.map((r) => r.player_id));
+  const assign: Record<string, number | null> = {};
+  for (const [id, slot] of Object.entries((raw ?? {}) as Record<string, unknown>)) {
+    if (!rosterIds.has(id)) continue; // kadroda olmayan oyuncu sayılmaz
+    assign[id] = typeof slot === "number" ? slot : null;
+  }
+  if (!validAssignment(assign, formation)) fail(back, "Diziliş geçersiz (iki oyuncu aynı yerde olamaz)");
+
+  // Benzersiz slot kuralı yüzünden önce takımın tüm slotları boşaltılır
+  const cleared = await supabase.from("match_players").update({ slot: null }).eq("match_id", matchId).eq("team", team);
+  if (cleared.error) fail(back, "Diziliş kaydedilemedi (yetkiniz olmayabilir)");
+
+  const results = await Promise.all(
+    Object.entries(assign)
+      .filter(([, slot]) => slot !== null)
+      .map(([id, slot]) => {
+        const role = formation.slots[slot as number].role as Role;
+        return supabase
+          .from("match_players")
+          .update({ slot, position: role, is_goalkeeper: role === "GK" })
+          .eq("match_id", matchId)
+          .eq("player_id", id);
+      }),
+  );
+  if (results.some((r) => r.error)) fail(back, "Diziliş kaydedilemedi");
+
+  const { error } = await supabase
+    .from("matches")
+    .update({
+      [team === "A" ? "formation_a" : "formation_b"]: formation.id,
+      ...(match.team_size ? {} : { team_size: size }),
+    })
+    .eq("id", matchId);
+  if (error) fail(back, "Diziliş kaydedilemedi");
+  revalidatePath(back);
+  redirect(`${back}?dizilis=1`);
 }

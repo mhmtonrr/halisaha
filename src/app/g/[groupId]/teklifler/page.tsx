@@ -134,6 +134,10 @@ function ChallengeCard({
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
         <dt className="text-muted">Zaman</dt>
         <dd>{formatDate(c.proposedAt)}</dd>
+        <dt className="text-muted">Kişi</dt>
+        <dd>
+          {c.teamSize} kişilik ({c.teamSize}v{c.teamSize})
+        </dd>
         <dt className="text-muted">Saha</dt>
         <dd>{c.venue ?? "Belirtilmedi"}</dd>
         {c.feeNote && (

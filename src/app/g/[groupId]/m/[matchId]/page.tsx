@@ -16,6 +16,9 @@ import {
 } from "@/lib/actions";
 import { CONFIG } from "@/lib/rating";
 import { teamRating } from "@/lib/teams-data";
+import { getFormation, inferSize } from "@/lib/formations";
+import { LineupPitch, type PitchPlayer } from "@/components/LineupPitch";
+import { LineupEditor } from "./LineupEditor";
 import { TeamBadge } from "@/components/TeamBadge";
 import { Badge, Button, Card, ErrorNote, Header, Input, SectionTitle, cx } from "@/components/ui";
 import { OvrBadge, PositionChip, shortName } from "@/components/PlayerCard";
@@ -39,6 +42,8 @@ interface RosterEntry {
   position: Position | null;
   team: Team;
   isGoalkeeper: boolean;
+  /** Dizilişteki yeri; boşsa yedek */
+  slot: number | null;
   goals: number;
   assists: number;
   saves: number;
@@ -52,7 +57,7 @@ async function fetchRoster(supabase: SupabaseClient, matchId: string, groupId: s
   const [{ data: rows }, players] = await Promise.all([
     supabase
       .from("match_players")
-      .select("player_id, team, is_goalkeeper, position, goals, assists, saves, group_players(display_name, user_id, position)")
+      .select("player_id, team, is_goalkeeper, position, slot, goals, assists, saves, group_players(display_name, user_id, position)")
       .eq("match_id", matchId),
     getGroupPlayers(supabase, groupId),
   ]);
@@ -68,6 +73,7 @@ async function fetchRoster(supabase: SupabaseClient, matchId: string, groupId: s
         position: (r.position as Position | null) ?? (r.is_goalkeeper ? "GK" : (gp?.position ?? null)),
         team: r.team as Team,
         isGoalkeeper: r.is_goalkeeper,
+        slot: r.slot,
         goals: r.goals,
         assists: r.assists,
         saves: r.saves,
@@ -91,7 +97,14 @@ interface TeamInfo {
 
 interface Opponent {
   team: TeamInfo;
-  match: { id: string; status: string; score_a: number | null; score_b: number | null };
+  match: {
+    id: string;
+    status: string;
+    score_a: number | null;
+    score_b: number | null;
+    team_size: number | null;
+    formation_a: string | null;
+  };
   roster: RosterEntry[];
 }
 
@@ -104,7 +117,7 @@ async function loadOpponent(
 ): Promise<Opponent | null> {
   const { data: m } = await supabase
     .from("matches")
-    .select("id, group_id, status, score_a, score_b")
+    .select("id, group_id, status, score_a, score_b, team_size, formation_a")
     .eq("challenge_id", challengeId)
     .neq("id", myMatchId)
     .maybeSingle();
@@ -141,10 +154,10 @@ export default async function MatchPage({
   searchParams,
 }: {
   params: Promise<{ groupId: string; matchId: string }>;
-  searchParams: Promise<{ error?: string; voted?: string; positions?: string; kabul?: string }>;
+  searchParams: Promise<{ error?: string; voted?: string; positions?: string; kabul?: string; dizilis?: string }>;
 }) {
   const { groupId, matchId } = await params;
-  const { error, voted, positions, kabul } = await searchParams;
+  const { error, voted, positions, kabul, dizilis } = await searchParams;
   const { supabase, user } = await requireUser();
 
   const { data: first } = await supabase
@@ -159,7 +172,7 @@ export default async function MatchPage({
   const [{ data: match }, roster, players, { data: canManage }, { data: myTeam }] = await Promise.all([
     supabase
       .from("matches")
-      .select("id, played_at, venue, status, score_a, score_b, voting_deadline, kind, opponent_name, challenge_id, opponent_group_id")
+      .select("id, played_at, venue, status, score_a, score_b, voting_deadline, kind, opponent_name, challenge_id, opponent_group_id, team_size, formation_a, formation_b")
       .eq("id", matchId)
       .single(),
     fetchRoster(supabase, matchId, groupId),
@@ -204,6 +217,7 @@ export default async function MatchPage({
       />
       <p className="-mt-3 mb-4 text-sm text-muted">
         {external ? formatDate(match.played_at) : "Kendi aramızda"}
+        {match.team_size ? ` · ${match.team_size} kişilik` : ""}
         {match.venue ? ` · ${match.venue}` : ""}
       </p>
       <ErrorNote message={error} />
@@ -214,6 +228,9 @@ export default async function MatchPage({
       )}
       {positions && (
         <p className="mb-4 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">Mevkiler kaydedildi ✓</p>
+      )}
+      {dizilis && (
+        <p className="mb-4 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">Diziliş kaydedildi ✓ Rakip takım da görebilir.</p>
       )}
 
       {linked && opp && <VersusCard mine={{ id: groupId, name: myTeamName, color: myTeamColor, roster }} opp={opp} />}
@@ -234,6 +251,22 @@ export default async function MatchPage({
         </Card>
       )}
 
+      <LineupsSection
+        sides={
+          external
+            ? [
+                { key: "me", title: myTeamName, groupId, size: match.team_size, formationId: match.formation_a, roster },
+                ...(opp
+                  ? [{ key: "opp", title: opp.team.name, groupId: opp.team.id, size: opp.match.team_size, formationId: opp.match.formation_a, roster: opp.roster }]
+                  : []),
+              ]
+            : [
+                { key: "A", title: TEAM.A.label, groupId, size: match.team_size, formationId: match.formation_a, roster: teams.A },
+                { key: "B", title: TEAM.B.label, groupId, size: match.team_size, formationId: match.formation_b, roster: teams.B },
+              ]
+        }
+      />
+
       {match.status === "planned" && (
         <PlannedView
           groupId={groupId}
@@ -244,6 +277,8 @@ export default async function MatchPage({
           external={external}
           labels={labels}
           linked={linked}
+          teamSize={match.team_size}
+          formations={{ A: match.formation_a, B: match.formation_b }}
           bench={players
             .filter((p) => !roster.some((r) => r.id === p.id))
             .sort((a, b) => a.display_name.localeCompare(b.display_name, "tr"))}
@@ -295,6 +330,8 @@ async function PlannedView({
   external,
   labels,
   linked,
+  teamSize,
+  formations,
   bench,
 }: {
   groupId: string;
@@ -305,6 +342,8 @@ async function PlannedView({
   external: boolean;
   labels: Labels;
   linked: boolean;
+  teamSize: number | null;
+  formations: Record<Team, string | null>;
   bench: { id: string; display_name: string }[];
 }) {
   const all = [...teams.A, ...teams.B];
@@ -412,6 +451,37 @@ async function PlannedView({
                 {!external && " Kaydettikten sonra karıştırırsan takımlar yeni mevkilere göre dengelenir."}
               </p>
             </form>
+          </details>
+
+          <details className="mt-1">
+            <summary className="cursor-pointer py-2 text-sm text-muted">🧩 Diziliş (sürükle-bırak)</summary>
+            <div className="mt-2 space-y-6">
+              {(external ? (["A"] as const) : (["A", "B"] as const)).map((t) => {
+                const mine = teams[t];
+                if (mine.length === 0) {
+                  return (
+                    <p key={t} className="text-center text-sm text-muted">
+                      Önce kadroya oyuncu ekle; sonra dizilişi ayarlayabilirsin.
+                    </p>
+                  );
+                }
+                return (
+                  <div key={t}>
+                    {!external && <div className={cx("mb-2 text-sm font-bold", TEAM[t].text)}>{labels[t]}</div>}
+                    <LineupEditor
+                      key={`${t}-${mine.map((p) => p.id).join()}`}
+                      groupId={groupId}
+                      matchId={matchId}
+                      team={t}
+                      size={teamSize ?? inferSize(mine.length)}
+                      players={mine.map((p) => ({ id: p.id, name: p.name, overall: p.overall, position: p.position }))}
+                      initialFormation={formations[t]}
+                      initialAssign={Object.fromEntries(mine.map((p) => [p.id, p.slot]))}
+                    />
+                  </div>
+                );
+              })}
+            </div>
           </details>
 
           <details className="mt-1" open={linked && all.length === 0}>
@@ -886,6 +956,56 @@ function OpponentSection({ opp }: { opp: Opponent }) {
       <p className="mt-2 text-center text-xs text-muted">
         Her takım kendi oyuncularını puanlar; rakip oyuncuların puanları senin kartlarını etkilemez.
       </p>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Dizilişler (herkes görür)
+// ---------------------------------------------------------------------------
+
+interface LineupSide {
+  key: string;
+  title: string;
+  groupId: string;
+  size: number | null;
+  formationId: string | null;
+  roster: RosterEntry[];
+}
+
+/** Kaydedilmiş dizilişleri sahada kartlarla gösterir; hiç diziliş yoksa görünmez */
+function LineupsSection({ sides }: { sides: LineupSide[] }) {
+  const shown = sides.flatMap((side) => {
+    const formation = getFormation(side.size ?? inferSize(side.roster.length), side.formationId);
+    if (!formation || !side.roster.some((r) => r.slot !== null)) return [];
+    return [{ side, formation }];
+  });
+  if (!shown.length) return null;
+  return (
+    <>
+      <SectionTitle>Dizilişler</SectionTitle>
+      <div className="space-y-4">
+        {shown.map(({ side, formation }) => {
+          const placed = new Map<number, PitchPlayer>(
+            side.roster
+              .filter((r) => r.slot !== null)
+              .map((r) => [r.slot as number, { id: r.id, name: r.name, overall: r.overall, position: r.position }]),
+          );
+          const bench = side.roster.filter((r) => r.slot === null);
+          return (
+            <div key={side.key}>
+              <div className="mb-2 flex items-baseline justify-between">
+                <span className="font-bold">{side.title}</span>
+                <span className="text-sm font-black tabular-nums text-accent">{formation.id}</span>
+              </div>
+              <LineupPitch slots={formation.slots} placed={placed} playerHref={(id) => `/g/${side.groupId}/p/${id}`} />
+              {bench.length > 0 && (
+                <p className="mt-1.5 text-xs text-muted">Yedek: {bench.map((r) => shortName(r.name)).join(", ")}</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </>
   );
 }

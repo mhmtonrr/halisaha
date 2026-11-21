@@ -63,6 +63,7 @@ try {
 
   // 2) Kartal kaptanı teklif gönderir
   await A1.goto(`${BASE}/g/${teamB}/teklif`); await shot(A1, "30-teklif-formu");
+  await A1.selectOption('select[name="size"]', "5");
   await A1.fill('input[name="venue"]', "Petroller Halısaha"); await A1.fill('input[name="fee"]', "Saha yarı yarıya");
   await A1.fill('textarea[name="message"]', "Cuma akşamı 7'ye 7 yapalım mı?");
   await A1.click('button:has-text("Teklifi gönder")'); await A1.waitForURL(/teklifler\?sent=1/);
@@ -88,7 +89,8 @@ try {
   await B1.click('button:has-text("Kabul et")'); await B1.waitForURL(/\/m\/[0-9a-f-]+\?kabul=1/);
   const mB = B1.url().match(/\/m\/([0-9a-f-]+)/)[1];
   check("kabulde maç ekranına yönlendi, kadro boş uyarısı", (await B1.locator("text=Kadro boş").count()) > 0);
-  const { data: ms } = await admin.from("matches").select("id, group_id, kind, status, opponent_name, opponent_group_id, challenge_id").eq("challenge_id", ch[0].id);
+  const { data: ms } = await admin.from("matches").select("id, group_id, kind, status, opponent_name, opponent_group_id, challenge_id, team_size").eq("challenge_id", ch[0].id);
+  check("kişi sayısı (5) iki maça da yazıldı", ms.length === 2 && ms.every((m) => m.team_size === 5));
   check("iki takımda da external maç oluştu", ms.length === 2 && ms.every((m) => m.kind === "external" && m.status === "planned"));
   const mA = ms.find((m) => m.group_id === teamA).id;
   await shot(B1, "34-mac-bos-kadro");
@@ -105,6 +107,66 @@ try {
   }
   const { data: rosters } = await admin.from("match_players").select("match_id").in("match_id", [mA, mB]);
   check("her maçta 2 oyuncu (toplu ekleme çalıştı)", rosters.filter((r) => r.match_id === mA).length === 2 && rosters.filter((r) => r.match_id === mB).length === 2);
+
+  const gp = async (uid, gid) => (await admin.from("group_players").select("id").eq("user_id", uid).eq("group_id", gid).single()).data.id;
+  // 5b) Diziliş: A1 fareyle sürükle-bırak, B1 dokunarak (seç + yerleştir)
+  const openEditor = async (page, gid, mid) => {
+    await page.goto(`${BASE}/g/${gid}/m/${mid}`);
+    await page.locator("summary:has-text('Diziliş (sürükle-bırak)')").click();
+  };
+  const lineupJson = async (page) => JSON.parse(await page.locator('input[name="lineup"]').inputValue());
+  const box = async (loc) => { const b = await loc.boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; };
+  const [idAli, idAyse, idBerk] = [await gp(users[0].id, teamA), await gp(users[1].id, teamA), await gp(users[2].id, teamB)];
+
+  await openEditor(A1, teamA, mA);
+  check("editörde 5 kişilik dizilişler (2-2, 1-2-1…)", (await A1.locator('[role="radio"]').count()) === 4 && (await A1.locator('[role="radio"]:has-text("2-2")').count()) === 1);
+  await A1.locator('[role="radio"]:has-text("1-2-1")').click();
+  let lu = await lineupJson(A1);
+  check("diziliş seçilince otomatik yerleşti (ikisi de sahada)", Object.values(lu).filter((v) => v !== null).length === 2);
+  await shot(A1, "40a-dizilis-editoru");
+  // Saha ekranın tamamen görünür olsun (fare koordinatları görünür alanda kalmalı)
+  const centerPitch = (page) => page.locator('[data-drop="slot:0"]').evaluate((el) => el.closest(".overflow-hidden").scrollIntoView({ block: "center" }));
+  await centerPitch(A1);
+  // Ali'nin kartını boş forvet slotuna (slot:4) sürükle
+  const aliToken = A1.locator('[data-drop^="slot:"] .cursor-grab:has-text("Ali K.")');
+  const target = await box(A1.locator('[data-drop="slot:4"]'));
+  const from = await box(aliToken);
+  await A1.mouse.move(from.x, from.y); await A1.mouse.down();
+  await A1.mouse.move(from.x + 15, from.y - 15, { steps: 4 }); await A1.mouse.move(target.x, target.y, { steps: 10 }); await A1.mouse.up();
+  lu = await lineupJson(A1);
+  check("sürükle-bırak: Ali forvet slotuna (4) geçti", lu[idAli] === 4);
+  // Ayşe'yi Ali'nin üzerine bırak → yer değiştirirler (takas)
+  const ayseToken = A1.locator('[data-drop^="slot:"] .cursor-grab:has-text("Ayşe O.")');
+  const f2 = await box(ayseToken), t2 = await box(A1.locator('[data-drop="slot:4"]'));
+  await A1.mouse.move(f2.x, f2.y); await A1.mouse.down(); await A1.mouse.move(f2.x + 12, f2.y + 12, { steps: 3 }); await A1.mouse.move(t2.x, t2.y, { steps: 8 }); await A1.mouse.up();
+  lu = await lineupJson(A1);
+  check("dolu slota bırakınca takas: Ayşe 4'e, Ali Ayşe'nin eski yerine", lu[idAyse] === 4 && lu[idAli] !== null && lu[idAli] !== 4);
+  await A1.click('button:has-text("Dizilişi kaydet")'); await A1.waitForURL(/dizilis=1/);
+  const { data: lA } = await admin.from("match_players").select("player_id, slot, position, is_goalkeeper").eq("match_id", mA);
+  const { data: mrow } = await admin.from("matches").select("formation_a").eq("id", mA).single();
+  check("kayıt: formasyon 1-2-1, iki oyuncunun slotu yazıldı", mrow.formation_a === "1-2-1" && lA.every((r) => r.slot !== null) && lA.find((r) => r.player_id === idAyse).slot === 4);
+  check("sahaya dizilen oyuncunun mevkisi slot rolü oldu (slot 4 = FWD)", lA.find((r) => r.player_id === idAyse).position === "FWD");
+  check("kaleye dizilen oyuncu kaleci işaretlendi", lA.filter((r) => r.slot === 0).every((r) => r.is_goalkeeper && r.position === "GK"));
+
+  await openEditor(B1, teamB, mB);
+  await B1.locator('[role="radio"]:has-text("2-2")').click();
+  // dokunarak: kartı seç, sonra boş slota dokun
+  const berkToken = B1.locator('[data-drop^="slot:"] .cursor-grab:has-text("Berk K.")');
+  await berkToken.click();
+  await B1.locator('[data-drop="slot:3"]').click();
+  lu = await lineupJson(B1);
+  check("dokunarak yerleştirme: Berk 3. slota geçti", lu[idBerk] === 3);
+  await B1.click('button:has-text("Dizilişi kaydet")'); await B1.waitForURL(/dizilis=1/);
+  const { data: mB2 } = await admin.from("matches").select("formation_a").eq("id", mB).single();
+  check("B takımı diziliş kaydetti (2-2)", mB2.formation_a === "2-2");
+
+  // Normal oyuncu editörü görmez, herkes iki sahayı görür
+  await A2.goto(`${BASE}/g/${teamA}/m/${mA}`);
+  check("oyuncuda diziliş editörü yok", (await A2.locator("summary:has-text('Diziliş (sürükle-bırak)')").count()) === 0);
+  check("oyuncu iki takımın dizilişini görür", (await A2.locator("text=Dizilişler").count()) > 0 && (await A2.locator("text=1-2-1").count()) > 0 && (await A2.locator("text=2-2").count()) > 0);
+  await X.goto(`${BASE}/g/${teamB}/m/${mB}`);
+  check("yabancı da dizilişleri görür (takımlar herkese açık)", (await X.locator("text=Dizilişler").count()) > 0);
+  await shot(X, "40b-dizilisler-gorunum");
 
   // 6) Ortak ekran: rakip kadro görünür
   await A1.goto(`${BASE}/g/${teamA}/m/${mA}`);
@@ -144,7 +206,6 @@ try {
   check("iki maç da oylamada, süre var", mid2.every((m) => m.status === "voting" && m.voting_deadline));
 
   // 8) Çapraz oylama: sahadaki herkes kendi dışındaki herkese oy verir (iki takım tek havuz)
-  const gp = async (uid, gid) => (await admin.from("group_players").select("id").eq("user_id", uid).eq("group_id", gid).single()).data.id;
   const [a1, a2, b1, b2] = [await gp(users[0].id, teamA), await gp(users[1].id, teamA), await gp(users[2].id, teamB), await gp(users[3].id, teamB)];
   const vote = (m, v, t, s) => ({ match_id: m, voter_id: v, target_id: t, score: s });
   // a2 arayüzden oy verir, diğer üçü servis anahtarıyla

@@ -6,6 +6,7 @@ import { formatRegion } from "@/lib/regions";
 import { getMemberships } from "@/lib/teams-data";
 import { TeamBadge } from "@/components/TeamBadge";
 import { OvrBadge } from "@/components/PlayerCard";
+import { TeamSizeSelect } from "@/components/TeamSizeSelect";
 import { Button, Card, ErrorNote, Header, Input, Label, LinkButton } from "@/components/ui";
 
 /** Karşı takıma (bu sayfadaki takım) maç teklifi gönder */
@@ -86,6 +87,7 @@ export default async function ChallengePage({
               <Label>Maç zamanı</Label>
               <Input type="datetime-local" name="playedAt" defaultValue={defaultKickoff()} required />
             </label>
+            <TeamSizeSelect className="block" />
             <label className="block">
               <Label hint="isteğe bağlı">Saha</Label>
               <Input name="venue" maxLength={80} placeholder="Örn. Petroller Halısaha" />

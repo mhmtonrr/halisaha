@@ -49,6 +49,7 @@ src/lib/rating.ts        Puanlama motoru (saf, testli) — en kritik dosya
 src/lib/teams.ts         Dengeli takım kurma (saf, testli)
 src/lib/attributes.ts    Kart özellikleri FRM/İST/GOL|KRT/AST/GAL/MVP (saf, testli)
 src/lib/teams-data.ts    Takım rating'i (en iyi 7), rol etiketleri, takım/üyelik sorguları
+src/lib/formations.ts    Sabit dizilişler (5-11 kişilik, slot koordinatları), otomatik yerleştirme (saf, testli)
 src/lib/team-stats.ts    Takım karnesi, form, seri, rakip bazlı geçmiş, oyuncu liderleri (saf, testli)
 src/lib/challenges-data.ts  Maç teklifleri sorguları (gelen/giden, bekleyen sayısı)
 src/lib/data.ts          Ortak sorgular, mevki/ayak sabitleri, tarih yardımcıları (TR saati)
@@ -60,7 +61,7 @@ src/lib/authErrors.ts    Supabase Auth hatalarının Türkçesi
 src/lib/supabase/        server.ts (requireUser + karşılama yönlendirmesi), client.ts, admin.ts
 src/middleware.ts        Oturum yenileme, girişsiz yönlendirme, x-pathname başlığı
 src/app/                 Sayfalar (aşağıda)
-supabase/migrations/     0001..0010 SQL (sırayla; hepsi canlıya uygulandı)
+supabase/migrations/     0001..0011 SQL (sırayla; hepsi canlıya uygulandı)
 scripts/db-checks/       PGlite ile RLS/yetki kontrolleri (npm run db:check)
 scripts/e2e/             Canlı veritabanına karşı Playwright akış testleri
 scripts/recompute-all.ts Tüm ratingleri baştan hesaplar (vite-node ile, aşağıda)
@@ -113,6 +114,17 @@ Motor (`MatchInput.rivalShare`, `CONFIG.RIVAL_SHARE = 0.6`): bir oyuncunun maç 
 takımının oylarından gelir (taraf boşsa diğeri tam sayılır); tek MVP seçilir. İki maç birlikte kapanır (`finalizeMatch`
 çifti birlikte talep eder, sonuçlar `match_results`'a her oyuncunun kendi maç satırına yazılır). Bağlı maçta elle "oylamayı
 kapat" yoktur (süre dolunca veya herkes oy verince). Aynı kişi bağlı maçın iki kadrosunda olamaz (`guard_linked_roster`).
+
+**Kişi sayısı ve diziliş (migration 0011)**: `matches.team_size` (5-11, her takım, kaleci dahil; eski maçlarda boş →
+kadrodan tahmin `inferSize`). Teklifte seçilir (`create_challenge(..., p_size default 7)`), kabulde iki maça yazılır;
+normal maç kurarken de seçilir. Diziliş: `matches.formation_a/b` (ör. `2-3-1`) + `match_players.slot` (0 = kaleci,
+sonra savunmadan hücuma soldan sağa; boşsa yedek; takım başına benzersiz). `formations.ts` her sayı için hazır dizilişleri
+üretir. Kaptan/yetkili/maçı kuran maç ekranında "Diziliş (sürükle-bırak)" editörünü (`LineupEditor`, Pointer Events: sürükle
+ya da seç+dokun; dolu yere bırakınca takas) kullanır, `setLineup` action'ı kaydeder ve sahadaki oyuncunun maç mevkisini
+slot rolüne çeker. Dizilişler **hep açık**: herkes (rakip ve ziyaretçi dahil) maç ekranında iki sahayı görür. Rakibe karşı
+maçta sadece A tarafı vardır; kendi aramızda maçta A ve B ayrı dizilir. Oyuncu takım değiştirince slotu düşer (tetikleyici).
+Tuzak: editördeki token'ın `click`'i yukarı çıkarsa slot/yedek alanının "seçiliyi buraya koy" işleyicisi seçimi siler
+(`stopPropagation` bu yüzden var).
 
 **Takımlar arası maç teklifi** (match_challenges, migration 0009): kaptan/yetkili kendi takımından başka bir takıma
 `create_challenge` RPC ile teklif yollar (tarih, saha, ücret serbest metin, mesaj; aynı takıma en fazla 3 bekleyen).

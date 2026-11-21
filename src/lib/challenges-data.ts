@@ -24,6 +24,7 @@ export interface Challenge {
   venue: string | null;
   feeNote: string | null;
   message: string | null;
+  teamSize: number;
   status: ChallengeStatus;
   createdAt: string;
   from: TeamRef;
@@ -42,6 +43,7 @@ type Row = {
   venue: string | null;
   fee_note: string | null;
   message: string | null;
+  team_size: number;
   status: ChallengeStatus;
   created_at: string;
   from_group: TeamRef | TeamRef[] | null;
@@ -54,7 +56,7 @@ export async function getChallenges(supabase: SupabaseClient, groupId: string): 
   const { data, error } = await supabase
     .from("match_challenges")
     .select(
-      `id, proposed_at, venue, fee_note, message, status, created_at,
+      `id, proposed_at, venue, fee_note, message, team_size, status, created_at,
        from_group:groups!match_challenges_from_group_id_fkey(${TEAM_COLS}),
        to_group:groups!match_challenges_to_group_id_fkey(${TEAM_COLS}),
        matches(id, group_id, status)`,
@@ -76,6 +78,7 @@ export async function getChallenges(supabase: SupabaseClient, groupId: string): 
         venue: r.venue,
         feeNote: r.fee_note,
         message: r.message,
+        teamSize: r.team_size,
         status: r.status,
         createdAt: r.created_at,
         from,

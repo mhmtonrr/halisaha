@@ -5,6 +5,7 @@ import { createMatch } from "@/lib/actions";
 import { balanceTeams } from "@/lib/teams";
 import { Button, Card, Input, Label, cx } from "@/components/ui";
 import { OvrBadge, PositionChip, shortName } from "@/components/PlayerCard";
+import { TeamSizeSelect } from "@/components/TeamSizeSelect";
 import type { Position } from "@/lib/data";
 
 interface P {
@@ -24,6 +25,7 @@ export function NewMatchForm({
   preselected = [],
   pollId,
   defaultVenue,
+  defaultSize = 7,
 }: {
   groupId: string;
   players: P[];
@@ -33,6 +35,8 @@ export function NewMatchForm({
   preselected?: string[];
   pollId?: string;
   defaultVenue?: string;
+  /** Çağrıdan geliyorsa kontenjanın yarısı */
+  defaultSize?: number;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set(preselected));
   const [gks, setGks] = useState<Set<string>>(new Set(players.filter((p) => p.isGoalkeeper).map((p) => p.id)));
@@ -120,6 +124,7 @@ export function NewMatchForm({
           <Label hint="isteğe bağlı">Saha</Label>
           <Input name="venue" placeholder="Örn. Yıldız Halısaha" defaultValue={defaultVenue} />
         </label>
+        <TeamSizeSelect className="col-span-2" defaultValue={defaultSize} />
       </Card>
 
       <div className="flex items-center justify-between">
