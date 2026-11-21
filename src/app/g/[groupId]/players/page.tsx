@@ -78,7 +78,7 @@ export default async function ManagePage({
   const guests = players.filter((p) => !p.user_id);
   // Misafir geçmişi sadece henüz maçı olmayan üyelere aktarılabilir
   const claimable = players.filter((p) => p.user_id && p.totals.played === 0);
-  const sorted = [...players].sort(
+  const sorted = players.filter((p) => p.user_id).sort(
     (a, b) => ROLE_ORDER[a.role as Role] - ROLE_ORDER[b.role as Role] || a.display_name.localeCompare(b.display_name, "tr"),
   );
 
@@ -126,7 +126,6 @@ export default async function ManagePage({
                     </div>
                     <div className="flex flex-wrap items-center gap-1 pt-0.5">
                       {role !== "member" && <Badge tone={role === "captain" ? "warn" : "accent"}>{labels[role]}</Badge>}
-                      {!p.user_id && <Badge>Misafir</Badge>}
                       <span className="text-xs text-muted">{p.totals.played} maç</span>
                     </div>
                   </div>
@@ -172,6 +171,42 @@ export default async function ManagePage({
           })}
         </ul>
       </Card>
+
+      {guests.length > 0 && (
+        <>
+          <SectionTitle>Misafirler · {guests.length}</SectionTitle>
+          <Card className="p-0">
+            <ul className="divide-y divide-line">
+              {guests.map((p) => (
+                <li key={p.id} className="flex items-center gap-3 px-4 py-3">
+                  <OvrBadge overall={p.overall} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 truncate font-medium">
+                      {p.display_name} <PositionChip position={p.position} />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                      <Badge>Misafir</Badge>
+                      <span className="text-xs text-muted">
+                        {p.totals.played} maç · {p.totals.goals} gol · {p.totals.assists} asist
+                      </span>
+                    </div>
+                  </div>
+                  {canRemove(p) && (
+                    <form action={removePlayer}>
+                      <input type="hidden" name="groupId" value={groupId} />
+                      <input type="hidden" name="playerId" value={p.id} />
+                      <button className="rounded-lg px-2 py-1 text-xs text-muted hover:bg-red-950 hover:text-red-300">Çıkar</button>
+                    </form>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </Card>
+          <p className="mt-2 text-center text-xs text-muted">
+            Misafirler asıl kadroya, takım puanına ve sıralamalara girmez; maça gelince kadroya eklenirler.
+          </p>
+        </>
+      )}
 
       {canManage && isTeam && (
         <>

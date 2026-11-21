@@ -90,6 +90,9 @@ Sayfalar: `/login` (e-posta+şifre, Google, şifremi unuttum) · `/hosgeldin` (i
 **Sadece maç ekranından eklenir** (`addGuestToMatch`: misafiri gruba + o maçın kadrosuna yazar; planlanmış maçta, kaptan/yetkili).
 "Oyuncular" sayfasında ekleme formu yoktur; orada misafirin mevkisi ve geçmiş aktarımı kalır. Sonraki maçlarda
 misafir kadro listesinde (yedek seçiminde) tekrar seçilebilir.
+**Asıl kadro = hesabı olan üyeler** (davet linki/kodla katılanlar). Misafirler takım/grup sayfasında, kadro sayfasında ve Oyuncular
+sayfasında ayrı bölümde/sekmede durur (`RosterTabs`, `?sekme=misafir`; istatistikleri orada görünür); oyuncu sayısına, takım
+puanına (`teamRating`), Keşfet sıralamasına, takım liderlerine ve istatistik sayfasına girmez. Maç kadrosunda ve oylamada normal oyuncudur.
 
 **Davet kodu gizli**: `groups.invite_code` sütununa SELECT yetkisi yok (takımlar herkese açık olduğu için).
 Kod `group_invite_code()` RPC ile alınır (takımda captain/admin, grupta her üye). **`groups`'tan seçerken

@@ -48,7 +48,9 @@ function summarize(g: {
   description: string | null;
   group_players: GPRow[];
 }): TeamSummary {
-  const ratings = g.group_players.map((p) => one(p.player_ratings));
+  // Asıl kadro: hesabı olan üyeler. Misafirler (user_id boş) takım puanına ve oyuncu sayısına girmez.
+  const members = g.group_players.filter((p) => p.user_id);
+  const ratings = members.map((p) => one(p.player_ratings));
   return {
     id: g.id,
     name: g.name,
@@ -56,7 +58,7 @@ function summarize(g: {
     district: g.district,
     color: g.color,
     description: g.description,
-    members: g.group_players.length,
+    members: members.length,
     rating: teamRating(ratings.map((r) => r?.overall ?? DEFAULT_OVERALL)),
     rated: ratings.some((r) => (r?.matches_played ?? 0) > 0),
   };

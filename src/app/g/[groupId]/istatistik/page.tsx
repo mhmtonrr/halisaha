@@ -72,7 +72,9 @@ export default async function TeamStatsPage({ params }: { params: Promise<{ grou
   const rivals = headToHead(matches);
   const recent = competitive(matches).reverse().slice(0, 10);
 
-  const statRows: PlayerStatRow[] = players.map((p) => ({
+  // Takım liderleri ve puanı asıl kadrodandır; misafirlerin istatistikleri kendi sekmesinde
+  const squad = players.filter((p) => p.user_id);
+  const statRows: PlayerStatRow[] = squad.map((p) => ({
     playerId: p.id,
     name: p.display_name,
     played: p.totals.played,
@@ -89,8 +91,8 @@ export default async function TeamStatsPage({ params }: { params: Promise<{ grou
     { key: "saves", title: "Kurtarışlar", icon: "🧤", unit: "kurtarış" },
   ];
 
-  const rated = players.filter((p) => p.matches_played > 0);
-  const avgOverall = players.length ? Math.round(players.reduce((s, p) => s + p.overall, 0) / players.length) : 0;
+  const rated = squad.filter((p) => p.matches_played > 0);
+  const avgOverall = squad.length ? Math.round(squad.reduce((s, p) => s + p.overall, 0) / squad.length) : 0;
   const diff = record.goalsFor - record.goalsAgainst;
 
   const tiles = [
@@ -121,7 +123,7 @@ export default async function TeamStatsPage({ params }: { params: Promise<{ grou
           <div className="text-xs text-muted">{formatRegion(group.city ?? "", group.district)}</div>
         </div>
         <div className="text-center">
-          <OvrBadge overall={teamRating(players.map((p) => p.overall))} className={cx("h-12 w-12 text-lg", rated.length === 0 && "opacity-50")} />
+          <OvrBadge overall={teamRating(squad.map((p) => p.overall))} className={cx("h-12 w-12 text-lg", rated.length === 0 && "opacity-50")} />
           <div className="mt-1 text-[10px] text-muted">takım puanı</div>
         </div>
       </div>
@@ -187,7 +189,7 @@ export default async function TeamStatsPage({ params }: { params: Promise<{ grou
       <SectionTitle>Kadro</SectionTitle>
       <div className="grid grid-cols-3 gap-2 text-center">
         <Card className="p-2.5">
-          <div className="text-xl font-black">{players.length}</div>
+          <div className="text-xl font-black">{squad.length}</div>
           <div className="text-[10px] text-muted">Oyuncu</div>
         </Card>
         <Card className="p-2.5">

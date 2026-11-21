@@ -73,6 +73,22 @@ try {
   check("misafir Oyuncular listesinde 'Misafir' rozetiyle durur", (await cap.locator("text=Zeki Misafir").count()) > 0 && (await cap.locator("text=Misafir").count()) > 0);
   check("Oyuncular sayfasında yine ekleme formu yok", (await cap.locator('form:has(input[name="name"]):has-text("Ekle")').count()) === 0);
 
+  // Misafir asıl kadroda görünmez; "Misafirler" sekmesinde durur
+  await cap.goto(`${BASE}/g/${gid}`);
+  check("takım başlığında oyuncu sayısı sadece gerçek üyeler (2, misafir hariç)", (await cap.locator("text=İstanbul · 2 oyuncu").count()) > 0);
+  check("kadro sıralamasında misafir yok", (await cap.locator("text=Zeki Misafir").count()) === 0);
+  check("'Misafirler · 1' sekmesi var", (await cap.locator('[role="tab"]:has-text("Misafirler · 1")').count()) === 1);
+  await cap.click('[role="tab"]:has-text("Misafirler · 1")');
+  await cap.waitForURL(/sekme=misafir/);
+  check("misafir sekmesinde misafir ve istatistiği görünür", (await cap.locator("text=Zeki Misafir").count()) > 0 && (await cap.locator("text=Kadro sıralaması").count()) === 0);
+  await cap.screenshot({ path: `${SHOTS}/51-misafir-sekmesi.png`, fullPage: true });
+  await cap.goto(`${BASE}/g/${gid}/kadro`);
+  check("kadro sayfasında misafir kartı yok", (await cap.locator("text=Zeki").count()) === 0 && (await cap.locator('[role="tab"]:has-text("Misafirler")').count()) === 1);
+  await cap.goto(`${BASE}/g/${gid}/kadro?sekme=misafir`);
+  check("kadro misafir sekmesinde misafir kartı var", (await cap.locator("text=Zeki").count()) > 0);
+  await cap.goto(`${BASE}/g/${gid}/players`);
+  check("Oyuncular sayfasında üye listesi ile misafir bölümü ayrı", (await cap.locator("text=Misafirler · 1").count()) > 0);
+
   // Kısa isim ve normal oyuncu
   await cap.goto(`${BASE}/g/${gid}/m/${m.id}`);
   await cap.locator("summary:has-text('Kadroya oyuncu ekle')").click();

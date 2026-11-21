@@ -6,6 +6,7 @@ import { byRanking, formatDate, getGroupSummaries, POSITION_LABEL } from "@/lib/
 import { formatRegion } from "@/lib/regions";
 import { ROLE_LABEL, teamRating, type GroupKind, type Role } from "@/lib/teams-data";
 import { TeamBadge } from "@/components/TeamBadge";
+import { RosterTabs } from "@/components/RosterTabs";
 import { Badge, Card, Header, LinkButton, SectionTitle } from "@/components/ui";
 import { OvrBadge, initials } from "@/components/PlayerCard";
 import { InviteLink } from "./InviteLink";
@@ -20,8 +21,15 @@ const STATUS: Record<string, { label: string; tone: "default" | "accent" | "warn
   closed: { label: "Tamamlandı", tone: "accent" },
 };
 
-export default async function GroupPage({ params }: { params: Promise<{ groupId: string }> }) {
+export default async function GroupPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ groupId: string }>;
+  searchParams: Promise<{ sekme?: string }>;
+}) {
   const { groupId } = await params;
+  const { sekme } = await searchParams;
   const { supabase, user } = await requireUser();
 
   const { data: group } = await supabase
@@ -61,10 +69,15 @@ export default async function GroupPage({ params }: { params: Promise<{ groupId:
   const me = players.find((p) => p.user_id === user.id);
   const myRole = (me?.role ?? null) as Role | null;
   const canManage = myRole === "captain" || myRole === "admin";
-  const ranked = [...players].sort(byRanking);
+  // Asıl kadro hesabı olan üyelerdir; misafirler ayrı sekmede (istatistikleri orada görünür)
+  const members = players.filter((p) => p.user_id);
+  const guests = players.filter((p) => !p.user_id);
+  const tab = sekme === "misafir" && guests.length > 0 ? "misafir" : "kadro";
+  const ranked = [...members].sort(byRanking);
+  const guestRanked = [...guests].sort(byRanking);
   const active = (matches ?? []).filter((m) => m.status !== "closed");
   const recent = (matches ?? []).filter((m) => m.status === "closed").slice(0, 8);
-  const rating = teamRating(players.map((p) => p.overall));
+  const rating = teamRating(members.map((p) => p.overall));
 
   // Takımın rakiplere karşı karnesi
   const ext = (matches ?? []).filter((m) => m.status === "closed" && m.kind === "external");
@@ -76,7 +89,7 @@ export default async function GroupPage({ params }: { params: Promise<{ groupId:
   const staff = players.filter((p) => p.role !== "member").sort((a, b) => (a.role === "captain" ? -1 : b.role === "captain" ? 1 : 0));
 
   const leader = (key: "goals" | "assists" | "mvps") =>
-    players
+    members
       .map((p) => ({ p, v: p.totals[key] }))
       .filter((x) => x.v > 0)
       .sort((a, b) => b.v - a.v)[0];
@@ -120,7 +133,7 @@ export default async function GroupPage({ params }: { params: Promise<{ groupId:
           <h1 className="truncate text-2xl font-black">{group.name}</h1>
           <div className="text-xs text-muted">
             {group.city && `${formatRegion(group.city, group.district)} · `}
-            {players.length} {isTeam ? "oyuncu" : "üye"}
+            {members.length} {isTeam ? "oyuncu" : "üye"}
             {myRole && ` · Sen: ${labels[myRole]}`}
           </div>
         </div>
@@ -304,18 +317,19 @@ export default async function GroupPage({ params }: { params: Promise<{ groupId:
 
       <SectionTitle
         action={
-          !isTeam && ranked.length > 5 ? (
+          tab === "kadro" && !isTeam && ranked.length > 5 ? (
             <LinkButton href={`/g/${groupId}/kadro`} variant="ghost" className="min-h-8 px-2 text-accent">
               Tümü ›
             </LinkButton>
           ) : undefined
         }
       >
-        {isTeam ? "Kadro sıralaması" : "Topluluk sıralaması"}
+        {tab === "misafir" ? "Misafir oyuncular" : isTeam ? "Kadro sıralaması" : "Topluluk sıralaması"}
       </SectionTitle>
+      <RosterTabs base={`/g/${groupId}`} active={tab} members={members.length} guests={guests.length} memberLabel={isTeam ? "Kadro" : "Üyeler"} />
       <Card className="p-0">
         <ol className="divide-y divide-line">
-          {(isTeam ? ranked : ranked.slice(0, 5)).map((p, i) => {
+          {(tab === "misafir" ? guestRanked : isTeam ? ranked : ranked.slice(0, 5)).map((p, i) => {
             const s = p.totals;
             return (
               <li key={p.id}>
