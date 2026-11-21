@@ -14,6 +14,7 @@ import { formatDate, getGroupPlayers, type Position } from "@/lib/data";
 import { Badge, Button, Card, ErrorNote, Header, LinkButton, SectionTitle, cx } from "@/components/ui";
 import { OvrBadge, PositionChip } from "@/components/PlayerCard";
 import { SubmitButton } from "@/components/SubmitButton";
+import { PushPrompt } from "@/components/PushControls";
 import { settlePoll } from "@/lib/polls";
 import { pollProgress } from "@/lib/poll-rules";
 
@@ -199,6 +200,8 @@ export default async function PollPage({
           )}
         </>
       )}
+
+      {me && mine && open && <PushPrompt reason="Maç kurulunca veya çağrı değişince haber verelim mi?" />}
 
       {auto && poll.status === "open" && (isCreator || isAdmin) && (
         <form action={closePoll} className="mt-4 text-center">

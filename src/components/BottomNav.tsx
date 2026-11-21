@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cx } from "./ui";
+import { NotificationBadge } from "./NotificationBadge";
 
 const HIDDEN = ["/login", "/auth", "/hosgeldin", "/privacy", "/sifre-yenile"];
 
@@ -21,6 +22,17 @@ const items = [
       <>
         <circle cx="11" cy="11" r="7" />
         <path d="m20 20-3.5-3.5" />
+      </>
+    ),
+  },
+  {
+    href: "/bildirimler",
+    label: "Bildirim",
+    match: (p: string) => p.startsWith("/bildirimler"),
+    icon: (
+      <>
+        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+        <path d="M13.7 21a2 2 0 0 1-3.4 0" />
       </>
     ),
   },
@@ -51,7 +63,7 @@ export function BottomNav() {
               key={it.href}
               href={it.href}
               className={cx(
-                "flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px]",
+                "relative flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px]",
                 active ? "text-accent" : "text-muted hover:text-white",
               )}
             >
@@ -59,6 +71,7 @@ export function BottomNav() {
                 {it.icon}
               </svg>
               {it.label}
+              {it.href === "/bildirimler" && <NotificationBadge />}
             </Link>
           );
         })}

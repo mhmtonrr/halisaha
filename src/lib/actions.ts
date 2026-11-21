@@ -5,8 +5,12 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { finalizeMatch, recomputePlayers } from "@/lib/finalize";
 import { settlePoll } from "@/lib/polls";
+import { later, notify } from "@/lib/notify";
+import { text } from "@/lib/notify-rules";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { groupMemberIds, groupName, linkedMatches, matchAccountIds } from "@/lib/recipients";
 import { balanceTeams, pickVariant, type TeamCandidate } from "@/lib/teams";
-import { getGroupPlayers, parseLocalDateTime, POSITIONS, type Position } from "@/lib/data";
+import { formatDate, getGroupPlayers, parseLocalDateTime, POSITIONS, type Position } from "@/lib/data";
 import { canonicalDistrict, isProvince } from "@/lib/regions";
 import { getFormation, inferSize, isValidSize, validAssignment, type Role } from "@/lib/formations";
 
@@ -376,6 +380,12 @@ export async function createMatch(fd: FormData) {
   if (pollId) {
     await supabase.from("match_polls").update({ status: "converted", match_id: match.id }).eq("id", pollId);
   }
+  // Kadrodaki hesap sahiplerine "maç kuruldu"
+  later(async () => {
+    const admin = createAdminClient();
+    const [ids, name] = await Promise.all([matchAccountIds(admin, [match.id]), groupName(admin, groupId)]);
+    await notify(ids, "match", text.matchCreated(name, groupId, match.id, formatDate(parseLocalDateTime(when)), external ? opponent : null), { excludeUserId: user.id });
+  });
   redirect(`/g/${groupId}/m/${match.id}`);
 }
 
@@ -528,7 +538,7 @@ export async function removeFromMatch(fd: FormData) {
  * iki maçın da oylaması açılır; o zamana kadar maç "skor onayı bekliyor" durumunda kalır.
  */
 export async function submitResult(fd: FormData) {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
   const groupId = str(fd, "groupId");
   const matchId = str(fd, "matchId");
   const back = `/g/${groupId}/m/${matchId}`;
@@ -592,10 +602,24 @@ export async function submitResult(fd: FormData) {
   if (linked) {
     const { data: state, error: settleError } = await supabase.rpc("settle_linked_match", { p_match_id: matchId });
     if (settleError) fail(back, "Skor eşleştirilemedi");
+    if (state === "settled") announceVoting(matchId, user.id);
     revalidatePath(back);
     redirect(`${back}?skor=${state}`);
   }
+  announceVoting(matchId, user.id);
   revalidatePath(back);
+}
+
+/** Oylama açıldı: maçın (bağlı maçta iki takımın) hesap sahiplerine "oy ver" */
+function announceVoting(matchId: string, actorId: string) {
+  later(async () => {
+    const admin = createAdminClient();
+    const matches = await linkedMatches(admin, matchId);
+    for (const m of matches) {
+      const ids = await matchAccountIds(admin, [m.id]);
+      await notify(ids, "vote", text.voteOpened(m.group_id, m.id, m.kind === "external" ? m.opponent_name : null), { excludeUserId: actorId });
+    }
+  });
 }
 
 export async function submitVotes(fd: FormData) {
@@ -705,6 +729,7 @@ export async function createPoll(fd: FormData) {
     .select("id")
     .single();
   if (error) fail(back, "Çağrıyı sadece yetkililer açabilir");
+  announcePoll(groupId, data.id, user.id, parseLocalDateTime(when), str(fd, "venue").slice(0, 80) || null);
   redirect(`/g/${groupId}/cagri/${data.id}`);
 }
 
@@ -721,9 +746,18 @@ export async function respondPoll(fd: FormData) {
   revalidatePath("/");
 }
 
+/** Yeni çağrı: grubun üyelerine haber ver */
+function announcePoll(groupId: string, pollId: string, actorId: string, startsAt: string, venue: string | null) {
+  later(async () => {
+    const admin = createAdminClient();
+    const [ids, name] = await Promise.all([groupMemberIds(admin, groupId), groupName(admin, groupId)]);
+    await notify(ids, "poll", text.pollOpened(name, groupId, pollId, formatDate(startsAt), venue), { excludeUserId: actorId });
+  });
+}
+
 /** Üye çağrısı: otomatik maça dönüşen çağrı (kurallar ve sınırlar veritabanında zorunlu) */
 export async function createMemberPoll(fd: FormData) {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
   const groupId = str(fd, "groupId");
   const back = `/g/${groupId}/cagri/yeni`;
   const when = str(fd, "startsAt");
@@ -740,6 +774,7 @@ export async function createMemberPoll(fd: FormData) {
     p_note: str(fd, "note").slice(0, 300),
   });
   if (error || !data) fail(back, rpcMessage(error ?? {}, "Çağrı açılamadı"));
+  announcePoll(groupId, data as string, user.id, parseLocalDateTime(when), str(fd, "venue").slice(0, 80) || null);
   redirect(`/g/${groupId}/cagri/${data}`);
 }
 
@@ -810,7 +845,7 @@ export async function deletePoll(fd: FormData) {
 
 /** Kendi takımımızdan (fromGroupId) karşı takıma (toGroupId) teklif gönderir */
 export async function createChallenge(fd: FormData) {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
   const from = str(fd, "fromGroupId");
   const to = str(fd, "toGroupId");
   const back = `/g/${to}/teklif`;
@@ -830,12 +865,18 @@ export async function createChallenge(fd: FormData) {
     p_message: str(fd, "message").slice(0, 300),
   });
   if (error) fail(`${back}?from=${from}`, rpcMessage(error, "Teklif gönderilemedi"));
+  // Karşı takımın kaptan/yetkililerine "teklif geldi"
+  later(async () => {
+    const admin = createAdminClient();
+    const [ids, fromName] = await Promise.all([groupMemberIds(admin, to, { adminsOnly: true }), groupName(admin, from)]);
+    await notify(ids, "offer", text.challengeReceived(fromName, to, formatDate(parseLocalDateTime(when))), { excludeUserId: user.id });
+  });
   revalidatePath(`/g/${from}/teklifler`);
   redirect(`/g/${from}/teklifler?sent=1`);
 }
 
 export async function respondChallenge(fd: FormData) {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
   const groupId = str(fd, "groupId");
   const back = `/g/${groupId}/teklifler`;
   const accept = str(fd, "answer") === "accept";
@@ -844,6 +885,14 @@ export async function respondChallenge(fd: FormData) {
     p_accept: accept,
   });
   if (error) fail(back, rpcMessage(error, "Teklif yanıtlanamadı"));
+  // Teklifi gönderen takımın kaptan/yetkililerine yanıt
+  later(async () => {
+    const admin = createAdminClient();
+    const { data: c } = await admin.from("match_challenges").select("from_group_id, to_group_id").eq("id", str(fd, "challengeId")).maybeSingle();
+    if (!c) return;
+    const [ids, toName] = await Promise.all([groupMemberIds(admin, c.from_group_id, { adminsOnly: true }), groupName(admin, c.to_group_id)]);
+    await notify(ids, "offer", text.challengeAnswered(toName, c.from_group_id, accept), { excludeUserId: user.id });
+  });
   revalidatePath(back);
   // Kabulde doğrudan oluşan maça git: kadroyu belirlemek için
   if (accept && matchId) redirect(`/g/${groupId}/m/${matchId}?kabul=1`);
@@ -973,7 +1022,7 @@ export async function closeListing(fd: FormData) {
 
 /** Kaptan/yetkili başvuruyu kabul eder (oyuncu ödünç olarak maç kadrosuna girer) veya reddeder */
 export async function decideApplication(fd: FormData) {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
   const groupId = str(fd, "groupId");
   const matchId = str(fd, "matchId");
   const back = `/g/${groupId}/m/${matchId}`;
@@ -983,12 +1032,17 @@ export async function decideApplication(fd: FormData) {
     p_accept: str(fd, "answer") === "accept",
   });
   if (error) fail(back, rpcMessage(error, "Başvuru yanıtlanamadı"));
+  // Başvurana sonuç
+  later(async () => {
+    const admin = createAdminClient();
+    await notify([str(fd, "userId")], "listing", text.applicationDecided(await groupName(admin, groupId), str(fd, "answer") === "accept", groupId, matchId), { excludeUserId: user.id });
+  });
   revalidatePath(back);
 }
 
 /** Herkese açık ilana başvur (hesabı olan herkes) */
 export async function applyListing(fd: FormData) {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
   const listingId = str(fd, "listingId");
   const back = `/ilan/${listingId}`;
   const { error } = await supabase.rpc("apply_listing", {
@@ -997,6 +1051,18 @@ export async function applyListing(fd: FormData) {
     p_note: str(fd, "note").slice(0, 200),
   });
   if (error) fail(back, rpcMessage(error, "Başvuru gönderilemedi"));
+  // Takımın kaptan/yetkililerine "yeni başvuru"
+  later(async () => {
+    const admin = createAdminClient();
+    const { data: l } = await admin.from("player_listings").select("group_id, match_id").eq("id", listingId).maybeSingle();
+    if (!l) return;
+    const [ids, team, { data: p }] = await Promise.all([
+      groupMemberIds(admin, l.group_id, { adminsOnly: true }),
+      groupName(admin, l.group_id),
+      admin.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
+    ]);
+    await notify(ids, "listing", text.listingApplied(p?.display_name ?? "Bir oyuncu", team, l.group_id, l.match_id), { excludeUserId: user.id });
+  });
   revalidatePath(back);
   revalidatePath("/");
 }
@@ -1009,4 +1075,64 @@ export async function withdrawApplication(fd: FormData) {
   if (error) fail(back, rpcMessage(error, "Başvuru geri çekilemedi"));
   revalidatePath(back);
   revalidatePath("/");
+}
+
+// ---------------------------------------------------------------------------
+// Bildirimler
+// ---------------------------------------------------------------------------
+
+/**
+ * Sohbet mesajı atılınca göndericinin tarayıcısı çağırır (mesaj doğrudan veritabanına yazıldığı için sunucu bilmez).
+ * Mesajın gerçekten çağıranın, yeni ve metin olduğu doğrulanır; grup üyelerine (gönderen hariç) bildirim gider.
+ * Aynı gruptan 10 dakikada en fazla 1 bildirim alınır (birleştirme notify içinde).
+ */
+export async function notifyChatMessage(groupId: string, messageId: number) {
+  const { supabase, user } = await requireUser();
+  const { data: msg } = await supabase
+    .from("group_messages")
+    .select("id, kind, body, created_at, group_players(user_id, display_name)")
+    .eq("id", messageId)
+    .eq("group_id", groupId)
+    .maybeSingle();
+  const author = Array.isArray(msg?.group_players) ? msg?.group_players[0] : msg?.group_players;
+  if (!msg || msg.kind !== "text" || !author || (author as { user_id: string | null }).user_id !== user.id) return;
+  if (Date.now() - new Date(msg.created_at).getTime() > 60_000) return; // eski mesaj için bildirim yok
+  const authorName = (author as { display_name: string }).display_name;
+  later(async () => {
+    const admin = createAdminClient();
+    const [ids, name] = await Promise.all([groupMemberIds(admin, groupId), groupName(admin, groupId)]);
+    await notify(ids, "chat", text.chat(name, groupId, authorName, msg.body), { excludeUserId: user.id });
+  });
+}
+
+/** Bildirim kutusunu okundu işaretle (boşsa hepsi) */
+export async function markNotificationsRead(ids?: string[]) {
+  const { supabase } = await requireUser();
+  await supabase.rpc("mark_notifications_read", { p_ids: ids?.length ? ids : null });
+  revalidatePath("/bildirimler");
+}
+
+/** Cihazın push aboneliğini kaydet / kaldır (RPC: aynı cihaz başka kullanıcıya geçebilir) */
+export async function savePushSubscription(sub: { endpoint: string; p256dh: string; auth: string }, userAgent: string) {
+  const { supabase } = await requireUser();
+  const { error } = await supabase.rpc("save_push_subscription", {
+    p_endpoint: sub.endpoint,
+    p_p256dh: sub.p256dh,
+    p_auth: sub.auth,
+    p_user_agent: userAgent.slice(0, 300),
+  });
+  return { ok: !error, error: error ? rpcMessage(error, "Abonelik kaydedilemedi") : undefined };
+}
+
+export async function removePushSubscription(endpoint: string) {
+  const { supabase } = await requireUser();
+  await supabase.rpc("remove_push_subscription", { p_endpoint: endpoint });
+}
+
+/** Bildirim kategorisi aç/kapat (satır yoksa oluşturur) */
+export async function setNotificationPref(key: string, value: boolean) {
+  const { supabase, user } = await requireUser();
+  if (!["votes", "matches", "offers", "chat"].includes(key)) return;
+  await supabase.from("notification_prefs").upsert({ user_id: user.id, [key]: value, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+  revalidatePath("/profil");
 }

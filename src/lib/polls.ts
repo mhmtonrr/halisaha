@@ -3,6 +3,21 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getGroupPlayers, type Position } from "@/lib/data";
 import { balanceTeams } from "@/lib/teams";
 import { decidePoll, minPlayers, pickRoster } from "@/lib/poll-rules";
+import { later, notify } from "@/lib/notify";
+import { text } from "@/lib/notify-rules";
+import { formatDate } from "@/lib/data";
+
+/** "Geliyorum" diyen oyuncuların hesap sahipleri (misafirler hariç) */
+async function accountsOf(admin: ReturnType<typeof createAdminClient>, playerIds: string[]): Promise<string[]> {
+  if (!playerIds.length) return [];
+  const { data } = await admin.from("group_players").select("user_id").in("id", playerIds).not("user_id", "is", null);
+  return [...new Set((data ?? []).map((r) => r.user_id as string))];
+}
+
+async function groupNameOf(admin: ReturnType<typeof createAdminClient>, groupId: string) {
+  const { data } = await admin.from("groups").select("name").eq("id", groupId).maybeSingle();
+  return data?.name ?? "Grup";
+}
 
 export type SettleResult = "converted" | "cancelled" | "waiting" | "skipped";
 
@@ -52,6 +67,10 @@ export async function settlePoll(pollId: string): Promise<SettleResult> {
       body: `❌ Maç çağrısı iptal oldu: ${yes.length} kişi geldi, en az ${minPlayers(poll.capacity)} gerekiyordu.`,
       poll_id: poll.id,
     });
+    later(async () => {
+      const ids = await accountsOf(admin, yes.map((y) => y.id));
+      await notify(ids, "poll", text.pollCancelled(await groupNameOf(admin, poll.group_id), poll.group_id, poll.id));
+    });
     return "cancelled";
   }
 
@@ -95,6 +114,10 @@ export async function settlePoll(pollId: string): Promise<SettleResult> {
     );
     if (rosterError) throw rosterError;
     await admin.from("match_polls").update({ match_id: match.id }).eq("id", pollId);
+    later(async () => {
+      const ids = await accountsOf(admin, candidates.map((c) => c.id));
+      await notify(ids, "match", text.pollConverted(await groupNameOf(admin, poll.group_id), poll.group_id, match.id, formatDate(poll.starts_at)));
+    });
     return "converted";
   } catch (e) {
     // Yarım kalmasın: maçı sil, çağrıyı yeniden aç (bir sonraki ziyarette tekrar denenir)

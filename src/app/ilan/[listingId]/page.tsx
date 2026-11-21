@@ -9,6 +9,7 @@ import { APPLICATION_STATUS, LISTING_STATUS, getListing, getMyApplication } from
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { ShareLink } from "@/components/ShareLink";
 import { SubmitButton } from "@/components/SubmitButton";
+import { PushPrompt } from "@/components/PushControls";
 import { TeamBadge } from "@/components/TeamBadge";
 import { OvrBadge, PositionChip } from "@/components/PlayerCard";
 import { Badge, Card, ErrorNote, Header, Label, LinkButton } from "@/components/ui";
@@ -101,6 +102,7 @@ export default async function ListingPage({
         <ShareLink path={`/ilan/${listing.id}`} title={`${listing.team.name}: oyuncu arıyoruz`} />
       </Card>
 
+      {myApp?.status === "pending" && <PushPrompt reason="Başvurun yanıtlanınca haber verelim mi?" />}
       {isMember ? (
         <Card className="space-y-2 text-center text-sm text-muted">
           <p>Bu takımın oyuncususun.</p>

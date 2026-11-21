@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { notifyChatMessage } from "@/lib/actions";
 import { initials } from "@/components/PlayerCard";
 import { TeamBadge } from "@/components/TeamBadge";
 import { cx } from "@/components/ui";
@@ -248,6 +249,8 @@ export function ChatRoom({
       setError(error?.message.includes("hızlı") ? "Çok hızlı mesaj gönderiyorsun, biraz bekle." : "Mesaj gönderilemedi.");
       return;
     }
+    // Diğer üyelere bildirim (mesaj doğrudan veritabanına yazıldığı için sunucuya haber veririz; hata sohbeti etkilemez)
+    void notifyChatMessage(groupId, data.id).catch(() => {});
     // Gerçek zamanlı kopya önce geldiyse geçiciyi at, gelmediyse yerine koy
     setMessages((prev) => {
       const withoutTemp = prev.filter((m) => m.id !== temp.id);

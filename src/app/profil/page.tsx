@@ -7,6 +7,8 @@ import { formatRegion } from "@/lib/regions";
 import { Button, Card, ErrorNote, Header, SectionTitle } from "@/components/ui";
 import { ProfileFields, type ProfileValues } from "@/components/ProfileFields";
 import { OvrBadge, PlayerCard } from "@/components/PlayerCard";
+import { PushSettings } from "@/components/PushControls";
+import { DEFAULT_PREFS } from "@/lib/notify-rules";
 
 export default async function ProfilePage({
   searchParams,
@@ -16,7 +18,7 @@ export default async function ProfilePage({
   const { error, saved } = await searchParams;
   const { supabase, user } = await requireUser();
 
-  const [{ data: profile }, { data: memberships }] = await Promise.all([
+  const [{ data: profile }, { data: memberships }, { data: prefsRow }] = await Promise.all([
     supabase
       .from("profiles")
       .select("display_name, city, district, birth_year, preferred_position, secondary_positions, preferred_foot, shirt_number, bio")
@@ -27,6 +29,7 @@ export default async function ProfilePage({
       .select("id, group_id, groups(name), player_ratings(overall, matches_played)")
       .eq("user_id", user.id)
       .eq("is_loan", false),
+    supabase.from("notification_prefs").select("votes, matches, offers, chat").eq("user_id", user.id).maybeSingle(),
   ]);
 
   const position = (profile?.preferred_position ?? null) as Position | null;
@@ -64,6 +67,11 @@ export default async function ProfilePage({
           Adın ve ana mevkin tüm gruplarında güncellenir. Maça özel mevkini maçı kuran kişi değiştirebilir.
         </p>
       </form>
+
+      <div id="bildirimler" className="scroll-mt-4">
+        <SectionTitle>Bildirimler</SectionTitle>
+        <PushSettings prefs={{ ...DEFAULT_PREFS, ...(prefsRow ?? {}) }} />
+      </div>
 
       {(memberships?.length ?? 0) > 0 && (
         <>

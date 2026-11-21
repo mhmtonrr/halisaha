@@ -1,7 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/auth", "/privacy"];
+// /api/cron: Vercel Cron oturumsuz çağırır, kendi gizli anahtarıyla korunur
+const PUBLIC_PATHS = ["/login", "/auth", "/privacy", "/api/cron"];
 
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
@@ -45,6 +46,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|icon.svg|manifest.webmanifest).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icon.svg|manifest.webmanifest|sw.js).*)",
   ],
 };

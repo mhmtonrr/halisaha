@@ -26,6 +26,7 @@ import { ListingSection } from "./ListingSection";
 import { AutoOpenDetails } from "@/components/AutoOpenDetails";
 import { getApplicants, getListingForMatch, type Applicant, type Listing } from "@/lib/listings-data";
 import { SubmitButton } from "@/components/SubmitButton";
+import { PushPrompt } from "@/components/PushControls";
 import { TeamBadge } from "@/components/TeamBadge";
 import { Badge, Button, Card, ErrorNote, Header, Input, SectionTitle, cx } from "@/components/ui";
 import { OvrBadge, PositionChip, shortName } from "@/components/PlayerCard";
@@ -785,6 +786,7 @@ async function VotingView({
           Oyların kaydedildi ✓ Süre bitene kadar değiştirebilirsin.
         </p>
       )}
+      {justVoted && <PushPrompt reason="Sonuçlar açıklanınca haber verelim mi?" />}
 
       {me && me.userId ? (
         <>
