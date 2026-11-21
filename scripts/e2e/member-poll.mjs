@@ -25,7 +25,6 @@ try {
   }
   gid = (await admin.from("groups").insert({ name: "E2E Çağrı Grubu", created_by: users[0].id }).select("id").single()).data.id;
   await admin.from("group_players").insert([1, 2].map((i) => ({ group_id: gid, user_id: users[i].id, display_name: users[i].name })));
-  const gpOf = async (u) => (await admin.from("group_players").select("id").eq("group_id", gid).eq("user_id", u.id).single()).data.id;
   const mkGuests = async (n, prefix) => (await admin.from("group_players").insert(Array.from({ length: n }, (_, i) => ({ group_id: gid, display_name: `${prefix}${i + 1}`, position: i % 4 === 0 ? "DEF" : "MID" }))).select("id")).data.map((g) => g.id);
   const respond = (pollId, playerIds, t0 = Date.now()) =>
     admin.from("poll_responses").insert(playerIds.map((id, i) => ({ poll_id: pollId, player_id: id, answer: "yes", responded_at: new Date(t0 + i * 1000).toISOString() })));
