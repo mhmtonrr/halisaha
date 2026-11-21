@@ -3,6 +3,7 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { FEATURED_TAG } from "@/lib/featured-data";
 import { validateCardName } from "@/lib/card-name";
+import { cardPhotoPath, cardPhotoUrl } from "@/lib/card-photo";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { finalizeMatch, recomputePlayers } from "@/lib/finalize";
@@ -92,6 +93,30 @@ export async function updateProfile(fd: FormData) {
   await saveCardName(supabase, user.id, card.ok ? card.value : null, back);
   revalidatePath("/", "layout");
   redirect("/profil?sekme=ayarlar&saved=1");
+}
+
+/**
+ * Kart fotoğrafı tarayıcıdan depoya (`avatars/<id>/card`) yüklendikten sonra adresi profile yazar.
+ * Adres sunucuda kurulur (istemciden adres alınmaz); veritabanı kısıtı da sadece kendi klasörünü kabul eder.
+ */
+export async function saveCardPhoto(version: number): Promise<{ error?: string }> {
+  const { supabase, user } = await requireUser({ allowIncomplete: true });
+  if (!Number.isFinite(version) || version <= 0) return { error: "Geçersiz istek" };
+  const url = cardPhotoUrl(process.env.NEXT_PUBLIC_SUPABASE_URL!, user.id, version);
+  const { error } = await supabase.from("profiles").update({ photo_url: url }).eq("id", user.id);
+  if (error) return { error: "Fotoğraf kaydedilemedi" };
+  revalidatePath("/", "layout");
+  return {};
+}
+
+/** Kart fotoğrafını siler (depodaki dosya + profil adresi) */
+export async function deleteCardPhoto(): Promise<{ error?: string }> {
+  const { supabase, user } = await requireUser({ allowIncomplete: true });
+  const { error } = await supabase.from("profiles").update({ photo_url: null }).eq("id", user.id);
+  if (error) return { error: "Fotoğraf silinemedi" };
+  await supabase.storage.from("avatars").remove([cardPhotoPath(user.id)]);
+  revalidatePath("/", "layout");
+  return {};
 }
 
 /** İstatistik ve maç geçmişini kimin görebileceği: "teammates" (ortak grup/takım) veya "public" (herkes) */

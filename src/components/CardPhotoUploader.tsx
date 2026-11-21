@@ -1,0 +1,196 @@
+"use client";
+
+import { useEffect, useRef, useState, type ComponentProps } from "react";
+import { useRouter } from "next/navigation";
+import { CardFace } from "./PlayerCard";
+import { Button } from "./ui";
+import { createClient } from "@/lib/supabase/client";
+import { deleteCardPhoto, saveCardPhoto } from "@/lib/actions";
+import { MAX_PHOTO_BYTES, alphaBounds, cardPhotoPath, centerCrop, fitWithin, hasTransparency } from "@/lib/card-photo";
+
+type Preview = Omit<ComponentProps<typeof CardFace>, "photoUrl" | "compact" | "fontSize" | "className">;
+type Box = { x: number; y: number; width: number; height: number };
+
+/** İşlemeden önce büyük fotoğraf bu boyuta indirilir (model hızı/bellek) */
+const INPUT_MAX = 1280;
+/** Kayıtlı görselin en büyük boyutu (kart alanı küçük; ~100-200 KB) */
+const OUT_W = 480;
+const OUT_H = 600;
+
+function loadImage(src: Blob): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(src);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Görsel açılamadı")); };
+    img.src = url;
+  });
+}
+
+function canvasOf(src: CanvasImageSource, sw: number, sh: number, box: Box = { x: 0, y: 0, width: sw, height: sh }, max = { w: INPUT_MAX, h: INPUT_MAX }) {
+  const size = fitWithin(box.width, box.height, max.w, max.h);
+  const c = document.createElement("canvas");
+  c.width = size.width;
+  c.height = size.height;
+  const ctx = c.getContext("2d")!;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(src, box.x, box.y, box.width, box.height, 0, 0, size.width, size.height);
+  return c;
+}
+
+const pixels = (c: HTMLCanvasElement) => c.getContext("2d")!.getImageData(0, 0, c.width, c.height).data;
+
+/** Şeffaf kenarları kırpar ve kayıt boyutuna indirir */
+function trimmed(c: HTMLCanvasElement) {
+  const box = alphaBounds(pixels(c), c.width, c.height);
+  if (!box) throw new Error("Fotoğrafta kişi bulunamadı");
+  return canvasOf(c, c.width, c.height, box, { w: OUT_W, h: OUT_H });
+}
+
+const toBlob = (c: HTMLCanvasElement, type: string, q?: number) =>
+  new Promise<Blob | null>((resolve) => c.toBlob(resolve, type, q));
+
+/** WebP'ye çevirir (Safari WebP yazamaz → PNG); depo sınırına sığana dek kaliteyi/boyutu düşürür */
+async function encode(c: HTMLCanvasElement): Promise<Blob> {
+  let canvas = c;
+  for (let i = 0; i < 8; i++) {
+    for (const q of [0.85, 0.7, 0.55]) {
+      const b = await toBlob(canvas, "image/webp", q);
+      if (b && b.type !== "image/webp") break; // tarayıcı WebP desteklemiyor
+      if (b && b.size <= MAX_PHOTO_BYTES) return b;
+    }
+    const png = await toBlob(canvas, "image/png");
+    if (png && png.type === "image/png" && png.size <= MAX_PHOTO_BYTES) return png;
+    canvas = canvasOf(canvas, canvas.width, canvas.height, undefined, { w: canvas.width * 0.8, h: canvas.height * 0.8 });
+  }
+  throw new Error("Fotoğraf küçültülemedi");
+}
+
+/**
+ * Kart fotoğrafı: seç → arka planı tarayıcıda kaldır (fotoğraf sunucuya ham gitmez) → kartta önizle → Kaydet / Başka fotoğraf.
+ * Model (~40 MB) sadece fotoğraf seçilince indirilir. Şeffaf PNG/WebP yüklenirse işlem atlanır; model çalışmazsa düz kırpılır.
+ */
+export function CardPhotoUploader({ userId, currentUrl, preview }: { userId: string; currentUrl: string | null; preview: Preview }) {
+  const router = useRouter();
+  const input = useRef<HTMLInputElement>(null);
+  const [result, setResult] = useState<{ blob: Blob; url: string } | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => () => { if (result) URL.revokeObjectURL(result.url); }, [result]);
+
+  async function process(file: File) {
+    setError(null);
+    setNote(null);
+    setResult(null);
+    if (!file.type.startsWith("image/")) return setError("Bir fotoğraf seç");
+    setBusy(true);
+    try {
+      setStatus("Fotoğraf hazırlanıyor…");
+      const img = await loadImage(file);
+      const base = canvasOf(img, img.naturalWidth, img.naturalHeight);
+      let out: HTMLCanvasElement;
+      if (/png|webp/.test(file.type) && hasTransparency(pixels(base))) {
+        out = trimmed(base); // zaten dekupe edilmiş
+      } else {
+        try {
+          setStatus("Arka plan kaldırılıyor…");
+          const { removeBackground } = await import("@imgly/background-removal");
+          const input = (await toBlob(base, "image/jpeg", 0.92))!;
+          const cut = await removeBackground(input, {
+            model: "isnet_quint8",
+            output: { format: "image/png" },
+            progress: (key, current, total) => {
+              if (key.startsWith("fetch") && total > 0) setStatus(`Yapay zekâ modeli indiriliyor… %${Math.round((current / total) * 100)}`);
+              else setStatus("Arka plan kaldırılıyor…");
+            },
+          });
+          const cutImg = await loadImage(cut);
+          out = trimmed(canvasOf(cutImg, cutImg.naturalWidth, cutImg.naturalHeight));
+        } catch (e) {
+          console.warn("Arka plan kaldırılamadı", e);
+          const crop = centerCrop(base.width, base.height);
+          out = canvasOf(base, base.width, base.height, crop, { w: OUT_W, h: OUT_H });
+          setNote("Arka plan bu cihazda kaldırılamadı; fotoğraf düz kırpıldı. İstersen arka planı olmayan bir fotoğraf (şeffaf PNG) seçebilirsin.");
+        }
+      }
+      setStatus("Sıkıştırılıyor…");
+      const blob = await encode(out);
+      setResult({ blob, url: URL.createObjectURL(blob) });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Fotoğraf işlenemedi");
+    } finally {
+      setBusy(false);
+      setStatus(null);
+      if (input.current) input.current.value = "";
+    }
+  }
+
+  async function save() {
+    if (!result) return;
+    setBusy(true);
+    setError(null);
+    setStatus("Kaydediliyor…");
+    const { error: upErr } = await createClient()
+      .storage.from("avatars")
+      .upload(cardPhotoPath(userId), result.blob, { upsert: true, contentType: result.blob.type, cacheControl: "3600" });
+    const res = upErr ? { error: "Fotoğraf yüklenemedi" } : await saveCardPhoto(Date.now());
+    setBusy(false);
+    setStatus(null);
+    if (res.error) return setError(res.error);
+    setResult(null);
+    setNote(null);
+    router.refresh();
+  }
+
+  async function remove() {
+    if (!confirm("Kart fotoğrafın silinsin mi?")) return;
+    setBusy(true);
+    setError(null);
+    const res = await deleteCardPhoto();
+    setBusy(false);
+    if (res.error) return setError(res.error);
+    router.refresh();
+  }
+
+  const shown = result?.url ?? currentUrl;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-center">
+        <CardFace {...preview} photoUrl={shown} fontSize="17px" />
+      </div>
+      {status && <p className="text-center text-sm text-muted" aria-live="polite">{status}</p>}
+      {note && <p className="rounded-xl bg-amber-500/10 p-3 text-xs text-amber-200">{note}</p>}
+      {error && <p className="rounded-xl bg-red-500/10 p-3 text-center text-sm text-red-300">{error}</p>}
+
+      <input
+        ref={input}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) process(f); }}
+      />
+      {result ? (
+        <div className="grid grid-cols-2 gap-2">
+          <Button type="button" onClick={save} disabled={busy}>{busy ? "…" : "Kaydet"}</Button>
+          <Button type="button" variant="secondary" onClick={() => input.current?.click()} disabled={busy}>Başka fotoğraf</Button>
+        </div>
+      ) : (
+        <div className={currentUrl ? "grid grid-cols-2 gap-2" : ""}>
+          <Button type="button" variant="secondary" className="w-full" onClick={() => input.current?.click()} disabled={busy}>
+            {busy ? "İşleniyor…" : currentUrl ? "Fotoğrafı değiştir" : "📷 Fotoğraf seç"}
+          </Button>
+          {currentUrl && (
+            <Button type="button" variant="secondary" onClick={remove} disabled={busy}>Fotoğrafı sil</Button>
+          )}
+        </div>
+      )}
+      <p className="text-center text-xs text-muted">
+        Arka plan telefonunda/bilgisayarında kaldırılır; fotoğrafın sadece kartında görünür. İlk seferde ~40 MB model indirilir.
+      </p>
+    </div>
+  );
+}

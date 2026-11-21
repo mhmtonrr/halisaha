@@ -4,6 +4,8 @@ import { ProfileFields, type ProfileValues } from "@/components/ProfileFields";
 import { PushSettings } from "@/components/PushControls";
 import { DEFAULT_PREFS } from "@/lib/notify-rules";
 import type { StatsVisibility } from "@/lib/profile-data";
+import { CardPhotoUploader } from "@/components/CardPhotoUploader";
+import type { ComponentProps } from "react";
 
 const OPTIONS: { value: StatsVisibility; title: string; hint: string }[] = [
   { value: "teammates", title: "Sadece takım arkadaşlarım", hint: "Ortak bir grup veya takımı olanlar istatistiklerini ve maç geçmişini görür." },
@@ -16,14 +18,21 @@ export function SettingsPanel({
   visibility,
   discoverable,
   prefs,
+  photo,
 }: {
   values: ProfileValues;
   visibility: StatsVisibility;
   discoverable: boolean;
   prefs: typeof DEFAULT_PREFS;
+  photo: { userId: string; url: string | null; preview: ComponentProps<typeof CardPhotoUploader>["preview"] };
 }) {
   return (
     <>
+      <SectionTitle>Kart fotoğrafı</SectionTitle>
+      <Card className="mb-6">
+        <CardPhotoUploader userId={photo.userId} currentUrl={photo.url} preview={photo.preview} />
+      </Card>
+
       <form action={updateProfile} className="space-y-4">
         <Card className="space-y-4">
           <ProfileFields values={values} full />

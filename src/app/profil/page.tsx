@@ -6,6 +6,7 @@ import { ErrorNote, Header } from "@/components/ui";
 import type { ProfileValues } from "@/components/ProfileFields";
 import { ProfileView, parseTab } from "@/components/profile/ProfileView";
 import { SettingsPanel } from "./SettingsPanel";
+import { cardSkills } from "@/lib/skills";
 
 export default async function ProfilePage({
   searchParams,
@@ -22,7 +23,7 @@ export default async function ProfilePage({
     tab === "ayarlar"
       ? supabase
           .from("profiles")
-          .select("display_name, card_name, city, district, birth_year, preferred_position, secondary_positions, preferred_foot, shirt_number, bio")
+          .select("display_name, card_name, photo_url, city, district, birth_year, preferred_position, secondary_positions, preferred_foot, shirt_number, bio")
           .eq("id", user.id)
           .single()
       : Promise.resolve({ data: null }),
@@ -53,6 +54,20 @@ export default async function ProfilePage({
               visibility={data.person.profile.statsVisibility}
               discoverable={data.person.profile.discoverable}
               prefs={{ ...DEFAULT_PREFS, ...(prefsRow ?? {}) }}
+              photo={{
+                userId: user.id,
+                url: (form as { photo_url: string | null }).photo_url,
+                preview: {
+                  name: data.person.profile.displayName,
+                  cardName: data.person.profile.cardName,
+                  overall: data.person.overall,
+                  position: data.person.profile.position,
+                  skills: cardSkills(data.person.skills, data.person.profile.position === "GK"),
+                  city: data.person.profile.city,
+                  district: data.person.profile.district,
+                  unrated: data.person.matchesPlayed === 0,
+                },
+              }}
             />
           )
         }

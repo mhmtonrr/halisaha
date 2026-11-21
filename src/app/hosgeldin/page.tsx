@@ -3,9 +3,11 @@ import { requireUser } from "@/lib/supabase/server";
 import { completeOnboarding } from "@/lib/actions";
 import { Button, Card, ErrorNote } from "@/components/ui";
 import { ProfileFields, type ProfileValues } from "@/components/ProfileFields";
+import { cardSkills } from "@/lib/skills";
+import { CardPhotoUploader } from "@/components/CardPhotoUploader";
 
 const PROFILE_COLUMNS =
-  "display_name, card_name, city, district, birth_year, preferred_position, secondary_positions, preferred_foot, shirt_number, bio, onboarded_at";
+  "display_name, card_name, photo_url, city, district, birth_year, preferred_position, secondary_positions, preferred_foot, shirt_number, bio, onboarded_at";
 
 export default async function WelcomePage({
   searchParams,
@@ -31,6 +33,14 @@ export default async function WelcomePage({
         <p className="mt-1 text-muted">Kartını oluşturmak için seni biraz tanıyalım.</p>
       </div>
       <ErrorNote message={error} />
+      <Card className="mb-4 space-y-2">
+        <p className="text-sm font-semibold">Kart fotoğrafı <span className="font-normal text-muted">(isteğe bağlı)</span></p>
+        <CardPhotoUploader
+          userId={user.id}
+          currentUrl={profile?.photo_url ?? null}
+          preview={{ name: name || "Adın", cardName: profile?.card_name, overall: 60, position: profile?.preferred_position ?? null, skills: cardSkills(null, profile?.preferred_position === "GK"), city: profile?.city, district: profile?.district, unrated: true }}
+        />
+      </Card>
       <form action={completeOnboarding} className="space-y-4">
         <input type="hidden" name="next" value={next} />
         <Card className="space-y-4">
