@@ -6,6 +6,20 @@ FIFA tarzı kartlar oluşur; gruplar (topluluk) ve takımlar (rekabet) ayrı olu
 **Kullanıcı Türkçe konuşuyor; yanıtlar, arayüz metinleri, commit mesajları ve kod yorumları Türkçe.**
 Büyük tasarım kararlarını kodlamadan önce kullanıcıyla netleştir; küçük kararlarda makul varsayılanı seç ve söyle.
 
+## Çalışma kuralları (token tasarrufu — her oturumda geçerli, kullanıcı tekrar anlatmak zorunda değil)
+
+1. **Her görevin ilk yanıtının başında tek satır öneri ver**: `Öneri: model <haiku|sonnet|opus>, efor <low|medium|high>; parçalama: <gerekmez|şu parçalara böl>; /clear: <şimdi gerekmez|bitince>`.
+   Ölçüt: tek dosya/metin/stil/küçük hata → haiku veya sonnet + low; birkaç dosya, UI+veri → sonnet + medium; migration/RLS, puanlama, çok dosyalı özellik → sonnet/opus + high (önce plan).
+   Kullanıcı `/model` ve `/effort` ile ayarlar; mevcut ayar uygunsa "değiştirmene gerek yok" de.
+2. **Parçalama**: iş 5+ dosyaya, veya migration + UI + test birlikte dokunuyorsa kullanıcıya parçaları öner (örn. 1 veri/DB, 2 UI, 3 test), her parça sonunda commit+push; hepsini tek seferde yapma.
+3. **/clear uyarısı**: konu değişince, bir parça commit+push edilince, veya bağlam şiştiğinde (çok dosya okundu / uzun build-test çıktısı gördün) "şimdi /clear at" diye açıkça söyle. Gereksiz yere clear önerme.
+4. **Kapsam**: sadece istenen değişikliği yap; istenmemiş refactor/özellik/doküman ekleme. Ek iş gerekiyorsa önce söyle.
+5. **Keşif**: dosya belirtilmişse sadece onu oku (gerekirse ilgili satır aralığını); belirtilmemişse tek `Grep`/`Glob` ile bul. Tüm dizini gezme, `Agent` başlatma. Büyük dosyaları baştan sona okuma. İlgili `docs/` dosyası dışındakini okuma.
+6. **Doğrulama (kullanıcı özellikle istemedikçe)**: küçük değişiklikte sadece `npx tsc --noEmit` + etkilenen tek test dosyası. `npm run build`, tüm e2e, `npm run db:check` sadece migration/RLS/akış değiştiyse ve ilgili tek senaryoyu çalıştır. Çıktıyı her zaman kısalt (`| tail -15`, `grep`). Aynı komutu "emin olmak için" tekrarlama.
+7. **Commit/push** yalnızca iş bitince ve tek seferde; düzeltme için ek commit yerine mümkünse bitirmeden düzelt.
+8. **Yanıtlar kısa**: ne yapıldı + tek paragraf; kod/dosya listesini tekrar etme. Seçenek yığma, öneri ver.
+9. Bu kurallar değişecekse (kullanıcı isterse) burayı güncelle; yeni oturumda tekrar sorma.
+
 ## Canlı ortam
 
 | | |
@@ -96,232 +110,18 @@ Sayfalar: `/login` (e-posta+şifre, Google, şifremi unuttum) · `/hosgeldin` (i
 · `/yetenek` (yetenek değerlendirmesi) · `/oyuncu/[userId]` (başkasının profili) · `/katil` (davet koduyla takıma/gruba katıl; `?tur=takim|grup`) · `/join/[code]` · `/g/[id]` grup/takım · `/g/[id]/{players,kadro,sohbet,matches/new,cagri/yeni,cagri/[pollId],m/[matchId],p/[playerId]}`
 · takımlara özel: `/g/[id]/teklif` (bu takıma maç teklif et) · `/g/[id]/teklifler` (gelen/giden/kabul edilen) · `/g/[id]/istatistik` (herkese açık)
 
-## Alan modeli ve kurallar
+## Alan modeli ve kurallar (ayrıntı docs/ altında — sadece ilgili konuda oku)
 
-**Grup (`groups.kind='community'`)**: topluluk. Sadece üyelere görünür. Bölge isteğe bağlı.
-**Takım (`kind='team'`)**: rekabet. Herkese açık (ad, bölge, kadro, ratingler, maç sonuçları); il zorunlu.
-İkisi aynı altyapıyı paylaşır (group_players, matches, oylama, rating, çağrı, sohbet) ama **iş kuralları ayrıdır (kullanıcı kararı)**:
+| Konu | Dosya |
+|---|---|
+| Maç türleri, puanlama, genel rating, çapraz oylama, diziliş, teklif, çağrı, çekilme | `docs/mac-puanlama.md` |
+| Grup/takım farkı, roller, misafir, asıl kadro, davet kodu, ayrılma, oyuncu ilanı/ödünç | `docs/takim-grup-uyelik.md` |
+| Bildirim/push, canlı güncelleme (Realtime), sohbet | `docs/bildirim-canli-sohbet.md` |
+| Oyuncu kartı/yetenek, profil/istatistik, Keşfet/öne çıkanlar, menü, hız, karşılama, bölge | `docs/profil-kart-kesfet-menu.md` |
 
-| | Grup (topluluk) | Takım (rekabet) |
-|---|---|---|
-| Maç türü | sadece **kendi aramızda** (internal, dengeli A/B) | sadece **rakibe karşı** (external; teklifle ortak maç veya uygulamada olmayan rakip) |
-| Zorunluluk | `enforce_match_kind` tetikleyicisi (0013, sadece yeni kayıtlar; eski maçlar kalır) + `createMatch` türü gruptan alır | aynı |
-| Rating etkisi | yarım (`CONFIG.CASUAL_IMPORTANCE = 0.5`) | rakip maçı tam; iç/antrenman maçı (eski veri) yarım |
-| Görünürlük | özel | herkese açık; teklif, istatistik, diziliş, çapraz oylama sadece takımda |
-
-**Üye çağrısı (migration 0014, yapıldı)**: grupta üyeler maç kuramaz, **çağrı** açar (`create_member_poll` RPC: `match_polls.auto_match`,
-`team_size`; kontenjan = 2 × kişi sayısı). Sınırlar DB'de: maç en az 3 saat sonra, en fazla 14 gün içinde; son yanıt süresi (boşsa maçtan
-3 saat önce) maçtan en az 1 saat önce ve gelecekte; yetkili olmayan üye aynı anda 1 açık çağrı; açan otomatik "geliyorum". Takımda üye
-çağrı açamaz. Maça dönüşüm (`polls.ts`, `poll-rules.ts`): **kontenjan dolunca hemen** (`respondPoll` sonrası `settlePoll`); **son yanıt süresi
-bitince** "geliyorum" ≥ %70 (`MIN_FILL_RATIO`; 14 için 10) ise eksik kadroyla, değilse çağrı iptal olur ve sohbete yazılır. Sayfa açılışında
-tetiklenir (`settleExpiredPolls`, cron yok; çağrı sayfası açıkken 30 sn'de bir tazelenir). Kadro: yanıt sırasına göre ilk N kişi, fazlası yedek
-(biri vazgeçerse sıradaki girer); takımlar `balanceTeams` ile dengeli bölünür (profilinde mevkisi kaleci olan kaleci). Dönüşüm atomik talep eder
-(`status open → converted`), hata olursa maç silinir ve çağrı yeniden açılır. Çağrıyı açan veya yetkili `close_poll` ile iptal eder. Yetkililerin
-çağrısı eskisi gibi elle onaylıdır (`approve_*` RPC'leri, "Maçı oluştur"); yetkili hem maç kurar hem çağrı açar.
-
-**Oyuncu arama ilanı ve ödünç oyuncu (migration 0015, yapıldı)**: takımın kaptanı/yetkilisi planlanmış rakip maçı için "oyuncu arıyoruz"
-ilanı açar (`create_listing`: 1-10 oyuncu, aranan mevkiler, isteğe bağlı min. rating, not; maç başına 1, takım başına en fazla 5 açık ilan).
-İlan **herkese açıktır** (giriş yapmış herkes görür): `/ilan/[id]`, Keşfet'te bölgeye göre "Oyuncu arayan takımlar", takım sayfası, maç ekranı
-şeridi; `ShareLink` ile gruplarda paylaşılır. Hesabı olan herkes `apply_listing` ile başvurur (mevki + not; takımın oyuncusu, maçta/rakip kadroda
-olan ve min. rating altı başvuramaz; en fazla 10 bekleyen başvuru). Kaptan/yetkili başvuranları `listing_applicants` RPC'siyle **rating,
-mevki ve güvenilirlikle** görür (başvuranın rating'i kendi özel gruplarındaki satırlara bağlı olduğundan normal sorguyla okunamaz) ve
-`decide_application` ile **tek tek** kabul/ret eder (ilk gelen otomatik girmez). Kabul edilen oyuncu takıma `group_players.is_loan = true`
-olarak yazılır ve o maçın kadrosuna girer; takımın asıl kadrosunda değildir: `is_group_member` onu **saymaz** (takım sohbeti, teklifler,
-çağrılar, yetkiler kapalı), `getMemberships`/Takımlarım/profil kartlarında yoktur, takım sayfasında "Misafirler" sekmesinde "ödünç" etiketiyle
-görünür (maç ekranı ve kadro sayfası da `isSquadMember`/`isGuestLike` ayrımını kullanır). Oy verir/oylanır, genel ratingi geçerlidir.
-Gereken sayı dolunca ilan `filled` olur. Ödünç oyuncu davet koduyla katılırsa kalıcı üye olur (`join_group` upsert). Oyuncu ilan
-kabulünü/durumunu ana sayfada görür (canlı). **Güvenilirlik**: maç sonucu girerken kaptan "gelmedi" işaretler (`mark_no_shows`: kadrodan
-çıkarır, hesabı olanı `match_no_shows`'a yazar; sadece planlanmış maçta, yani skor düzeltmesinde "gelmedi" kutusu görünmez). `listing_applicants`
-oynadığı (oylama/kapanışa ulaşmış) maç ve gelmediği maç sayısını verir (kimlik doğrulamasız genel bir güvenilirlik sorgusu bilerek yok),
-`reliability()` yüzdeyi ve etiketi üretir (3 kayıttan azında "Yeni"). `submitResult` sırası: önce her şeyi doğrula (yetki, skor, "gelmedi"
-çıkınca kalan ≥2, durum), sonra istatistikleri yaz, "gelmedi"yi en son (maç durumu güncellenmeden hemen önce) işaretle; geri alınamayan işlem
-doğrulanabilir bir hatadan önce yapılmaz.
-**İlan yaşam döngüsü (0016)**: maç planlanmış olmaktan çıkınca (sonuç/oylama/iptal) açık ilan **kapanır** (tetikleyici); 5 açık ilan sınırı sadece
-planlanmış ve gelecekteki maçları sayar; bekleyen 10 başvuru sınırı yeniden başvuruda da işler; kabul edilmiş ödünç oyuncu maç kadrosundan çıkarılırsa
-(`match_players` silinmesi) başvurusu `withdrawn` olur ve dolu ilan yeniden açılır; mevkisiz başvuran da kabul edilir (kaleci sayılmaz).
-Ödünç oyuncu `getMemberships`'te yok ama oynadığı maç oylamaya geçince ana sayfada "Oyunu bekliyorlar (ödünç)" kartı görür. Tuzak: `returns table` içinde `position` sütun adı olamaz (`chosen_position`).
-Tuzak: canlı yenilenen sunucu bileşeninde `<details open={koşul}>` her yenilemede kullanıcının açtığını kapatır → `AutoOpenDetails`
-(sadece ilk yüklemede açar).
-
-**Roller (`group_players.role`)**: `captain` (takımda "Kaptan", grupta "Kurucu"), `admin` ("Yetkili"), `member`.
-- Maç ve maç çağrısını sadece captain/admin kurar (RLS). Rolleri sadece captain değiştirir (`set_member_role` RPC;
-  doğrudan UPDATE politikası bilerek yok). Kaptanlık devrinde eski kaptan admin olur.
-- Oyuncu çıkarma: captain çıkarılamaz; admin'leri sadece captain çıkarır.
-- `is_group_admin()` captain'ı da kapsar.
-
-**Misafir**: `group_players.user_id IS NULL`. Oylanır, oy veremez, sohbete yazamaz. `claim_guest` ile hesaba aktarılır.
-**Sadece maç ekranından eklenir** (`addGuestToMatch`: misafiri gruba + o maçın kadrosuna yazar; planlanmış maçta, kaptan/yetkili).
-"Oyuncular" sayfasında ekleme formu yoktur; orada misafirin mevkisi ve geçmiş aktarımı kalır. Sonraki maçlarda
-misafir kadro listesinde (yedek seçiminde) tekrar seçilebilir.
-**Asıl kadro = hesabı olan üyeler** (davet linki/kodla katılanlar). Misafirler takım/grup sayfasında, kadro sayfasında ve Oyuncular
-sayfasında ayrı bölümde/sekmede durur (`RosterTabs`, `?sekme=misafir`; istatistikleri orada görünür); oyuncu sayısına, takım
-puanına (`teamRating`), Keşfet sıralamasına, takım liderlerine ve istatistik sayfasına girmez. Maç kadrosunda ve oylamada normal oyuncudur.
-
-**Davet kodu gizli**: `groups.invite_code` sütununa SELECT yetkisi yok (takımlar herkese açık olduğu için).
-Kod `group_invite_code()` RPC ile alınır (takımda captain/admin, grupta her üye). **`groups`'tan seçerken
-sütunları açıkça yaz, `select *` ve `invite_code` kullanma** — yetki hatası verir.
-**Katılma (migration 0023, kullanıcı isteği)**: link (`/join/KOD`) yanında **elle yazılan kod**: yeni kodlar 10 karakter, karışan O/0/I/1/L yok (`new_invite_code()`, sütun varsayılanı), ekranda `XXXXX-XXXXX`;
-eski 12 karakterli kodlar geçerli. `join_group` büyük/küçük harf, boşluk ve tireyi yok sayar (`norm_invite`). Grup/takım sayfasında kod büyük gösterilir + "Kopyala" + link "Paylaş" + yetkiliye "Yeni kod oluştur"
-(`regenerate_invite`, eski kod/link ölür). **`/katil?tur=takim|grup`**: kod yazılır (tam link de olur) → `invite_preview` RPC'siyle önizleme (ad, tür, bölge, oyuncu sayısı, zaten üye mi) → "Takıma/Gruba katıl" (`joinGroup`).
-Seçilen tür kodla uyuşmazsa doğru bölüme yönlendirilir. Giriş noktaları: ana sayfada Takımlarım/Gruplarım başlıklarında "Takıma/Gruba katıl", menüde ayrı Takımlarım ve Gruplarım bölümleri (her birinde katıl/kur), Keşfet.
-Bilinen: kod tahmini için oran sınırı yok (31^10 ≈ 8e14 olasılık; oturum açmak gerekir).
-
-**Maç**: `kind` internal (kendi aramızda, A/B takımı) / external (rakibe karşı; tüm kadro A, score_a=biz).
-Durum: planned → voting (skor girilince, 24 saat) → closed. Takımlar arası maçta planned → played (skor onayı) → voting. Maça özel mevki `match_players.position`.
-
-**Puanlama** (src/lib/rating.ts): oy veren bazlı normalizasyon (z), 5+ oyda uç değer kırpma, ikili/klik tespiti,
-ağırlık = katılım (oy verebilecek hesap sahiplerinin yarısı → tam) × örneklem (4+ oy → tam), tek oyla 0;
-galibiyet ±0.15; maçın önemi çarpanı (`MatchInput.importance`: takım rakip maçı 1, grup/iç maç 0.5; ağırlığı çarpar, eşikleri değiştirmez); yakın maçlar ağır basar; yeni oyuncu ortalamaya (65) çekilir; 40-99 FIFA ölçeği.
-Oylama süre dolunca **sayfa açıldığında** kapanır (`finalizeExpired`), herkes oy verince anında kapanır.
-Formül değişirse `recomputeGroup(groupId)` ile grubun tüm sonuçları yeniden yazılabilir (oylara dokunmaz).
-
-**Genel rating (migration 0010)**: hesap sahibi oyuncunun rating'i tüm grup/takım/maçlardan **tek** hesaplanır ve kişinin
-her `group_players` satırına aynen yazılır (`player_ratings` yapısı değişmedi, UI sorguları aynı). Kimlik anahtarı = `user_id`,
-misafirde `group_players.id` (misafirin rating'i kendi grubunda kalır). Bir kişinin rating'i sadece oynadığı maçlara
-bağlı olduğundan `recomputeRatings(admin, {playerIds})` o kişilerin tüm maçlarını yükler. Yeni gruba katılana DB tetikleyicisi
-mevcut rating'i kopyalar (`copy_rating_on_join`); misafir hesaba aktarılınca `recomputePlayers`. Kart özellikleri
-(gol/asist/FRM…) hâlâ grup geçmişinden gelir; sadece rating genel.
-Formül değişince veya geçişte hepsini yeniden yazmak için (yedek alıp farkı listeler):
-`NODE_USE_ENV_PROXY=1 npx vite-node --config scripts/recompute.vite.config.mjs scripts/recompute-all.ts`
-
-**Çapraz oylama**: takımlar arası (bağlı) iki maç **tek oylama havuzudur**: sahadaki herkes kendi dışındaki herkese oy verir
-(`can_vote` bağlı maçın kadrosunu da kabul eder; oy oy verenin kendi maçına yazılır, `voting_progress` iki maçı sayar).
-Motor (`MatchInput.rivalShare`, `CONFIG.RIVAL_SHARE = 0.6`): bir oyuncunun maç puanının %60'ı rakip takımın, %40'ı kendi
-takımının oylarından gelir (taraf boşsa diğeri tam sayılır); tek MVP seçilir. İki maç birlikte kapanır (`finalizeMatch`
-çifti birlikte talep eder, sonuçlar `match_results`'a her oyuncunun kendi maç satırına yazılır). Bağlı maçta elle "oylamayı
-kapat" yoktur (süre dolunca veya herkes oy verince). Aynı kişi bağlı maçın iki kadrosunda olamaz (`guard_linked_roster`).
-
-**Kişi sayısı ve diziliş (migration 0011)**: `matches.team_size` (5-11, her takım, kaleci dahil; eski maçlarda boş →
-kadrodan tahmin `inferSize`). Teklifte seçilir (`create_challenge(..., p_size default 7)`), kabulde iki maça yazılır;
-normal maç kurarken de seçilir. Diziliş: `matches.formation_a/b` (ör. `2-3-1`) + `match_players.slot` (0 = kaleci,
-sonra savunmadan hücuma soldan sağa; boşsa yedek; takım başına benzersiz). `formations.ts` her sayı için hazır dizilişleri
-üretir. Kaptan/yetkili/maçı kuran maç ekranında "Diziliş (sürükle-bırak)" editörünü (`LineupEditor`, Pointer Events: sürükle
-ya da seç+dokun; dolu yere bırakınca takas) kullanır, `setLineup` action'ı kaydeder ve sahadaki oyuncunun maç mevkisini
-slot rolüne çeker. Dizilişler **hep açık**: herkes (rakip ve ziyaretçi dahil) maç ekranında iki sahayı görür. Rakibe karşı
-maçta sadece A tarafı vardır; kendi aramızda maçta A ve B ayrı dizilir. Oyuncu takım değiştirince slotu düşer (tetikleyici).
-Sahadaki oyuncu, profildeki gerçek oyuncu kartıdır (`PitchCard`: kalkan, seviye rengi, rating/mevki/baş harfler/isim ve 6 özellik
-FRM·İST·GOL|KRT·AST·GAL·MVP). Kart `em` ile çizilir; yazı boyutu sahanın genişliğinden (`cqw`, `Pitch` kapsayıcısı + `--cw`)
-türetilir ve `cardWidthPct` ile hat başına oyuncu sayısına göre ölçeklenir. Özellikler `getGroupSummaries` ile gelir (kendi ve rakip kadro).
-Tuzak: editördeki token'ın `click`'i yukarı çıkarsa slot/yedek alanının "seçiliyi buraya koy" işleyicisi seçimi siler
-(`stopPropagation` bu yüzden var).
-
-**Takımlar arası maç teklifi** (match_challenges, migration 0009): kaptan/yetkili kendi takımından başka bir takıma
-`create_challenge` RPC ile teklif yollar (tarih, saha, ücret serbest metin, mesaj; aynı takıma en fazla 3 bekleyen).
-Karşı takımın kaptan/yetkilisi `respond_challenge` ile kabul/ret eder; kabulde **iki takımda da** birer `external` maç
-açılır (`matches.challenge_id` ortak, `opponent_group_id` rakip takım) ve kadroları her takım kendi maçında seçer.
-Teklifi sadece iki takımın üyeleri görür; yazma sadece RPC (`cancel_challenge`: gönderen bekleyeni geri çeker, kabul
-edilmiş planlı maçı iki taraf da iptal eder — iki maç birlikte silinir). Bağlı maçta "Maçı iptal et" = `cancel_challenge`.
-**Skor eşleşmesi**: bağlı maçta skoru iki takım ayrı girer; `submitResult` maçı `played` (skor onayı bekliyor) yapar ve
-`settle_linked_match` RPC'si çağrılır: skorlar birbirinin aynası değilse `mismatch` (oylama açılmaz, taraflar düzeltir),
-rakip girmediyse `waiting`, eşleşirse `settled` ve iki maç da `voting` (24 saat) olur. Maç ekranı ortak karşılaşma ekranıdır:
-iki takım kartı, rakip kadro/ratingler (takımlar herkese açık olduğu için RLS değişmedi), kapanınca rakibin oyuncu puanları.
-Takım istatistikleri `finished` (voting+closed) rakip maçlarından hesaplanır (`team-stats.ts`).
-
-**Maç çağrısı** (match_polls/poll_responses): yetkili açar; üyeler `respond_poll` RPC ile yanıtlar; onay
-sadece `set_poll_approval` / `approve_first_responders` RPC ile. Kontenjan sırası `responded_at`.
-"Maçı oluştur" → `/matches/new?cagri=ID` onaylananlarla dolu gelir; maç oluşunca çağrı `converted`.
-
-**Canlı güncelleme (migration 0012)**: sayfa elle yenilenmeden diğer kullanıcıların işlemleri yansır. `<LiveRefresh watches=[…]>`
-Supabase Realtime `postgres_changes`'i dinler (RLS'e uyar; `realtime.setAuth`) ve `router.refresh()` yapar (250 ms debounce; sayfa
-kaydırması, form ve sürükleme durumu korunur). Yayındaki tablolar: group_messages, matches, match_players, match_results,
-match_challenges, match_polls, poll_responses, group_players. Yeni bir tabloyu canlı yapmak için migration'da publication'a ekle.
-Filtre tek koşuldur (`col=eq.x` veya `inList()`); **DELETE olayları filtreli aboneliklere ulaşmaz** → silmeye bağlı durumlar
-bir güncelleme olayıyla izlenir (teklif iptalinde maçlar silinir, `match_challenges.status` güncellenir; maç ekranı bunu dinler).
-Başkalarının oyları RLS'ten dolayı Realtime'a düşmez; oylamada sayaç için `pollMs` (15 sn) kullanılır. Sekme görünür olunca/
-ağ gelince/yeniden bağlanınca da yenilenir. Tuzak: `inList` gibi yardımcılar `"use client"` dosyasında olamaz (sunucu bileşeni çağıramaz) → `src/lib/live.ts`.
-Sohbet kendi aboneliğini kullanır (LiveRefresh koyma). Sayfa zıplamasın diye yerinde güncellenecek formlar `redirect` etmez:
-eylem durum döndürür (`useActionState`, bkz. `GuestForm`); `revalidatePath` sayfayı yerinde tazeler.
-
-**Bildirimler (migration 0017)**: her olay `notify()` ile önce **bildirim kutusuna** (`notifications`, `/bildirimler`, nav rozeti Realtime ile canlı)
-yazılır, sonra (VAPID anahtarı ve abonelik varsa) **web push** gönderilir; push izni olmayan/iPhone'da ana ekrana eklememiş kullanıcı da kutuda görür.
-Olaylar: oylama açıldı (`submitResult`/`settle_linked_match` sonrası, iki takım), oylama hatırlatması (günlük cron), çağrı açıldı/maça dönüştü/iptal,
-maç kuruldu, teklif geldi/yanıtlandı, ilana başvuru/başvuru sonucu, sohbet mesajı. Olayı yapan kendi işlemi için bildirim almaz. Kategori tercihi
-(`notification_prefs`: votes, matches, offers, chat; satır yoksa hepsi açık) kapalıysa ne kutuya ne push'a yazılır. **Sohbet**: bir kullanıcıya aynı
-gruptan 10 dakikada en fazla 1 bildirim (etiket `chat:<grup>`; mesaj doğrudan DB'ye yazıldığından gönderenin tarayıcısı `notifyChatMessage` ile bildirir,
-sunucu mesajın çağıranın ve <60 sn olduğunu doğrular). Gönderim yanıttan sonra (`later` = `after`) yapılır; hata asıl işlemi bozmaz. Ölü abonelik (404/410)
-silinir. İzin kartı (`PushPrompt`) anlamlı anda çıkar: oy verince, çağrıya yanıt verince, ilana başvurunca; 14 gün "şimdi değil"; iPhone'da önce ana ekrana ekleme anlatılır.
-**Ortam değişkenleri (Vercel; yoksa sadece uygulama içi kutu çalışır)**: `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` (üretmek için
-`npx web-push generate-vapid-keys`; özel anahtarı asla commit etme/yazdırma), isteğe bağlı `VAPID_SUBJECT` (varsayılan site adresi; kişisel e-posta koyma),
-`CRON_SECRET` (hatırlatma cron'u için; yoksa `/api/cron/vote-reminders` kapalıdır, Vercel Cron `vercel.json` ile günde 1 kez 18:00 TR çağırır).
-Test: `scripts/e2e/notifications.mjs` (sunucu `CRON_SECRET=e2e-secret` ile başlatılmalı) ve gerçek kütüphane/VAPID imzalı
-`NODE_USE_ENV_PROXY=1 npx vite-node --config scripts/recompute.vite.config.mjs scripts/e2e/push-delivery.ts`. Gerçek cihaza teslim sadece elle denenebilir. **Tanılama**: profil → Ayarlar → Bildirimler'de cihaz "açık ✓" ise **"Test bildirimi gönder"** (`sendTestNotification` → `sendTestPush`) abonelik/VAPID/push servisini uçtan uca dener ve nedeni açıklar
-(`explainPushFailure`: 401/403 = VAPID çifti uyuşmuyor, 404/410 = geçersiz abonelik…); abonelik başarısızsa gerçek tarayıcı hatası gösterilir (`explainSubscribeError`: AbortError = push servisine ulaşılamadı, Brave ayarı…).
-Gönderim hataları artık Vercel kayıtlarına `[push] <kod> <mesaj>` olarak düşer. Hatırlatma: **kişi kendi işleminden bildirim almaz** (kendi sohbet mesajı sana push göndermez); test için ikinci hesap veya test düğmesi gerekir.
-Aboneliğin sunucuya kaydı `push_subscriptions` tablosundan kontrol edilir (0 satır = cihaz hiç abone olmamış).
-**Android ekran kapalıyken gelmeme (kullanıcı raporu)**: push `urgency: "high"` ile gönderilir (normal öncelik Doze'da bekletilir); `sw.js` `renotify`+`vibrate` kullanır. Hâlâ gelmezse cihaz tarafı: Chrome için pil
-kısıtlaması kapalı ("Sınırsız"), site bildirim kanalı önemi "Yüksek", veri tasarrufu/Rahatsız etme kapalı.
-Tuzak: `web-push` adlandırılmış içe aktarımla kullanılır (varsayılan dışa aktarımı yok; derleme uyarısı verir ve üretimde çöker).
-
-**Oyuncu kartı ve yetenek değerlendirmesi (migration 0018 + 0019)**: kart (`PlayerCard`/`CardFace`, saha için `compact`) FIFA kalkanıdır: rating, mevki,
-**il plaka kodu + ilçe** (bayrak yerine; `plateOf`), takım rozeti (sadece profilde), 6 yetenek (Türkçe kısaltma). Maçı olmayan oyuncunun kartı gri ("new" seviye);
-yetenekler değer gelene dek "–". Kartın yetenekleri **sadece değerlendirmeden** gelir; eski istatistik göstergeleri (FRM/İST/GOL/AST/GAL/MVP, `attributes.ts`) oyuncu
-sayfasında "Performans göstergeleri"dir. **Model (kullanıcı kararı, "B")**: maç oylamasından ayrı `/yetenek` sayfası; birlikte **en az 2 maç** oynadığın (rakipler ve misafirler
-dahil, maç `voting`/`closed`; bağlı iki maç tek havuz) ve son 30 günde puanlamadığın oyuncular `skill_queue` RPC'siyle listelenir (her seferde en fazla 5). Her oyuncu 6 yetenekte
-1-10 kaydırıcıyla puanlanır, bilinmeyen boş bırakılır ("bilmiyorum"); kaleciye kaleci seti (REF ATL HAV YER DAĞ İLT), diğerlerine saha seti (HIZ ŞUT PAS DRİ DEF FİZ).
-Yazma sadece `submit_skill_rating` RPC'si (kendine değil, ortak maç şartı, kategori seti doğrulanır, tekrar gönderince yerine geçer); `skill_ratings` anonim (RLS: sadece kendi puanların);
-`shared_players` iç fonksiyondur (çağrılamaz). Giriş noktaları: ana sayfa ve oy verdikten sonra maç ekranındaki `SkillQueueBanner`.
-Hesap (`skills.ts` motor + `skills-data.ts`, `submitSkillRating` sonrası `later`): **oy verene göre normalizasyon** (rating.ts gibi): oy verenin tüm puanlarından kategori başına
-ortalama/sapma (az puan verdiyse tarafsız 6 / 1,5'a çekilir), z = (puan − ortalama)/sapma; karşılıklı ortalaması ≥ 8,5 olan iki kişi (klik) yarım ağırlık; değer =
-`65 + 11·(Σwz / (Σw + 1))`, 40-99. **Görünme eşiği: en az 2 farklı oy veren** (`SKILL_CONFIG`; "2 maç" şartı değerlendirmeyi açar), yoksa "–". Oy verenin normalizasyonu değiştiğinden
-bir gönderim, o oy verenin puanladığı herkesi yeniden hesaplatır (`recomputeSkillsForVoter`). Sonuç `player_skills`'e kişinin tüm `group_players` satırlarına yazılır
-(rating gibi); misafirde kendi satırı. Kaleci kuralı her yerde aynı: `match_players.position`, yoksa `is_goalkeeper`, yoksa profil mevkisi.
-Test: `skills.test.ts`, `db-checks/skill-ratings.mjs`, `e2e/skills.mjs`. (Geçmiş: 0018'de "maçta kim öne çıktı?" işaretleme modeli (A) yapılmıştı; kullanıcı B istediği için 0019 ile kaldırıldı.)
-
-**Profil ve istatistik (migration 0020)**: `/profil` sekmelidir (`?sekme=genel|istatistik|maclar|ayarlar`), başkasının profili `/oyuncu/[userId]` (Ayarlar sekmesi yok; kendi
-kimliğine giderse `/profil`'e yönlenir). Aynı `ProfileView`. **Genel**: kart, güvenilirlik, yetenek çubukları, oyuncu bilgisi, takımlar (başkasında sadece herkese açık takımlar). **İstatistik**:
-toplamlar, G/B/M, form + son 10 puanlı maç grafiği, seri, ortalamalar, rakip/iç ayrımı, takım-grup bazında, mevki, güvenilirlik. **Maçlar**: son 50 maç. Veri **tüm grup ve takımlardan** (oylamada +
-kapanmış maçlar; grup sayfasındaki istatistik hâlâ sadece kapanmış maçlardır) service role ile okunur (`profile-data.ts`), **görünürlük kontrolü çağıranın sorumluluğu** (`canViewStats`).
-**Görünürlük (kullanıcı kararı)**: `profiles.stats_visibility` = `teammates` (varsayılan: ödünç olmayan ortak grup/takım) veya `public` (giriş yapmış herkes); ayar Ayarlar sekmesinde
-(`updateStatsVisibility`). Kart (rating, yetenekler, bölge) her zaman herkese görünür; sadece istatistik ve maç geçmişi ayara bağlı. Başkasının maç geçmişinde özel topluluğun adı ve maç bağlantısı
-sadece o grubun üyelerine görünür ("Özel grup"); takımlar herkese açık. "Gruplarımdaki kartlarım" kaldırıldı (rating ve yetenekler genel olduğundan kartlar aynı). Tuzak: başlıklar CSS ile BÜYÜK harf;
-e2e'de metin karşılaştırması Türkçe küçük harfe göre yapılır. **Profile giden bağlantılar**: Oyuncular sayfası, maç kadrosu (planlanmış), grup/takım sayfası, kadro, istatistik liderleri → `/g/[id]/p/[playerId]` (oradan "Tüm gruplardaki istatistikleri gör" → `/oyuncu/[userId]`);
-ilan başvuranları doğrudan `/oyuncu/[userId]` (rating/yetenek kartı açık, istatistik görünürlük ayarına bağlı). Tuzak: zaten `<Link>` olan satırın içine ikinci `<Link>` koyma (iç içe `<a>` → React #418 hydration hatası). Test: `profile-stats.test.ts`, `db-checks/stats-visibility.mjs`, `e2e/profile.mjs`.
-
-**Gruptan/takımdan ayrılma (migration 0021)**: kayıt **silinmez**; `group_players.left_at` dolar (maç kadroları, oylar, sonuçlar ve kişinin genel rating'i `group_players`'a bağlı, silmek geçmişi götürürdü).
-`my_player_id`/`is_group_member`/`is_group_admin`/`is_group_captain`/`unread_counts` `left_at is null` ister; TS tarafında `getGroupPlayers` (varsayılan) ve `getMemberships`, `recipients`, `teams-data`, `profile-data`
-ayrılmışları saymaz; **geçmiş gösteren** yerler (maç ekranı, oyuncu sayfası) `getGroupSummaries(..., { includeLeft: true })` kullanır, `isSquadMember` `left_at`'i dışlar. `leave_group` RPC (kullanıcı kararları):
-**kaptan/kurucu önce devreder** (yoksa hata), **oylaması süren (`voting`/`played`) maçı olan oylama bitince ayrılır**; ayrılırken `deactivate_member` gelecekteki planlanmış maç kadrolarından ve açık çağrı yanıtlarından çıkarır,
-kaptan/yetkililere "üye ayrıldı" bildirimi gider (`text.memberLeft`, tür `match`). Aynı davet koduyla `join_group` satırı yeniden açar (rol `member`). **Yetkili çıkarma** artık `remove_member` RPC'si: hesaplı üye aynı şekilde
-ayrılmış sayılır, misafir silinir; `group_players` DELETE politikası sadece misafir kayıtları içindir. Tek başına kalan kaptan `delete_group` ile grubu/takımı siler (adını yazarak onaylar; maçlar da gider, kişinin
-rating'i `recomputePlayers` ile yeniden hesaplanır); doğrudan `groups` silme politikası kaldırıldı. UI: `/g/[id]/players` sayfasının altında "Gruptan/Takımdan ayrıl". Bilinen küçük boşluk: ayrılan takım üyesi aynı takımın ilanına
-`apply_listing` ile ödünç başvuramaz ("bu takımın oyuncususun" kontrolü `left_at`'i saymıyor). Test: `db-checks/leave-group.mjs`, `e2e/leave.mjs`.
-
-**Maçtan çekilme (migration 0022, kullanıcı kararı: "her zaman onay")**: çağrı aşamasında "geliyorum"dan "gelemem"e geçmek serbest (eskisi gibi); **maç kurulup kadroya girdikten sonra** oyuncu maç ekranında
-"Maçtan çekilmek istiyorum" der (isteğe bağlı sebep ≤200), `request_withdrawal` RPC'si `match_withdrawals` satırı açar (`pending`); kaptan/yetkili `decide_withdrawal` ile onaylar (oyuncu `match_players`'tan çıkar) veya reddeder
-(oyuncu kadroda kalır, yeniden isteyebilir); oyuncu `cancel_withdrawal` ile geri çekebilir. **Onaylı çekilme `match_no_shows`'a yazılmaz** (güvenilirliği bozmaz); reddedilen yine gelmezse kaptan sonuç girerken "gelmedi" işaretler.
-Maça 3 saatten az kala istek `late` ("Son dakika") olur. Kaptan/yetkili kendi adına **doğrudan çıkar** (kayıt `approved`). Sadece `planned` maçta ve maç saatinden önce; maç planlanmış olmaktan çıkarsa veya oyuncu başka yolla
-kadrodan çıkarsa (kaptan çıkardı, "gelmedi", ayrıldı) bekleyen istek `closed` olur (tetikleyiciler). Bağlı maçta onayı oyuncunun kendi takımının kaptanı/yetkilisi verir. Bildirimler (tür `match`): istek → kaptan/yetkililer,
-karar → oyuncu, yetkili çıkışı → diğer yetkililer. UI: `m/[matchId]/WithdrawalSection.tsx` ("Çekilme istekleri" yetkilide, "Maça katılımım" oyuncuda). RLS: istek sahibi ve yetkililer görür; yazma sadece RPC.
-Yapılmadı: onaydan sonra çağrının yedek listesinden otomatik öneri (kaptan "Kadroya oyuncu ekle / çıkar" listesinden elle ekler). Test: `db-checks/withdrawals.mjs`, `e2e/withdrawal.mjs`.
-
-**Oyuncu keşfi (migration 0024, kullanıcı kararları)**: `/kesfet` iki sekmeli (`?sekme=oyuncu`): Takımlar | Oyuncular. Oyuncu araması GET formudur (paylaşılabilir adres): il/ilçe, ad, mevki (+ "ikinci mevkisi de"), rating aralığı
-(maçsız oyuncular dışlanır), deneyim (en az puanlı maç), ayak, yetenek+eşik, güvenilir (gelmedi yok veya %90+), takımsız (hiçbir takımın asıl üyesi değil), sıralama; sayfa başına 20, "Daha fazla" `?sayfa=`. Veri service role ile okunur
-(rating özel gruplardaki satırlara bağlı) → **sadece `profiles.discoverable = true` olanlar** (varsayılan açık, Profil → Ayarlar → "Oyuncu aramasında görün" ile kapatılır, `updateDiscoverable`; kapatınca `revalidateTag("featured")`). Sonuçta özel grup adı
-asla yok, sadece herkese açık takımlar. Aday listesi bölge/ad/mevki/ayak SQL'de, kalanı TS'de süzülür (tek sorguda en fazla 1000 profil; ölçek büyürse RPC'ye taşı). **Ana sayfa**: "Takımlarım/Gruplarım"dan sonra, kullanıcının iline göre ⭐ Öne çıkan oyuncular
-(en az 3 puanlı maç), 🏆 Öne çıkan takımlar (puanlı), 🔥 Haftanın MVP'leri (son 7 gün, **sadece herkese açık takım maçları**: özel grup maçı sızmasın), 📈 Yükselen yıldızlar (son 30 gün rating artışı, en az 2 maç), 🔎 Oyuncu arayan takımlar;
-bölgede <3 kayıt varsa Türkiye geneli gösterilir. Tuzak: `match_results→matches→groups` gömmesi iki FK yüzünden belirsiz (PGRST201) → `groups!matches_group_id_fkey`. Test: `player-search.test.ts`, `db-checks/discoverable.mjs`, `e2e/discover.mjs`.
-
-**Menü**: her sayfada sağ üstte bildirim çanı + ☰ (`Header` içinde `MenuControls`; ana sayfada kendi satırı). ☰ sağdan açılan çekmecedir: profil özeti, Ana sayfa, Keşfet, Bildirimler,
-Yetenek değerlendirmesi (bekleyen sayısı), İstatistiklerim, Ayarlar, **ayrı Takımlarım ve Gruplarım bölümleri** (her biri açılır: ana sayfa, kadro, sohbet, takımda teklifler/istatistik, oyuncular; her başlıkta Katıl/Kur), Gizlilik,
-**Çıkış yap** (`POST /auth/signout`). **Alt çubuk kaldı** (kullanıcı kararı). Menü verisi layout'ta değil, `loadMenu` server action'ıyla boşta zamanda ve çekmece açılırken gelir (`AppMenuShell`; veri gelene dek iskelet); giriş sayfalarında menü yoktur (`HIDDEN`); çekmece sayfa değişince/Escape/karartma ile kapanır.
-
-**Hız (kullanıcı raporu: "uygulama yavaş")**: ölçüm `node scripts/perf/ttfb.mjs [adres]` (geçici kullanıcıyla sayfa TTFB'si; ilk ölçüm 0,7-1,7 sn). Kök neden: Vercel fonksiyonları `iad1` (ABD) çalışıyordu, Supabase Frankfurt;
-her sorgu/kimlik çağrısı okyanus aşıyordu. Yapılanlar: `vercel.json` `regions: ["fra1"]` (Supabase ile aynı bölge); **JWT yerelde doğrulanır** (`getClaims`, ES256 JWKS; middleware ve `getAuthUser`/`requireUser`) — `getUser()` her istekte
-3 kez Auth'a gidiyordu; `createClient`/`getAuthUser`/onboarding sorgusu `React.cache` ile **istek başına tek**; ☰ menü verisi layout'ta değil, `loadMenu` server action'ıyla boşta/açılışta (layout sorgusuz);
-`next.config.ts` `staleTimes.dynamic = 20` (ziyaret edilen sayfalar istemcide 20 sn önbellekte; sunucu eylemi `revalidatePath` ve `router.refresh` geçersiz kılar). **Tuzak: kök `loading.tsx` ekleme** — verili kullanıcıda
-`?sekme=` gibi aynı sayfa arama-parametresi gezintisinin URL'sini asla tamamlatmadı (e2e `profile`); menü artık veri beklediği için testlerde çekmece içeriği `waitFor` ile beklenir.
-
-**Sohbet** (group_messages/chat_reads): Realtime postgres_changes, RLS'e uyar (sadece üyeler; takım sohbeti de
-sadece oyunculara). İstemci abone olmadan önce `realtime.setAuth(token)` çağırır ve (yeniden) bağlanınca
-kaçırılanları çeker — bunu kaldırma, yoksa mesajlar ara sıra düşmüyor. Etkinlik kartları DB tetikleyicileriyle
-(çağrı açıldı, maç kuruldu, oylama açıldı); "sonuçlar açıklandı" kartı finalize başarılı olunca koddan yazılır.
-Spam: dakikada 20 mesaj, 1000 karakter. Silme `delete_message` RPC (yazar veya yetkili; içerik silinir).
-
-**Karşılama**: `profiles.onboarded_at` boşsa `requireUser()` kullanıcıyı `/hosgeldin?next=...` sayfasına yollar
-(middleware `x-pathname` başlığı ile). Karşılama sayfası `requireUser({ allowIncomplete: true })` kullanır.
-
-**Bölge**: il `PROVINCES` listesinden, ilçe `canonicalDistrict(il, ilçe)` ile sunucuda doğrulanır.
-Formlarda `RegionSelect` (il seçilince ilçeler) kullan.
+Kısa özet: **Grup** (`kind='community'`) özel topluluk, sadece kendi aramızda maç, rating etkisi yarım. **Takım** (`kind='team'`) herkese açık, sadece rakibe karşı maç, tam etki.
+Roller: captain/admin/member. Misafir = `user_id IS NULL`. Davet kodu sütunu okunamaz (RPC). Rating hesap bazında genel (`user_id`), tüm `group_players` satırlarına yazılır.
+Yetki hep RLS/RPC'de; `groups` seçerken sütunları açıkça yaz (`invite_code` yok). Yeni konu/tuzak çıkarsa ilgili docs dosyasına ekle, buraya sadece tek satırlık işaret koy.
 
 ## Veritabanı değişikliği iş akışı
 
