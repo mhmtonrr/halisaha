@@ -1,5 +1,6 @@
 import { cx } from "./ui";
 import { plateOf } from "@/lib/regions";
+import { fitCardName } from "@/lib/card-name";
 import { POSITION_LABEL, type Position } from "@/lib/data";
 import type { Attribute } from "@/lib/attributes";
 
@@ -169,8 +170,8 @@ function FullCard({
       </div>
 
       {/* ad kuşağı */}
-      <div className="absolute truncate text-center font-extrabold" style={{ left: "10%", right: "5%", top: "58%", fontSize: "1em", lineHeight: 1.2 }}>
-        {name}
+      <div className="absolute truncate text-center font-extrabold" style={{ left: "10%", right: "5%", top: "56%", fontSize: fitCardName(name).length > 12 ? "0.88em" : "1em", lineHeight: 1.25 }}>
+        {fitCardName(name)}
       </div>
 
       {/* 6 yetenek */}
