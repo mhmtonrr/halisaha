@@ -61,3 +61,11 @@ Formlarda `RegionSelect` (il seçilince ilçeler) kullan.
 - Telif/KVKK: fotoğraf sadece kendi kartında; üçüncü taraf servise gitmez. Seçilen alternatifler: ücretli API (remove.bg) ve sunucuda işleme **reddedildi**.
 - Takım rozeti tasarımı ayrı, sonraki geliştirme (kart şimdilik takım baş harflerini gösterir).
 - Önerilen model/efor: opus + high (depolama güvenliği + model entegrasyonu); `/clear` sonrası "Parça 2'ye geç" yeter, bu bölümü oku.
+
+## Sıradaki: "kartta görünen ad" (kullanıcı onaylı kararlar)
+
+- Karttaki ad şu an `fitCardName(gerçek ad)` (src/lib/card-name.ts: sığmazsa "Mehmet Onur D." gibi kısaltır). Yeni: `profiles.card_name` (isteğe bağlı). Boşsa gerçek ad kullanılır; doluysa o kısaltma kuralından geçerek kartta görünür. Kartın kullanıldığı her yerde (Profil, oyuncu sayfası, kadro, saha, öne çıkanlar, arama) bu alan kullanılır.
+- Düzenleme: Profil → Ayarlar'da "Kartta görünen ad" alanı (ve hoş geldin ekranında isteğe bağlı).
+- **Doğrulama (kesin kurallar)**: 2-20 karakter; **sadece harf (Türkçe harfler dahil), boşluk ve nokta**; kısa çizgi, rakam ve diğer her sembol yasak. Boşluk serbest (2-3 kelimeli adlar); baş/son boşluk silinir, ardışık boşluklar tek boşluğa iner. Nokta sadece bir harfin hemen arkasından gelir ("M.", "Mehmet O."), ardışık iki nokta ve noktayla başlama yasak. **Küfür/hakaret kontrolü zorunlu**: Türkçe kelime listesi + normalizasyon (büyük/küçük, Türkçe harf eşlemesi, tekrar eden harf, boşluk/nokta ile bölme ve s1k/ş0t gibi harf-rakam değişimleri yakalanır). Hem sunucuda (`actions.ts`, saf doğrulama fonksiyonu + birim testleri) hem veritabanında (check kısıtı: karakter kümesi ve uzunluk) uygulanır; küfür listesi sadece TS tarafında.
+- Parçalama: 1) saf doğrulama + test (`card-name.ts` genişlet), 2) migration + db-check + action + Ayarlar/hoş geldin arayüzü + kartlara bağlama.
+- Önerilen model/efor: sonnet + medium. `/clear` sonrası "Parça 2'ye geç, kart adı" yeter.
