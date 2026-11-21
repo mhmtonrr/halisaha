@@ -74,6 +74,24 @@ const oneLine = (text: string) => text.replace(/\s+/g, " ").trim();
 const join = (...parts: (string | null | undefined | false)[]) => parts.filter(Boolean).join(" · ");
 
 export const text = {
+  withdrawalRequested: (groupId: string, matchId: string, who: string, when: string, late: boolean, reason?: string | null): Content => ({
+    title: late ? "🙋 Maçtan çekilme isteği (son dakika)" : "🙋 Maçtan çekilme isteği",
+    body: truncate(join(who, when, reason ? `“${oneLine(reason)}”` : null, "onayını bekliyor"), 300),
+    url: `/g/${groupId}/m/${matchId}`,
+    tag: `withdrawal:${matchId}`,
+  }),
+  withdrawalLeft: (groupId: string, matchId: string, who: string, when: string): Content => ({
+    title: "👋 Bir oyuncu maçtan çıktı",
+    body: truncate(join(who, when, "kadrodan çıktı"), 300),
+    url: `/g/${groupId}/m/${matchId}`,
+    tag: `withdrawal-left:${matchId}`,
+  }),
+  withdrawalDecided: (groupId: string, matchId: string, approved: boolean, when: string): Content => ({
+    title: approved ? "✅ Çekilme isteğin onaylandı" : "❌ Çekilme isteğin reddedildi",
+    body: approved ? join(when, "maç kadrosundan çıkarıldın") : join(when, "kadroda kalıyorsun; gelemeyeceksen kaptanla konuş"),
+    url: `/g/${groupId}/m/${matchId}`,
+    tag: `withdrawal-decided:${matchId}`,
+  }),
   memberLeft: (groupName: string, who: string, groupId: string): Content => ({
     title: "👋 Bir üye ayrıldı",
     body: truncate(join(groupName, `${who} gruptan ayrıldı`), 300),

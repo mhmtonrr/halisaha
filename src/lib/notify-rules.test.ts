@@ -144,3 +144,21 @@ describe("üye ayrıldı metni", () => {
     expect(c.url).toBe("/g/g1/players");
   });
 });
+
+describe("maçtan çekilme metinleri", () => {
+  it("istek: kim, ne zaman, sebep ve son dakika işareti; maç ekranına götürür", () => {
+    const c = text.withdrawalRequested("g1", "m1", "Mert", "Cum 21:00", true, "Dizim\nağrıyor");
+    expect(c.title).toContain("son dakika");
+    expect(c.body).toContain("Mert");
+    expect(c.body).toContain("Dizim ağrıyor");
+    expect(c.body).toContain("onayını bekliyor");
+    expect(c.url).toBe("/g/g1/m/m1");
+    expect(text.withdrawalRequested("g1", "m1", "Mert", "Cum 21:00", false).title).not.toContain("son dakika");
+  });
+  it("karar: onay ve ret farklı metin taşır", () => {
+    expect(text.withdrawalDecided("g1", "m1", true, "Cum 21:00").title).toContain("onaylandı");
+    const denied = text.withdrawalDecided("g1", "m1", false, "Cum 21:00");
+    expect(denied.title).toContain("reddedildi");
+    expect(denied.body).toContain("kadroda kalıyorsun");
+  });
+});

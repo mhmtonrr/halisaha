@@ -31,6 +31,7 @@ import { SkillQueueBanner } from "@/components/SkillQueueBanner";
 import { Badge, Button, Card, ErrorNote, Header, Input, SectionTitle, cx } from "@/components/ui";
 import { OvrBadge, PositionChip, shortName } from "@/components/PlayerCard";
 import { VoteForm } from "./VoteForm";
+import { WithdrawalSection, type WithdrawalRow } from "./WithdrawalSection";
 
 type Team = "A" | "B";
 const TEAM = {
@@ -180,10 +181,10 @@ export default async function MatchPage({
   searchParams,
 }: {
   params: Promise<{ groupId: string; matchId: string }>;
-  searchParams: Promise<{ error?: string; voted?: string; positions?: string; kabul?: string; dizilis?: string }>;
+  searchParams: Promise<{ error?: string; voted?: string; positions?: string; kabul?: string; dizilis?: string; cekilme?: string }>;
 }) {
   const { groupId, matchId } = await params;
-  const { error, voted, positions, kabul, dizilis } = await searchParams;
+  const { error, voted, positions, kabul, dizilis, cekilme } = await searchParams;
   const { supabase, user } = await requireUser();
 
   const { data: first } = await supabase
@@ -223,6 +224,25 @@ export default async function MatchPage({
   const labels = labelsFor(external, oppName);
 
   const me = roster.find((r) => r.userId === user.id);
+  // Maçtan çekilme istekleri (RLS: oyuncu kendininkini, yetkili hepsini görür); sadece planlanmış maçta anlamlı
+  let withdrawals: WithdrawalRow[] = [];
+  if (match.status === "planned" && (me || canManage)) {
+    const { data: wRows } = await supabase
+      .from("match_withdrawals")
+      .select("id, player_id, reason, late, status, created_at, group_players(display_name)")
+      .eq("match_id", matchId)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    withdrawals = (wRows ?? []).map((w) => ({
+      id: w.id,
+      player_id: w.player_id,
+      reason: w.reason,
+      late: w.late,
+      status: w.status as WithdrawalRow["status"],
+      created_at: w.created_at,
+      name: (Array.isArray(w.group_players) ? w.group_players[0] : w.group_players)?.display_name ?? "Oyuncu",
+    }));
+  }
   const teams = { A: roster.filter((r) => r.team === "A"), B: roster.filter((r) => r.team === "B") };
   const avg = (t: RosterEntry[]) =>
     t.length ? Math.round((t.reduce((s, p) => s + p.overall, 0) / t.length) * 10) / 10 : 0;
@@ -246,6 +266,7 @@ export default async function MatchPage({
           { table: "matches", filter: `id=eq.${matchId}` },
           { table: "match_players", filter: `match_id=eq.${matchId}` },
           { table: "match_results", filter: `match_id=eq.${matchId}` },
+          { table: "match_withdrawals", filter: `match_id=eq.${matchId}` },
           ...(isTeamMatch ? [{ table: "player_listings", filter: `match_id=eq.${matchId}` }] : []),
           ...(listing ? [{ table: "listing_applications", filter: `listing_id=eq.${listing.id}` }] : []),
           ...(match.challenge_id
@@ -334,6 +355,18 @@ export default async function MatchPage({
               ]
         }
       />
+
+      {match.status === "planned" && (
+        <WithdrawalSection
+          groupId={groupId}
+          matchId={matchId}
+          playedAt={match.played_at}
+          myPlayerId={me?.id ?? null}
+          canManage={!!canManage}
+          rows={withdrawals}
+          flash={cekilme}
+        />
+      )}
 
       {match.status === "planned" && (
         <PlannedView

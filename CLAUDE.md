@@ -81,7 +81,7 @@ src/lib/authErrors.ts    Supabase Auth hatalarının Türkçesi
 src/lib/supabase/        server.ts (requireUser + karşılama yönlendirmesi), client.ts, admin.ts
 src/middleware.ts        Oturum yenileme, girişsiz yönlendirme, x-pathname başlığı
 src/app/                 Sayfalar (aşağıda)
-supabase/migrations/     0001..0021 SQL (sırayla; hepsi canlıya uygulandı)
+supabase/migrations/     0001..0022 SQL (sırayla; hepsi canlıya uygulandı)
 scripts/db-checks/       PGlite ile RLS/yetki kontrolleri (npm run db:check)
 scripts/e2e/             Canlı veritabanına karşı Playwright akış testleri
 scripts/recompute-all.ts Tüm ratingleri baştan hesaplar (vite-node ile, aşağıda)
@@ -271,6 +271,14 @@ ayrılmış sayılır, misafir silinir; `group_players` DELETE politikası sadec
 rating'i `recomputePlayers` ile yeniden hesaplanır); doğrudan `groups` silme politikası kaldırıldı. UI: `/g/[id]/players` sayfasının altında "Gruptan/Takımdan ayrıl". Bilinen küçük boşluk: ayrılan takım üyesi aynı takımın ilanına
 `apply_listing` ile ödünç başvuramaz ("bu takımın oyuncususun" kontrolü `left_at`'i saymıyor). Test: `db-checks/leave-group.mjs`, `e2e/leave.mjs`.
 
+**Maçtan çekilme (migration 0022, kullanıcı kararı: "her zaman onay")**: çağrı aşamasında "geliyorum"dan "gelemem"e geçmek serbest (eskisi gibi); **maç kurulup kadroya girdikten sonra** oyuncu maç ekranında
+"Maçtan çekilmek istiyorum" der (isteğe bağlı sebep ≤200), `request_withdrawal` RPC'si `match_withdrawals` satırı açar (`pending`); kaptan/yetkili `decide_withdrawal` ile onaylar (oyuncu `match_players`'tan çıkar) veya reddeder
+(oyuncu kadroda kalır, yeniden isteyebilir); oyuncu `cancel_withdrawal` ile geri çekebilir. **Onaylı çekilme `match_no_shows`'a yazılmaz** (güvenilirliği bozmaz); reddedilen yine gelmezse kaptan sonuç girerken "gelmedi" işaretler.
+Maça 3 saatten az kala istek `late` ("Son dakika") olur. Kaptan/yetkili kendi adına **doğrudan çıkar** (kayıt `approved`). Sadece `planned` maçta ve maç saatinden önce; maç planlanmış olmaktan çıkarsa veya oyuncu başka yolla
+kadrodan çıkarsa (kaptan çıkardı, "gelmedi", ayrıldı) bekleyen istek `closed` olur (tetikleyiciler). Bağlı maçta onayı oyuncunun kendi takımının kaptanı/yetkilisi verir. Bildirimler (tür `match`): istek → kaptan/yetkililer,
+karar → oyuncu, yetkili çıkışı → diğer yetkililer. UI: `m/[matchId]/WithdrawalSection.tsx` ("Çekilme istekleri" yetkilide, "Maça katılımım" oyuncuda). RLS: istek sahibi ve yetkililer görür; yazma sadece RPC.
+Yapılmadı: onaydan sonra çağrının yedek listesinden otomatik öneri (kaptan "Kadroya oyuncu ekle / çıkar" listesinden elle ekler). Test: `db-checks/withdrawals.mjs`, `e2e/withdrawal.mjs`.
+
 **Menü**: her sayfada sağ üstte bildirim çanı + ☰ (`Header` içinde `MenuControls`; ana sayfada kendi satırı). ☰ sağdan açılan çekmecedir: profil özeti, Ana sayfa, Keşfet, Bildirimler,
 Yetenek değerlendirmesi (bekleyen sayısı), İstatistiklerim, Ayarlar, **Takımlarım ve gruplarım** (her biri açılır: ana sayfa, kadro, sohbet, takımda teklifler/istatistik, oyuncular), Takım/Grup kur, Gizlilik,
 **Çıkış yap** (`POST /auth/signout`). **Alt çubuk kaldı** (kullanıcı kararı). Layout her istekte `loadMenuData()` çağırır (giriş yoksa null → menü hiç görünmez); çekmece sayfa değişince/Escape/karartma ile kapanır.
@@ -314,7 +322,7 @@ Uçtan uca (canlı Supabase'e karşı; test kullanıcıları/grupları oluşturu
 (NODE_USE_ENV_PROXY=1 npx next start -p 3000 > /tmp/server.log 2>&1 &)
 NODE_USE_ENV_PROXY=1 NO_PROXY=localhost,127.0.0.1 node scripts/e2e/chat.mjs /tmp/shots
 ```
-Senaryolar: `leave`, `menu`, `profile`, `skills`, `positions-external`, `auth-onboarding`, `teams-polls`, `regions-community`, `chat`, `challenges`, `guest-match`, `realtime`, `member-poll`, `listings`, `notifications`.
+Senaryolar: `withdrawal`, `leave`, `menu`, `profile`, `skills`, `positions-external`, `auth-onboarding`, `teams-polls`, `regions-community`, `chat`, `challenges`, `guest-match`, `realtime`, `member-poll`, `listings`, `notifications`.
 Ekran görüntülerine bak (390px genişlik, telefon) — görsel sorunlar çoğu zaman sadece orada yakalanıyor.
 Port doluysa: `fuser -k 3000/tcp`. Arayüzden kayıt (signUp) test etme: onay maili gönderir, limit saatte 2.
 

@@ -299,6 +299,70 @@ export async function removePlayer(fd: FormData) {
   revalidatePath(`/g/${groupId}`, "layout");
 }
 
+// ---------------------------------------------------------------------------
+// Maçtan çekilme (kaptan onaylı)
+// ---------------------------------------------------------------------------
+
+/** Kadrodaki oyuncu maçtan çekilmek ister; kaptan/yetkili onaylar. Yetkililer kendi adına doğrudan çıkar. */
+export async function requestWithdrawal(fd: FormData) {
+  const { supabase, user } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const matchId = str(fd, "matchId");
+  const back = `/g/${groupId}/m/${matchId}`;
+  const reason = str(fd, "reason").slice(0, 200);
+  const { data, error } = await supabase.rpc("request_withdrawal", { p_match: matchId, p_reason: reason || null });
+  if (error) fail(back, rpcMessage(error, "İstek gönderilemedi"));
+  const result = data as "pending" | "approved";
+  later(async () => {
+    const admin = createAdminClient();
+    const [{ data: profile }, { data: match }, ids] = await Promise.all([
+      admin.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
+      admin.from("matches").select("played_at").eq("id", matchId).maybeSingle(),
+      groupMemberIds(admin, groupId, { adminsOnly: true }),
+    ]);
+    const who = profile?.display_name ?? "Bir oyuncu";
+    const when = match ? formatDate(match.played_at) : "";
+    const late = match ? new Date(match.played_at).getTime() - Date.now() < 3 * 3600_000 : false;
+    if (result === "pending") await notify(ids, "match", text.withdrawalRequested(groupId, matchId, who, when, late, reason), { excludeUserId: user.id });
+    else await notify(ids, "match", text.withdrawalLeft(groupId, matchId, who, when), { excludeUserId: user.id });
+  });
+  revalidatePath(back);
+  redirect(`${back}?cekilme=${result}`);
+}
+
+export async function cancelWithdrawal(fd: FormData) {
+  const { supabase } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const matchId = str(fd, "matchId");
+  const back = `/g/${groupId}/m/${matchId}`;
+  const { error } = await supabase.rpc("cancel_withdrawal", { p_id: str(fd, "withdrawalId") });
+  if (error) fail(back, rpcMessage(error, "İstek geri çekilemedi"));
+  revalidatePath(back);
+  redirect(`${back}?cekilme=cancelled`);
+}
+
+/** Kaptan/yetkili çekilme isteğini onaylar veya reddeder; oyuncuya haber gider */
+export async function decideWithdrawal(fd: FormData) {
+  const { supabase } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const matchId = str(fd, "matchId");
+  const withdrawalId = str(fd, "withdrawalId");
+  const approve = str(fd, "approve") === "1";
+  const back = `/g/${groupId}/m/${matchId}`;
+  const { error } = await supabase.rpc("decide_withdrawal", { p_id: withdrawalId, p_approve: approve });
+  if (error) fail(back, rpcMessage(error, "Karar kaydedilemedi"));
+  later(async () => {
+    const admin = createAdminClient();
+    const { data: w } = await admin.from("match_withdrawals").select("player_id, matches(played_at)").eq("id", withdrawalId).maybeSingle();
+    if (!w) return;
+    const { data: gp } = await admin.from("group_players").select("user_id").eq("id", w.player_id).maybeSingle();
+    const m = Array.isArray(w.matches) ? w.matches[0] : w.matches;
+    if (gp?.user_id) await notify([gp.user_id], "match", text.withdrawalDecided(groupId, matchId, approve, m ? formatDate((m as { played_at: string }).played_at) : ""));
+  });
+  revalidatePath(back);
+  redirect(`${back}?cekilme=${approve ? "approved-by-admin" : "denied-by-admin"}`);
+}
+
 /**
  * Kendi isteğiyle gruptan/takımdan ayrıl. Geçmiş (maçlar, oylar, rating) korunur; gelecekteki maçlardan ve açık
  * çağrılardan çıkarılır. Kaptan önce devretmeli; oylaması süren maçı olan bekler (kurallar veritabanında).
