@@ -2,25 +2,41 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { cx } from "./ui";
 import { initials, shortName, tierClass } from "./PlayerCard";
+import type { Attribute } from "@/lib/attributes";
 import { POSITION_LABEL, type Position } from "@/lib/data";
-import type { Slot } from "@/lib/formations";
+import { cardWidthPct, type Slot } from "@/lib/formations";
 
 export interface PitchPlayer {
   id: string;
   name: string;
   overall: number;
   position: Position | null;
+  /** Profil kartındaki 6 özellik (FRM, İST, GOL/KRT, AST, GAL, MVP); yoksa tireler görünür */
+  attributes?: Pick<Attribute, "key" | "value">[];
+  shirtNumber?: number | null;
+  /** Rating henüz yeterince oya dayanmıyor */
+  provisional?: boolean;
 }
 
 /** Saha zemini: dikey, çizgili. İçine konumlanan öğeler için konumlandırma bağlamı sağlar. */
-export function Pitch({ children, className }: { children: ReactNode; className?: string }) {
+export function Pitch({
+  children,
+  className,
+  cardPct = 24,
+}: {
+  children: ReactNode;
+  className?: string;
+  /** Oyuncu kartının saha genişliğine oranı (%); cardWidthPct ile hesaplanır */
+  cardPct?: number;
+}) {
   return (
     <div
       className={cx(
         "relative w-full overflow-hidden rounded-2xl border border-emerald-300/20 bg-gradient-to-b from-emerald-800 to-emerald-900",
         className,
       )}
-      style={{ aspectRatio: "4 / 5" }}
+      // Kartlar bu kapsayıcının genişliğine göre ölçeklenir (cqw); --cw kart genişliği yüzdesi
+      style={{ aspectRatio: "4 / 5", containerType: "inline-size", ["--cw" as string]: cardPct }}
     >
       {/* Çimen şeritleri */}
       <div
@@ -60,27 +76,65 @@ export function SlotBox({
   );
 }
 
+const SHIELD = "polygon(50% 0, 100% 7%, 100% 88%, 50% 100%, 0 88%, 0 7%)";
+
 /**
- * Minik oyuncu kartı: FIFA tarzı, seviyesine göre altın/gümüş/bronz. Rating, mevki, baş harfler ve kısa ad.
- * Sahada 5'li hatta bile sığması için 50x64 px.
+ * Profildeki oyuncu kartının (PlayerCard) sahaya sığan hali: aynı kalkan biçimi, seviye rengi, rating, mevki,
+ * baş harfler, isim ve 6 özellik (FRM, İST, GOL/KRT, AST, GAL, MVP). Her şey `em` ile çizilir; yazı boyutu
+ * sahanın genişliğinden (cqw) türetildiği için kart hat başına oyuncu sayısına göre kendiliğinden ölçeklenir.
+ * `fontSize` verilirse sabit boyut (yedekler, sürükleme hayaleti).
  */
-export function MiniCard({ player, className }: { player: PitchPlayer; className?: string }) {
+export function PitchCard({ player, fontSize, className }: { player: PitchPlayer; fontSize?: string; className?: string }) {
   return (
     <div
-      className={cx(
-        "flex h-16 w-[50px] flex-col items-center rounded-lg bg-gradient-to-br px-1 pb-0.5 pt-1 shadow-md ring-1 ring-black/30",
-        tierClass(player.overall),
-        className,
-      )}
+      className={cx("relative overflow-hidden bg-gradient-to-b shadow-lg", tierClass(player.overall), className)}
+      style={{
+        width: "11em",
+        padding: "0.45em 0.5em 1em",
+        fontSize: fontSize ?? "calc(var(--cw, 20) / 11 * 1cqw)",
+        clipPath: SHIELD,
+      }}
     >
-      <div className="flex w-full items-start justify-between leading-none">
-        <span className="text-[17px] font-black tracking-tight">{player.overall}</span>
-        <span className="mt-0.5 text-[8px] font-extrabold opacity-70">{player.position ? POSITION_LABEL[player.position] : ""}</span>
+      <div className="flex items-start justify-between" style={{ paddingTop: "0.35em" }}>
+        <div className="text-center leading-none">
+          <div className="font-black" style={{ fontSize: "2.2em" }}>
+            {player.overall}
+          </div>
+          <div className="font-bold" style={{ fontSize: "0.85em", marginTop: "0.2em" }}>
+            {player.position ? POSITION_LABEL[player.position] : "—"}
+          </div>
+        </div>
+        <div
+          className="relative flex items-center justify-center rounded-full bg-black/10 font-black"
+          style={{ width: "2.9em", height: "2.9em", fontSize: "1em" }}
+        >
+          {initials(player.name)}
+          {player.shirtNumber != null && (
+            <span
+              className="absolute flex items-center justify-center rounded-full bg-black/25 font-black text-white"
+              style={{ width: "1.3em", height: "1.3em", right: "-0.2em", bottom: "-0.2em", fontSize: "0.6em" }}
+            >
+              {player.shirtNumber}
+            </span>
+          )}
+        </div>
       </div>
-      <span className="mt-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-black/15 text-[8px] font-black">
-        {initials(player.name)}
-      </span>
-      <span className="mt-auto w-full truncate text-center text-[9px] font-bold leading-3">{shortName(player.name)}</span>
+      <div
+        className="truncate border-b border-black/15 text-center font-extrabold uppercase"
+        style={{ marginTop: "0.4em", paddingBottom: "0.12em", fontSize: "0.82em" }}
+      >
+        {shortName(player.name)}
+      </div>
+      <div className="grid grid-cols-2" style={{ marginTop: "0.25em", columnGap: "0.3em", fontSize: "0.72em" }}>
+        {(player.attributes ?? []).map((a) => (
+          <div key={a.key} className="flex items-baseline" style={{ gap: "0.2em" }}>
+            <span className="text-right font-black tabular-nums" style={{ width: "1.7em" }}>
+              {a.value ?? "–"}
+            </span>
+            <span className="font-semibold opacity-80">{a.key}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -111,7 +165,7 @@ export function LineupPitch({
   playerHref?: (playerId: string) => string;
 }) {
   return (
-    <Pitch>
+    <Pitch cardPct={cardWidthPct({ id: "", size: slots.length, lines: [], slots })}>
       {slots.map((slot) => {
         const p = placed.get(slot.index);
         return (
@@ -119,10 +173,10 @@ export function LineupPitch({
             {p ? (
               playerHref ? (
                 <Link href={playerHref(p.id)}>
-                  <MiniCard player={p} />
+                  <PitchCard player={p} />
                 </Link>
               ) : (
-                <MiniCard player={p} />
+                <PitchCard player={p} />
               )
             ) : (
               <EmptySlot role={slot.role} />

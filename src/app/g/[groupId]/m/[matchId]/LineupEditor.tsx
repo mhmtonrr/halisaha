@@ -2,9 +2,9 @@
 
 import { useMemo, useRef, useState } from "react";
 import { setLineup } from "@/lib/actions";
-import { autoLineup, formationsFor, getFormation, type Role } from "@/lib/formations";
+import { autoLineup, cardWidthPct, formationsFor, getFormation, type Role } from "@/lib/formations";
 import { Button, Card, cx } from "@/components/ui";
-import { EmptySlot, MiniCard, Pitch, SlotBox, type PitchPlayer } from "@/components/LineupPitch";
+import { EmptySlot, PitchCard, Pitch, SlotBox, type PitchPlayer } from "@/components/LineupPitch";
 
 type Assign = Record<string, number | null>;
 
@@ -166,7 +166,7 @@ export function LineupEditor({
         ))}
       </div>
 
-      <Pitch>
+      <Pitch cardPct={cardWidthPct(formation)}>
         {formation.slots.map((slot) => {
           const id = owner.get(slot.index);
           const p = id ? byId.get(id) : undefined;
@@ -186,7 +186,7 @@ export function LineupEditor({
             >
               {p ? (
                 <div {...tokenProps(p.id)} className={cx(tokenProps(p.id).className, selected === p.id && "scale-110 drop-shadow-[0_0_6px_rgba(61,220,132,0.9)]", drag?.id === p.id && "opacity-30")}>
-                  <MiniCard player={p} />
+                  <PitchCard player={p} />
                 </div>
               ) : (
                 <EmptySlot role={slot.role} active={over || !!selected} />
@@ -227,7 +227,7 @@ export function LineupEditor({
                     drag?.id === p.id && "opacity-30",
                   )}
                 >
-                  <MiniCard player={p} />
+                  <PitchCard player={p} fontSize="7.5px" />
                 </div>
               </li>
             ))}
@@ -256,7 +256,7 @@ export function LineupEditor({
       {/* Sürüklenen kartın imleci izleyen kopyası */}
       {drag && dragging && (
         <div className="pointer-events-none fixed z-50 -translate-x-1/2 -translate-y-1/2 scale-110 opacity-90" style={{ left: drag.x, top: drag.y }}>
-          <MiniCard player={dragging} />
+          <PitchCard player={dragging} fontSize="8px" />
         </div>
       )}
     </form>

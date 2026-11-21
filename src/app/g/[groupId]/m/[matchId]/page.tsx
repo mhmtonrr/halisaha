@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { finalizeExpired } from "@/lib/finalize";
-import { formatDate, getGroupPlayers, one, POSITION_NAME, POSITIONS, type Position } from "@/lib/data";
+import { formatDate, getGroupPlayers, getGroupSummaries, one, POSITION_NAME, POSITIONS, type Position } from "@/lib/data";
+import type { Attribute } from "@/lib/attributes";
 import {
   addToMatch,
   closeVoting,
@@ -51,6 +52,10 @@ interface RosterEntry {
   assists: number;
   saves: number;
   overall: number;
+  /** Profil kartı için: özellikler, forma numarası, geçici rating */
+  attributes: Pick<Attribute, "key" | "value">[];
+  shirtNumber: number | null;
+  provisional: boolean;
 }
 
 type GP = { display_name: string; user_id: string | null; position: Position | null };
@@ -62,9 +67,9 @@ async function fetchRoster(supabase: SupabaseClient, matchId: string, groupId: s
       .from("match_players")
       .select("player_id, team, is_goalkeeper, position, slot, goals, assists, saves, group_players(display_name, user_id, position)")
       .eq("match_id", matchId),
-    getGroupPlayers(supabase, groupId),
+    getGroupSummaries(supabase, groupId),
   ]);
-  const overall = new Map(players.map((p) => [p.id, p.overall]));
+  const summary = new Map(players.map((p) => [p.id, p]));
   return (rows ?? [])
     .map((r) => {
       const gp = one(r.group_players as GP | GP[]);
@@ -80,7 +85,10 @@ async function fetchRoster(supabase: SupabaseClient, matchId: string, groupId: s
         goals: r.goals,
         assists: r.assists,
         saves: r.saves,
-        overall: overall.get(r.player_id) ?? 65,
+        overall: summary.get(r.player_id)?.overall ?? 65,
+        attributes: summary.get(r.player_id)?.attributes ?? [],
+        shirtNumber: summary.get(r.player_id)?.shirt_number ?? null,
+        provisional: (summary.get(r.player_id)?.matches_played ?? 0) > 0 && (summary.get(r.player_id)?.confidence ?? 0) < 0.6,
       };
     })
     .sort(
@@ -89,6 +97,17 @@ async function fetchRoster(supabase: SupabaseClient, matchId: string, groupId: s
         b.overall - a.overall,
     );
 }
+
+/** Maç kadrosu satırı → sahadaki profil kartı verisi */
+const toPitch = (r: RosterEntry): PitchPlayer => ({
+  id: r.id,
+  name: r.name,
+  overall: r.overall,
+  position: r.position,
+  attributes: r.attributes,
+  shirtNumber: r.shirtNumber,
+  provisional: r.provisional,
+});
 
 interface TeamInfo {
   id: string;
@@ -498,7 +517,7 @@ async function PlannedView({
                       matchId={matchId}
                       team={t}
                       size={teamSize ?? inferSize(mine.length)}
-                      players={mine.map((p) => ({ id: p.id, name: p.name, overall: p.overall, position: p.position }))}
+                      players={mine.map(toPitch)}
                       initialFormation={formations[t]}
                       initialAssign={Object.fromEntries(mine.map((p) => [p.id, p.slot]))}
                     />
@@ -1014,7 +1033,7 @@ function LineupsSection({ sides }: { sides: LineupSide[] }) {
           const placed = new Map<number, PitchPlayer>(
             side.roster
               .filter((r) => r.slot !== null)
-              .map((r) => [r.slot as number, { id: r.id, name: r.name, overall: r.overall, position: r.position }]),
+              .map((r) => [r.slot as number, toPitch(r)]),
           );
           const bench = side.roster.filter((r) => r.slot === null);
           return (

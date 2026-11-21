@@ -128,6 +128,9 @@ sonra savunmadan hücuma soldan sağa; boşsa yedek; takım başına benzersiz).
 ya da seç+dokun; dolu yere bırakınca takas) kullanır, `setLineup` action'ı kaydeder ve sahadaki oyuncunun maç mevkisini
 slot rolüne çeker. Dizilişler **hep açık**: herkes (rakip ve ziyaretçi dahil) maç ekranında iki sahayı görür. Rakibe karşı
 maçta sadece A tarafı vardır; kendi aramızda maçta A ve B ayrı dizilir. Oyuncu takım değiştirince slotu düşer (tetikleyici).
+Sahadaki oyuncu, profildeki gerçek oyuncu kartıdır (`PitchCard`: kalkan, seviye rengi, rating/mevki/baş harfler/isim ve 6 özellik
+FRM·İST·GOL|KRT·AST·GAL·MVP). Kart `em` ile çizilir; yazı boyutu sahanın genişliğinden (`cqw`, `Pitch` kapsayıcısı + `--cw`)
+türetilir ve `cardWidthPct` ile hat başına oyuncu sayısına göre ölçeklenir. Özellikler `getGroupSummaries` ile gelir (kendi ve rakip kadro).
 Tuzak: editördeki token'ın `click`'i yukarı çıkarsa slot/yedek alanının "seçiliyi buraya koy" işleyicisi seçimi siler
 (`stopPropagation` bu yüzden var).
 
