@@ -11,6 +11,7 @@ import { OvrBadge, initials } from "@/components/PlayerCard";
 import { InviteLink } from "./InviteLink";
 import { regenerateInvite } from "@/lib/actions";
 import { countIncoming } from "@/lib/challenges-data";
+import { LiveRefresh } from "@/components/LiveRefresh";
 
 const STATUS: Record<string, { label: string; tone: "default" | "accent" | "warn" }> = {
   planned: { label: "Planlandı", tone: "default" },
@@ -87,6 +88,19 @@ export default async function GroupPage({ params }: { params: Promise<{ groupId:
 
   return (
     <main>
+      <LiveRefresh
+        watches={[
+          { table: "matches", filter: `group_id=eq.${groupId}` },
+          { table: "match_polls", filter: `group_id=eq.${groupId}` },
+          { table: "group_players", filter: `group_id=eq.${groupId}` },
+          ...(isTeam
+            ? [
+                { table: "match_challenges", filter: `to_group_id=eq.${groupId}` },
+                { table: "match_challenges", filter: `from_group_id=eq.${groupId}` },
+              ]
+            : []),
+        ]}
+      />
       <Header
         title=""
         back="/"

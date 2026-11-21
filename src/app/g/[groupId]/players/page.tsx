@@ -1,3 +1,4 @@
+import { LiveRefresh } from "@/components/LiveRefresh";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
@@ -87,6 +88,11 @@ export default async function ManagePage({
 
   return (
     <main>
+      <LiveRefresh
+        watches={[
+          { table: "group_players", filter: `group_id=eq.${groupId}` },
+        ]}
+      />
       <Header title={canManage ? (isTeam ? "Takımı yönet" : "Grubu yönet") : isTeam ? "Oyuncular" : "Üyeler"} back={`/g/${groupId}`} />
       <ErrorNote message={error} />
       {saved && <p className="mb-4 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">Kaydedildi ✓</p>}

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { cx } from "./ui";
-import { OvrBadge, shortName } from "./PlayerCard";
+import { initials, shortName, tierClass } from "./PlayerCard";
 import { POSITION_LABEL, type Position } from "@/lib/data";
 import type { Slot } from "@/lib/formations";
 
@@ -60,14 +60,27 @@ export function SlotBox({
   );
 }
 
-/** Minik oyuncu kartı: rating rozeti + kısa ad (+ mevki) */
+/**
+ * Minik oyuncu kartı: FIFA tarzı, seviyesine göre altın/gümüş/bronz. Rating, mevki, baş harfler ve kısa ad.
+ * Sahada 5'li hatta bile sığması için 50x64 px.
+ */
 export function MiniCard({ player, className }: { player: PitchPlayer; className?: string }) {
   return (
-    <div className={cx("flex w-[58px] flex-col items-center", className)}>
-      <OvrBadge overall={player.overall} className="h-9 w-9 text-base shadow-md ring-1 ring-black/30" />
-      <span className="-mt-1 max-w-full truncate rounded bg-black/60 px-1 text-center text-[10px] font-semibold leading-4 text-white">
-        {shortName(player.name)}
+    <div
+      className={cx(
+        "flex h-16 w-[50px] flex-col items-center rounded-lg bg-gradient-to-br px-1 pb-0.5 pt-1 shadow-md ring-1 ring-black/30",
+        tierClass(player.overall),
+        className,
+      )}
+    >
+      <div className="flex w-full items-start justify-between leading-none">
+        <span className="text-[17px] font-black tracking-tight">{player.overall}</span>
+        <span className="mt-0.5 text-[8px] font-extrabold opacity-70">{player.position ? POSITION_LABEL[player.position] : ""}</span>
+      </div>
+      <span className="mt-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-black/15 text-[8px] font-black">
+        {initials(player.name)}
       </span>
+      <span className="mt-auto w-full truncate text-center text-[9px] font-bold leading-3">{shortName(player.name)}</span>
     </div>
   );
 }
@@ -77,7 +90,7 @@ export function EmptySlot({ role, active }: { role: Slot["role"]; active?: boole
   return (
     <div
       className={cx(
-        "flex h-10 w-10 items-center justify-center rounded-full border border-dashed text-[10px] font-bold",
+        "flex h-11 w-11 items-center justify-center rounded-full border border-dashed text-[10px] font-bold",
         active ? "border-accent bg-accent/20 text-accent" : "border-white/40 text-white/60",
       )}
     >

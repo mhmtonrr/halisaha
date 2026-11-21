@@ -1,3 +1,4 @@
+import { LiveRefresh } from "@/components/LiveRefresh";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
@@ -106,6 +107,12 @@ export default async function TeamStatsPage({ params }: { params: Promise<{ grou
 
   return (
     <main>
+      <LiveRefresh
+        watches={[
+          { table: "matches", filter: `group_id=eq.${groupId}` },
+          { table: "group_players", filter: `group_id=eq.${groupId}` },
+        ]}
+      />
       <Header title="Takım istatistikleri" back={`/g/${groupId}`} />
       <div className="mb-5 flex items-center gap-3">
         <TeamBadge name={group.name} color={group.color} />

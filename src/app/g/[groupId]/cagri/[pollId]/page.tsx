@@ -1,3 +1,4 @@
+import { LiveRefresh } from "@/components/LiveRefresh";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
@@ -83,6 +84,12 @@ export default async function PollPage({
 
   return (
     <main>
+      <LiveRefresh
+        watches={[
+          { table: "match_polls", filter: `id=eq.${pollId}` },
+          { table: "poll_responses", filter: `poll_id=eq.${pollId}` },
+        ]}
+      />
       <Header
         title="Maç çağrısı"
         back={`/g/${groupId}`}

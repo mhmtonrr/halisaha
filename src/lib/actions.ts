@@ -186,33 +186,44 @@ export async function joinGroup(fd: FormData) {
   redirect(`/g/${data}`);
 }
 
+export interface GuestState {
+  ok?: boolean;
+  error?: string;
+  /** Başarıda eklenen kişinin adı (bildirim için); her gönderimde değişir, form bunu anahtar olarak kullanır */
+  added?: string;
+  /** Hata durumunda yazılan isim geri doldurulsun */
+  name?: string;
+  at?: number;
+}
+
 /**
  * Maç ekranından misafir oyuncu ekler: hesabı olmayan biri maça geldiyse isim + mevki yazılır, oyuncu
  * hem gruba (misafir olarak) hem bu maçın kadrosuna girer. Oylanır ama oy veremez. Sadece planlanmış maçta;
  * yetkiyi RLS yapar (kaptan/yetkili/maçı kuran).
+ * Sayfa zıplamasın diye yönlendirmez: durum döndürür, sayfa yerinde yenilenir (revalidatePath).
  */
-export async function addGuestToMatch(fd: FormData) {
+export async function addGuestToMatch(_prev: GuestState, fd: FormData): Promise<GuestState> {
   const { supabase } = await requireUser();
   const groupId = str(fd, "groupId");
   const matchId = str(fd, "matchId");
-  const back = `/g/${groupId}/m/${matchId}`;
   const name = str(fd, "name");
   const position = asPosition(str(fd, "position"));
-  if (name.length < 2) fail(back, "Misafirin ismi en az 2 karakter olmalı");
+  const error = (message: string): GuestState => ({ error: message, name, at: Date.now() });
+  if (name.length < 2) return error("Misafirin ismi en az 2 karakter olmalı");
 
   const [{ data: match }, roster] = await Promise.all([
     supabase.from("matches").select("kind, status").eq("id", matchId).eq("group_id", groupId).maybeSingle(),
     loadRoster(supabase, matchId),
   ]);
-  if (!match) fail(back, "Maç bulunamadı");
-  if (match.status !== "planned") fail(back, "Misafir sadece planlanmış maça eklenir");
+  if (!match) return error("Maç bulunamadı");
+  if (match.status !== "planned") return error("Misafir sadece planlanmış maça eklenir");
 
-  const { data: guest, error } = await supabase
+  const { data: guest, error: insertError } = await supabase
     .from("group_players")
     .insert({ group_id: groupId, display_name: name.slice(0, 60), position })
     .select("id")
     .single();
-  if (error || !guest) fail(back, "Misafir eklenemedi (yetkiniz olmayabilir)");
+  if (insertError || !guest) return error("Misafir eklenemedi (yetkiniz olmayabilir)");
 
   const countA = roster.filter((r) => r.team === "A").length;
   const team = match.kind === "external" || countA <= roster.length - countA ? "A" : "B";
@@ -226,10 +237,10 @@ export async function addGuestToMatch(fd: FormData) {
   if (rosterError) {
     // Kadroya girmeyen misafir grupta yetim kalmasın
     await supabase.from("group_players").delete().eq("id", guest.id);
-    fail(back, "Misafir maça eklenemedi");
+    return error("Misafir maça eklenemedi");
   }
-  revalidatePath(back);
-  redirect(`${back}?misafir=1`);
+  revalidatePath(`/g/${groupId}/m/${matchId}`);
+  return { ok: true, added: name.slice(0, 60), at: Date.now() };
 }
 
 export async function claimGuest(fd: FormData) {

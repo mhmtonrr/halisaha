@@ -7,6 +7,8 @@ import { DEFAULT_OVERALL } from "@/lib/rating";
 import { ROLE_LABEL, findTeams, getMemberships, type Membership } from "@/lib/teams-data";
 import { countIncoming } from "@/lib/challenges-data";
 import { Badge, Card, ErrorNote, LinkButton, SectionTitle, cx } from "@/components/ui";
+import { LiveRefresh } from "@/components/LiveRefresh";
+import { inList } from "@/lib/live";
 import { OvrBadge, initials, tierOf } from "@/components/PlayerCard";
 import { TeamBadge } from "@/components/TeamBadge";
 
@@ -77,6 +79,22 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
 
   return (
     <main className="pt-5">
+      <LiveRefresh
+        watches={[
+          ...(groupIds.length
+            ? [
+                { table: "matches", filter: inList("group_id", groupIds) },
+                { table: "match_polls", filter: inList("group_id", groupIds) },
+              ]
+            : []),
+          ...(adminTeamIds.length
+            ? [
+                { table: "match_challenges", filter: inList("to_group_id", adminTeamIds) },
+                { table: "match_challenges", filter: inList("from_group_id", adminTeamIds) },
+              ]
+            : []),
+        ]}
+      />
       <ErrorNote message={error} />
 
       {/* Karşılama + kişisel kart */}

@@ -49,14 +49,23 @@ try {
   check("maç ekranında misafir ekleme formu var", (await cap.locator("text=Misafir oyuncu ekle").count()) > 0);
   await cap.fill('input[name="name"]', "Zeki Misafir");
   await cap.selectOption('select[name="position"]', "GK");
-  await cap.click('button:has-text("Misafiri ekle")'); await cap.waitForURL(/misafir=1/);
-  await cap.waitForLoadState("networkidle");
-  check("onay mesajı", (await cap.locator("text=Misafir oyuncu kadroya eklendi").count()) > 0);
+  // Sayfa zıplamasın: gönderimden önce kaydırma konumunu al, sonra aynı yerde kalmalı
+  await cap.evaluate(() => window.scrollTo(0, 250));
+  const y0 = await cap.evaluate(() => window.scrollY);
+  await cap.evaluate(() => { window.__same = 1; });
+  await cap.click('button:has-text("Misafiri ekle")');
+  await cap.locator("text=Zeki Misafir kadroya eklendi").waitFor({ timeout: 10000 });
+  check("onay mesajı yerinde göründü", true);
+  const y1 = await cap.evaluate(() => window.scrollY);
+  // Kadro kartı büyüyünce tarayıcı konumu birkaç yüz piksel içinde kaydırabilir; başa (0) atmamalı
+  check(`sayfa başa atmadı (kaydırma ${y0} → ${y1})`, y0 > 100 && y1 >= y0 - 10 && y1 < y0 + 200);
+  check("sayfa yenilenmedi, adres değişmedi", (await cap.evaluate(() => window.__same === 1)) && !cap.url().includes("misafir="));
+  check("form temizlendi, açık kaldı", (await cap.locator('input[name="name"]').inputValue()) === "");
   const { data: guest } = await admin.from("group_players").select("id, user_id, position").eq("group_id", gid).eq("display_name", "Zeki Misafir").maybeSingle();
   check("misafir grupta hesapsız oyuncu olarak var", !!guest && guest.user_id === null && guest.position === "GK");
   const { data: mp } = await admin.from("match_players").select("team, position, is_goalkeeper").eq("match_id", m.id).eq("player_id", guest.id).maybeSingle();
   check("misafir bu maçın kadrosunda, kaleci", !!mp && mp.team === "A" && mp.position === "GK" && mp.is_goalkeeper);
-  check("maç ekranında misafir görünüyor", (await cap.locator("text=Zeki M.").count()) > 0);
+  check("maç ekranında misafir kadroda görünüyor (yerinde güncellendi)", (await cap.locator("text=Zeki M.").count()) > 0);
   await cap.screenshot({ path: `${SHOTS}/50-misafir-maca-eklendi.png`, fullPage: true });
 
   // Misafir "Oyuncular" sayfasında kayıtlı kalır (geçmiş aktarımı için) ama oradan eklenmez

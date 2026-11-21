@@ -5,7 +5,9 @@ import { cancelChallenge, respondChallenge } from "@/lib/actions";
 import { formatDate } from "@/lib/data";
 import { CHALLENGE_STATUS, getChallenges, type Challenge } from "@/lib/challenges-data";
 import { TeamBadge } from "@/components/TeamBadge";
-import { Badge, Button, Card, ErrorNote, Header, SectionTitle } from "@/components/ui";
+import { LiveRefresh } from "@/components/LiveRefresh";
+import { Badge, Card, ErrorNote, Header, SectionTitle } from "@/components/ui";
+import { SubmitButton } from "@/components/SubmitButton";
 
 /** Takımın maç teklifleri: gelenler (yanıt bekleyen), gönderilenler ve geçmiş */
 export default async function ChallengesPage({
@@ -36,6 +38,13 @@ export default async function ChallengesPage({
 
   return (
     <main>
+      <LiveRefresh
+        watches={[
+          { table: "match_challenges", filter: `to_group_id=eq.${groupId}` },
+          { table: "match_challenges", filter: `from_group_id=eq.${groupId}` },
+          { table: "matches", filter: `group_id=eq.${groupId}` },
+        ]}
+      />
       <Header title="Maç teklifleri" back={`/g/${groupId}`} />
       <ErrorNote message={error} />
       {sent && (
@@ -156,9 +165,13 @@ function ChallengeCard({
               <input type="hidden" name="groupId" value={groupId} />
               <input type="hidden" name="challengeId" value={c.id} />
               <input type="hidden" name="answer" value={answer} />
-              <Button variant={answer === "accept" ? "primary" : "secondary"} className="w-full">
+              <SubmitButton
+                variant={answer === "accept" ? "primary" : "secondary"}
+                className="w-full"
+                pendingLabel={answer === "accept" ? "Kabul ediliyor…" : "Reddediliyor…"}
+              >
                 {answer === "accept" ? "Kabul et" : "Reddet"}
-              </Button>
+              </SubmitButton>
             </form>
           ))}
         </div>

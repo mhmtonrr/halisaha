@@ -17,6 +17,9 @@ const tierStyle: Record<Tier, string> = {
   bronze: "from-bronze-1 to-bronze-2 text-[#3a1d0a]",
 };
 
+/** Rating seviyesine göre kart rengi (altın/gümüş/bronz); küçük kartlar için dışa açık */
+export const tierClass = (overall: number) => tierStyle[tierOf(overall)];
+
 export function initials(name: string) {
   return name
     .split(/\s+/)

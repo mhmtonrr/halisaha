@@ -1,3 +1,4 @@
+import { LiveRefresh } from "@/components/LiveRefresh";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { getGroupSummaries } from "@/lib/data";
@@ -14,6 +15,12 @@ export default async function SquadPage({ params }: { params: Promise<{ groupId:
 
   return (
     <main>
+      <LiveRefresh
+        watches={[
+          { table: "group_players", filter: `group_id=eq.${groupId}` },
+          { table: "matches", filter: `group_id=eq.${groupId}` },
+        ]}
+      />
       <Header title="Kadro" back={`/g/${groupId}`} />
       <SquadGrid
         groupId={groupId}

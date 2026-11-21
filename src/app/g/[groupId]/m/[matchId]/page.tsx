@@ -5,7 +5,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { finalizeExpired } from "@/lib/finalize";
 import { formatDate, getGroupPlayers, one, POSITION_NAME, POSITIONS, type Position } from "@/lib/data";
 import {
-  addGuestToMatch,
   addToMatch,
   closeVoting,
   deleteMatch,
@@ -20,6 +19,9 @@ import { teamRating } from "@/lib/teams-data";
 import { getFormation, inferSize } from "@/lib/formations";
 import { LineupPitch, type PitchPlayer } from "@/components/LineupPitch";
 import { LineupEditor } from "./LineupEditor";
+import { LiveRefresh } from "@/components/LiveRefresh";
+import { GuestForm } from "./GuestForm";
+import { SubmitButton } from "@/components/SubmitButton";
 import { TeamBadge } from "@/components/TeamBadge";
 import { Badge, Button, Card, ErrorNote, Header, Input, SectionTitle, cx } from "@/components/ui";
 import { OvrBadge, PositionChip, shortName } from "@/components/PlayerCard";
@@ -155,10 +157,10 @@ export default async function MatchPage({
   searchParams,
 }: {
   params: Promise<{ groupId: string; matchId: string }>;
-  searchParams: Promise<{ error?: string; voted?: string; positions?: string; kabul?: string; dizilis?: string; misafir?: string }>;
+  searchParams: Promise<{ error?: string; voted?: string; positions?: string; kabul?: string; dizilis?: string }>;
 }) {
   const { groupId, matchId } = await params;
-  const { error, voted, positions, kabul, dizilis, misafir } = await searchParams;
+  const { error, voted, positions, kabul, dizilis } = await searchParams;
   const { supabase, user } = await requireUser();
 
   const { data: first } = await supabase
@@ -211,6 +213,27 @@ export default async function MatchPage({
 
   return (
     <main>
+      <LiveRefresh
+        pollMs={match.status === "voting" ? 15000 : undefined}
+        watches={[
+          { table: "matches", filter: `id=eq.${matchId}` },
+          { table: "match_players", filter: `match_id=eq.${matchId}` },
+          { table: "match_results", filter: `match_id=eq.${matchId}` },
+          ...(match.challenge_id
+            ? [
+                // Karşı takımın maçı, kadrosu ve sonuçları; teklif iptali (maçlar silinir, teklifin durumu güncellenir)
+                { table: "matches", filter: `challenge_id=eq.${match.challenge_id}` },
+                { table: "match_challenges", filter: `id=eq.${match.challenge_id}` },
+                ...(opp
+                  ? [
+                      { table: "match_players", filter: `match_id=eq.${opp.match.id}` },
+                      { table: "match_results", filter: `match_id=eq.${opp.match.id}` },
+                    ]
+                  : []),
+              ]
+            : []),
+        ]}
+      />
       <Header
         title={external ? `vs ${oppName}` : formatDate(match.played_at)}
         back={`/g/${groupId}`}
@@ -229,9 +252,6 @@ export default async function MatchPage({
       )}
       {positions && (
         <p className="mb-4 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">Mevkiler kaydedildi ✓</p>
-      )}
-      {misafir && (
-        <p className="mb-4 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">Misafir oyuncu kadroya eklendi ✓</p>
       )}
       {dizilis && (
         <p className="mb-4 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">Diziliş kaydedildi ✓ Rakip takım da görebilir.</p>
@@ -519,37 +539,12 @@ async function PlannedView({
                       </li>
                     ))}
                   </ul>
-                  <Button variant="secondary" className="w-full">
+                  <SubmitButton variant="secondary" className="w-full" pendingLabel="Ekleniyor…">
                     Seçilenleri ekle
-                  </Button>
+                  </SubmitButton>
                 </form>
               )}
-              <form action={addGuestToMatch} className="space-y-2 border-t border-line pt-3">
-                <Hidden groupId={groupId} matchId={matchId} />
-                <div className="text-xs uppercase tracking-wide text-muted">Misafir oyuncu ekle</div>
-                <p className="text-xs text-muted">
-                  Uygulamayı kullanmayan biri maça geldiyse. Oylanır ama oy veremez.
-                </p>
-                <Input name="name" placeholder="İsim" required minLength={2} maxLength={60} />
-                <div className="flex gap-2">
-                  <select
-                    name="position"
-                    defaultValue=""
-                    className="min-h-11 rounded-xl border border-line bg-pitch-950 px-2 text-sm"
-                    aria-label="Mevki"
-                  >
-                    <option value="">Mevki —</option>
-                    {POSITIONS.map((pos) => (
-                      <option key={pos} value={pos}>
-                        {POSITION_NAME[pos]}
-                      </option>
-                    ))}
-                  </select>
-                  <Button variant="secondary" className="flex-1">
-                    Misafiri ekle
-                  </Button>
-                </div>
-              </form>
+              <GuestForm groupId={groupId} matchId={matchId} />
             </Card>
           </details>
 

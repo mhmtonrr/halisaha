@@ -5,7 +5,6 @@ import { setLineup } from "@/lib/actions";
 import { autoLineup, formationsFor, getFormation, type Role } from "@/lib/formations";
 import { Button, Card, cx } from "@/components/ui";
 import { EmptySlot, MiniCard, Pitch, SlotBox, type PitchPlayer } from "@/components/LineupPitch";
-import { OvrBadge, PositionChip, shortName } from "@/components/PlayerCard";
 
 type Assign = Record<string, number | null>;
 
@@ -223,14 +222,12 @@ export function LineupEditor({
                   {...tokenProps(p.id)}
                   className={cx(
                     tokenProps(p.id).className,
-                    "flex items-center gap-1.5 rounded-lg border border-line bg-pitch-950 py-1 pl-1 pr-2",
-                    selected === p.id && "border-accent ring-1 ring-accent",
+                    "rounded-lg",
+                    selected === p.id && "scale-110 drop-shadow-[0_0_6px_rgba(61,220,132,0.9)]",
                     drag?.id === p.id && "opacity-30",
                   )}
                 >
-                  <OvrBadge overall={p.overall} className="h-7 w-7 text-xs" />
-                  <span className="text-sm">{shortName(p.name)}</span>
-                  <PositionChip position={p.position} />
+                  <MiniCard player={p} />
                 </div>
               </li>
             ))}

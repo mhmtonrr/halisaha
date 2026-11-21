@@ -7,7 +7,8 @@ import { getMemberships } from "@/lib/teams-data";
 import { TeamBadge } from "@/components/TeamBadge";
 import { OvrBadge } from "@/components/PlayerCard";
 import { TeamSizeSelect } from "@/components/TeamSizeSelect";
-import { Button, Card, ErrorNote, Header, Input, Label, LinkButton } from "@/components/ui";
+import { Card, ErrorNote, Header, Input, Label, LinkButton } from "@/components/ui";
+import { SubmitButton } from "@/components/SubmitButton";
 
 /** Karşı takıma (bu sayfadaki takım) maç teklifi gönder */
 export default async function ChallengePage({
@@ -107,7 +108,9 @@ export default async function ChallengePage({
               />
             </label>
           </Card>
-          <Button className="w-full">Teklifi gönder</Button>
+          <SubmitButton className="w-full" pendingLabel="Teklif gönderiliyor…">
+            Teklifi gönder
+          </SubmitButton>
           <p className="text-center text-xs text-muted">
             Karşı takımın kaptanı veya yetkilisi kabul ederse iki takımda da maç oluşur; kadroyu her takım kendi belirler.
           </p>
