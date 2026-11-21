@@ -245,6 +245,8 @@ Test: `scripts/e2e/notifications.mjs` (sunucu `CRON_SECRET=e2e-secret` ile başl
 (`explainPushFailure`: 401/403 = VAPID çifti uyuşmuyor, 404/410 = geçersiz abonelik…); abonelik başarısızsa gerçek tarayıcı hatası gösterilir (`explainSubscribeError`: AbortError = push servisine ulaşılamadı, Brave ayarı…).
 Gönderim hataları artık Vercel kayıtlarına `[push] <kod> <mesaj>` olarak düşer. Hatırlatma: **kişi kendi işleminden bildirim almaz** (kendi sohbet mesajı sana push göndermez); test için ikinci hesap veya test düğmesi gerekir.
 Aboneliğin sunucuya kaydı `push_subscriptions` tablosundan kontrol edilir (0 satır = cihaz hiç abone olmamış).
+**Android ekran kapalıyken gelmeme (kullanıcı raporu)**: push `urgency: "high"` ile gönderilir (normal öncelik Doze'da bekletilir); `sw.js` `renotify`+`vibrate` kullanır. Hâlâ gelmezse cihaz tarafı: Chrome için pil
+kısıtlaması kapalı ("Sınırsız"), site bildirim kanalı önemi "Yüksek", veri tasarrufu/Rahatsız etme kapalı.
 Tuzak: `web-push` adlandırılmış içe aktarımla kullanılır (varsayılan dışa aktarımı yok; derleme uyarısı verir ve üretimde çöker).
 
 **Oyuncu kartı ve yetenek değerlendirmesi (migration 0018 + 0019)**: kart (`PlayerCard`/`CardFace`, saha için `compact`) FIFA kalkanıdır: rating, mevki,

@@ -15,6 +15,9 @@ self.addEventListener("push", (event) => {
       tag: typeof data.tag === "string" ? data.tag : undefined,
       icon: "/icon.svg",
       badge: "/icon.svg",
+      // Aynı etiketli bildirim yer değiştirirken de ses/titreşimle uyar (yoksa sessizce değişir ve fark edilmez)
+      renotify: typeof data.tag === "string" && data.tag.length > 0,
+      vibrate: [200, 100, 200],
       data: { url: typeof data.url === "string" ? data.url : "/" },
     }),
   );

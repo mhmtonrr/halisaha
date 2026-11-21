@@ -32,7 +32,9 @@ function pushConfigured(): boolean {
 const defaultSender: PushSender = async (sub, payload) => {
   await sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload, {
     TTL: 12 * 3600,
-    urgency: "normal",
+    // Yüksek öncelik: Android'de ekran kapalıyken (Doze) normal öncelikli push'lar dakikalarca/saatlerce bekletilir,
+    // yüksek öncelikli olanlar cihazı uyandırıp hemen gösterilir. Bildirimlerimiz hep kullanıcıya görünür (sohbet, oylama, çağrı).
+    urgency: "high",
     timeout: 10_000, // takılı bir push servisi isteği bekletmesin
   });
 };
