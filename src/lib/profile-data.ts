@@ -23,6 +23,8 @@ export interface PersonProfile {
   shirt: number | null;
   bio: string | null;
   statsVisibility: StatsVisibility;
+  /** Oyuncu aramasında ve öne çıkanlarda görünür mü */
+  discoverable: boolean;
 }
 
 export interface PersonGroup {
@@ -53,7 +55,7 @@ export async function loadPerson(admin: SupabaseClient, userId: string): Promise
   const [{ data: p }, { data: rows, error }] = await Promise.all([
     admin
       .from("profiles")
-      .select("id, display_name, city, district, preferred_position, secondary_positions, preferred_foot, shirt_number, bio, stats_visibility")
+      .select("id, display_name, city, district, preferred_position, secondary_positions, preferred_foot, shirt_number, bio, stats_visibility, discoverable")
       .eq("id", userId)
       .maybeSingle(),
     admin.from("group_players").select("id, group_id, role, is_loan, left_at, groups(name, kind, color)").eq("user_id", userId),
@@ -83,6 +85,7 @@ export async function loadPerson(admin: SupabaseClient, userId: string): Promise
       shirt: p.shirt_number,
       bio: p.bio,
       statsVisibility: p.stats_visibility === "public" ? "public" : "teammates",
+      discoverable: p.discoverable !== false,
     },
     rowIds,
     groups: (rows ?? []).map((r) => {

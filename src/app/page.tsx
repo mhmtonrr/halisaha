@@ -5,9 +5,10 @@ import { settleExpiredPolls } from "@/lib/polls";
 import { formatDate } from "@/lib/data";
 import { formatRegion } from "@/lib/regions";
 import { DEFAULT_OVERALL } from "@/lib/rating";
-import { ROLE_LABEL, findTeams, getMemberships, type Membership } from "@/lib/teams-data";
+import { ROLE_LABEL, getMemberships, type Membership } from "@/lib/teams-data";
 import { countIncoming } from "@/lib/challenges-data";
-import { getMyApplications } from "@/lib/listings-data";
+import { getMyApplications, getOpenListings } from "@/lib/listings-data";
+import { FeaturedSections } from "@/components/FeaturedSections";
 import { Badge, Card, ErrorNote, LinkButton, SectionTitle, cx } from "@/components/ui";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { inList } from "@/lib/live";
@@ -29,7 +30,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
   await Promise.all(groupIds.map((id) => finalizeExpired(id)));
   await Promise.all(groupIds.map((id) => settleExpiredPolls(id)));
 
-  const [{ data: active }, { data: myVotes }, regionTeams, { data: openPolls }, { data: unreadRows }] = await Promise.all([
+  const [{ data: active }, { data: myVotes }, listings, { data: openPolls }, { data: unreadRows }] = await Promise.all([
     groupIds.length
       ? supabase
           .from("matches")
@@ -43,7 +44,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
       .from("votes")
       .select("match_id")
       .in("voter_id", memberships.map((m) => m.playerId)),
-    profile?.city ? findTeams(supabase, { city: profile.city, limit: 5 }) : Promise.resolve([]),
+    profile?.city ? getOpenListings(supabase, { city: profile.city, limit: 3 }) : Promise.resolve([]),
     groupIds.length
       ? supabase
           .from("match_polls")
@@ -301,42 +302,33 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
         <div className="space-y-2">{groups.map((m) => <MembershipRow key={m.playerId} m={m} unread={unread.get(m.group.id) ?? 0} />)}</div>
       )}
 
-      {profile?.city && (
+      <FeaturedSections city={profile?.city ?? null} />
+
+      {listings.length > 0 && (
         <>
           <SectionTitle
-            action={
-              <LinkButton href={`/kesfet?il=${encodeURIComponent(profile.city)}`} variant="ghost" className="min-h-8 px-2 text-accent">
-                Tümü ›
-              </LinkButton>
-            }
+            action={<LinkButton href={`/kesfet${profile?.city ? `?il=${encodeURIComponent(profile.city)}` : ""}`} variant="ghost" className="min-h-8 px-2 text-accent">Tümü ›</LinkButton>}
           >
-            {profile.city} sıralaması
+            🔎 Oyuncu arayan takımlar
           </SectionTitle>
-          {regionTeams.length === 0 ? (
-            <Card className="text-center text-sm text-muted">
-              {profile.city}&apos;da henüz takım yok. İlk takımı sen kur! 🏆
-            </Card>
-          ) : (
-            <Card className="p-0">
-              <ol className="divide-y divide-line">
-                {regionTeams.map((t, i) => (
-                  <li key={t.id}>
-                    <Link href={`/g/${t.id}`} className="flex items-center gap-3 px-4 py-3 transition hover:bg-pitch-800">
-                      <span className={cx("w-5 text-center text-sm font-black", i === 0 ? "text-gold-1" : "text-muted")}>{i + 1}</span>
-                      <TeamBadge name={t.name} color={t.color} size="sm" />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate font-medium">{t.name}</div>
-                        <div className="text-xs text-muted">
-                          {t.district ?? t.city} · {t.members} oyuncu
-                        </div>
-                      </div>
-                      <OvrBadge overall={t.rating} className={t.rated ? "" : "opacity-50"} />
-                    </Link>
-                  </li>
-                ))}
-              </ol>
-            </Card>
-          )}
+          <div className="space-y-2">
+            {listings.map((l) => (
+              <Link key={l.id} href={`/ilan/${l.id}`}>
+                <Card className="flex items-center gap-3 border-amber-400/30 transition hover:border-amber-400">
+                  <TeamBadge name={l.team.name} color={l.team.color} size="sm" />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-semibold">{l.team.name} · {l.needed} oyuncu</div>
+                    <div className="truncate text-xs text-muted">
+                      {formatDate(l.playedAt)}
+                      {l.positions.length ? ` · ${l.positions.join("/")}` : ""}
+                      {l.minOverall ? ` · min ${l.minOverall}` : ""}
+                    </div>
+                  </div>
+                  <span className="text-amber-300">›</span>
+                </Card>
+              </Link>
+            ))}
+          </div>
         </>
       )}
     </main>

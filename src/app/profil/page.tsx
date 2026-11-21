@@ -51,6 +51,7 @@ export default async function ProfilePage({
             <SettingsPanel
               values={form as ProfileValues}
               visibility={data.person.profile.statsVisibility}
+              discoverable={data.person.profile.discoverable}
               prefs={{ ...DEFAULT_PREFS, ...(prefsRow ?? {}) }}
             />
           )

@@ -69,6 +69,8 @@ src/lib/invite.ts        Davet kodu: linkten/yazıdan kodu çıkarma, XXXXX-XXXX
 src/lib/fetch-in.ts      Büyük `in (...)` sorgularını parçalayıp sayfalayan yardımcı
 src/components/profile/ProfileView.tsx  Sekmeli profil (Genel/İstatistik/Maçlar/Ayarlar); /profil ve /oyuncu/[id] aynı bileşeni kullanır
 src/lib/team-stats.ts    Takım karnesi, form, seri, rakip bazlı geçmiş, oyuncu liderleri (saf, testli)
+src/lib/player-search.ts  Oyuncu arama süzgeçleri/sıralama/URL ayrıştırma (saf, testli); veri: src/lib/players-data.ts (service role, sadece `discoverable` kişiler)
+src/lib/featured-data.ts  Ana sayfa "öne çıkanlar" (bölge başına 5 dk `unstable_cache`, etiket `featured`); src/components/FeaturedSections.tsx (Suspense ile akar)
 src/lib/challenges-data.ts  Maç teklifleri sorguları (gelen/giden, bekleyen sayısı)
 src/lib/data.ts          Ortak sorgular, mevki/ayak sabitleri, tarih yardımcıları (TR saati)
 src/lib/regions.ts       81 il + src/data/districts.json (973 ilçe, iki kaynakla doğrulandı)
@@ -82,7 +84,7 @@ src/lib/authErrors.ts    Supabase Auth hatalarının Türkçesi
 src/lib/supabase/        server.ts (requireUser + karşılama yönlendirmesi), client.ts, admin.ts
 src/middleware.ts        Oturum yenileme, girişsiz yönlendirme, x-pathname başlığı
 src/app/                 Sayfalar (aşağıda)
-supabase/migrations/     0001..0023 SQL (sırayla; hepsi canlıya uygulandı)
+supabase/migrations/     0001..0024 SQL (sırayla; hepsi canlıya uygulandı)
 scripts/db-checks/       PGlite ile RLS/yetki kontrolleri (npm run db:check)
 scripts/e2e/             Canlı veritabanına karşı Playwright akış testleri
 scripts/perf/ttfb.mjs   Sayfa yanıt süresi ölçümü (geçici kullanıcıyla canlı site, TTFB)
@@ -291,6 +293,13 @@ Maça 3 saatten az kala istek `late` ("Son dakika") olur. Kaptan/yetkili kendi a
 kadrodan çıkarsa (kaptan çıkardı, "gelmedi", ayrıldı) bekleyen istek `closed` olur (tetikleyiciler). Bağlı maçta onayı oyuncunun kendi takımının kaptanı/yetkilisi verir. Bildirimler (tür `match`): istek → kaptan/yetkililer,
 karar → oyuncu, yetkili çıkışı → diğer yetkililer. UI: `m/[matchId]/WithdrawalSection.tsx` ("Çekilme istekleri" yetkilide, "Maça katılımım" oyuncuda). RLS: istek sahibi ve yetkililer görür; yazma sadece RPC.
 Yapılmadı: onaydan sonra çağrının yedek listesinden otomatik öneri (kaptan "Kadroya oyuncu ekle / çıkar" listesinden elle ekler). Test: `db-checks/withdrawals.mjs`, `e2e/withdrawal.mjs`.
+
+**Oyuncu keşfi (migration 0024, kullanıcı kararları)**: `/kesfet` iki sekmeli (`?sekme=oyuncu`): Takımlar | Oyuncular. Oyuncu araması GET formudur (paylaşılabilir adres): il/ilçe, ad, mevki (+ "ikinci mevkisi de"), rating aralığı
+(maçsız oyuncular dışlanır), deneyim (en az puanlı maç), ayak, yetenek+eşik, güvenilir (gelmedi yok veya %90+), takımsız (hiçbir takımın asıl üyesi değil), sıralama; sayfa başına 20, "Daha fazla" `?sayfa=`. Veri service role ile okunur
+(rating özel gruplardaki satırlara bağlı) → **sadece `profiles.discoverable = true` olanlar** (varsayılan açık, Profil → Ayarlar → "Oyuncu aramasında görün" ile kapatılır, `updateDiscoverable`; kapatınca `revalidateTag("featured")`). Sonuçta özel grup adı
+asla yok, sadece herkese açık takımlar. Aday listesi bölge/ad/mevki/ayak SQL'de, kalanı TS'de süzülür (tek sorguda en fazla 1000 profil; ölçek büyürse RPC'ye taşı). **Ana sayfa**: "Takımlarım/Gruplarım"dan sonra, kullanıcının iline göre ⭐ Öne çıkan oyuncular
+(en az 3 puanlı maç), 🏆 Öne çıkan takımlar (puanlı), 🔥 Haftanın MVP'leri (son 7 gün, **sadece herkese açık takım maçları**: özel grup maçı sızmasın), 📈 Yükselen yıldızlar (son 30 gün rating artışı, en az 2 maç), 🔎 Oyuncu arayan takımlar;
+bölgede <3 kayıt varsa Türkiye geneli gösterilir. Tuzak: `match_results→matches→groups` gömmesi iki FK yüzünden belirsiz (PGRST201) → `groups!matches_group_id_fkey`. Test: `player-search.test.ts`, `db-checks/discoverable.mjs`, `e2e/discover.mjs`.
 
 **Menü**: her sayfada sağ üstte bildirim çanı + ☰ (`Header` içinde `MenuControls`; ana sayfada kendi satırı). ☰ sağdan açılan çekmecedir: profil özeti, Ana sayfa, Keşfet, Bildirimler,
 Yetenek değerlendirmesi (bekleyen sayısı), İstatistiklerim, Ayarlar, **ayrı Takımlarım ve Gruplarım bölümleri** (her biri açılır: ana sayfa, kadro, sohbet, takımda teklifler/istatistik, oyuncular; her başlıkta Katıl/Kur), Gizlilik,

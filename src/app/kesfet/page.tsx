@@ -6,6 +6,10 @@ import { findTeams } from "@/lib/teams-data";
 import { getOpenListings } from "@/lib/listings-data";
 import { formatDate } from "@/lib/data";
 import { LiveRefresh } from "@/components/LiveRefresh";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { loadCandidates } from "@/lib/players-data";
+import { parseFilter, searchCandidates } from "@/lib/player-search";
+import { PAGE_SIZE, PlayerFilters, PlayerResults } from "./PlayerSearch";
 import { Button, Card, ErrorNote, Header, Input, LinkButton, SectionTitle, cx } from "@/components/ui";
 import { OvrBadge } from "@/components/PlayerCard";
 import { TeamBadge } from "@/components/TeamBadge";
@@ -13,15 +17,18 @@ import { TeamBadge } from "@/components/TeamBadge";
 export default async function DiscoverPage({
   searchParams,
 }: {
-  searchParams: Promise<{ il?: string; ilce?: string; q?: string; error?: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const sp = await searchParams;
+  const players = sp.sekme === "oyuncu";
   const { supabase, user } = await requireUser();
   const { data: profile } = await supabase.from("profiles").select("city").eq("id", user.id).single();
 
   // Filtre hiç seçilmediyse kullanıcının ili; boş seçildiyse Türkiye geneli
   const city = sp.il === undefined ? (profile?.city ?? "") : isProvince(sp.il) ? sp.il : "";
   const district = canonicalDistrict(city, sp.ilce) ?? undefined;
+  if (players) return <PlayersTab sp={sp} userId={user.id} city={city} district={district} />;
+
   const [teams, listings] = await Promise.all([
     findTeams(supabase, { city: city || undefined, district, q: sp.q, limit: 100 }),
     getOpenListings(supabase, { city: city || undefined, district, limit: 20 }),
@@ -32,6 +39,7 @@ export default async function DiscoverPage({
       <LiveRefresh watches={[{ table: "player_listings" }]} />
       <Header title="Keşfet" />
       <ErrorNote message={sp.error} />
+      <Tabs active="takim" city={city} district={district} />
 
       <form className="space-y-2" action="/kesfet">
         <RegionSelect
@@ -119,6 +127,72 @@ export default async function DiscoverPage({
           Gruba katıl
         </LinkButton>
       </div>
+    </main>
+  );
+}
+
+function Tabs({ active, city, district }: { active: "takim" | "oyuncu"; city: string; district?: string }) {
+  // Sekme değişince seçili bölge korunur
+  const region = new URLSearchParams({ il: city, ...(district ? { ilce: district } : {}) }).toString();
+  const tab = (key: "takim" | "oyuncu", label: string) => (
+    <Link
+      href={`/kesfet?${key === "oyuncu" ? "sekme=oyuncu&" : ""}${region}`}
+      className={cx(
+        "flex min-h-10 flex-1 items-center justify-center rounded-lg text-sm font-semibold transition",
+        active === key ? "bg-accent text-pitch-950" : "text-muted hover:text-white",
+      )}
+    >
+      {label}
+    </Link>
+  );
+  return <div className="mb-3 flex gap-1 rounded-xl border border-line bg-pitch-900/80 p-1">{tab("takim", "Takımlar")}{tab("oyuncu", "Oyuncular")}</div>;
+}
+
+async function PlayersTab({
+  sp,
+  userId,
+  city,
+  district,
+}: {
+  sp: Record<string, string | undefined>;
+  userId: string;
+  city: string;
+  district?: string;
+}) {
+  const { filter, sort } = parseFilter(sp);
+  const page = Math.max(1, Math.min(50, Number(sp.sayfa) || 1));
+  const candidates = await loadCandidates(createAdminClient(), {
+    city: city || undefined,
+    district,
+    q: filter.q,
+    position: filter.position,
+    includeSecondary: filter.includeSecondary,
+    foot: filter.foot,
+  });
+  const found = searchCandidates(candidates, filter, sort);
+  const items = found.slice(0, page * PAGE_SIZE);
+  const more = new URLSearchParams(Object.entries(sp).filter((e): e is [string, string] => e[1] !== undefined && e[0] !== "sayfa" && e[0] !== "error"));
+  more.set("sayfa", String(page + 1));
+
+  return (
+    <main>
+      <Header title="Keşfet" />
+      <ErrorNote message={sp.error} />
+      <Tabs active="oyuncu" city={city} district={district} />
+      <PlayerFilters city={city} district={district} filter={filter} sort={sort} />
+      <SectionTitle>
+        {city ? `${city}${district ? ` · ${district}` : ""}` : "Türkiye"} oyuncuları · {found.length}
+      </SectionTitle>
+      <PlayerResults
+        items={items}
+        total={found.length}
+        userId={userId}
+        skill={filter.skill}
+        moreHref={items.length < found.length ? `/kesfet?${more.toString()}` : null}
+      />
+      <p className="mt-2 text-center text-xs text-muted">
+        Soluk puanlı oyuncular henüz puanlı maç oynamadı. Aramada görünmek istemezsen Profil → Ayarlar&apos;dan kapatabilirsin.
+      </p>
     </main>
   );
 }

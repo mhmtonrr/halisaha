@@ -1,4 +1,4 @@
-import { updateProfile, updateStatsVisibility } from "@/lib/actions";
+import { updateDiscoverable, updateProfile, updateStatsVisibility } from "@/lib/actions";
 import { Button, Card, SectionTitle } from "@/components/ui";
 import { ProfileFields, type ProfileValues } from "@/components/ProfileFields";
 import { PushSettings } from "@/components/PushControls";
@@ -14,10 +14,12 @@ const OPTIONS: { value: StatsVisibility; title: string; hint: string }[] = [
 export function SettingsPanel({
   values,
   visibility,
+  discoverable,
   prefs,
 }: {
   values: ProfileValues;
   visibility: StatsVisibility;
+  discoverable: boolean;
   prefs: typeof DEFAULT_PREFS;
 }) {
   return (
@@ -52,6 +54,22 @@ export function SettingsPanel({
           Görünürlüğü kaydet
         </Button>
         <p className="text-center text-xs text-muted">Kartın (rating, yetenekler, bölge) her zaman herkese görünür; bu ayar sadece istatistik ve maç geçmişini etkiler.</p>
+      </form>
+
+      <SectionTitle>Oyuncu aramasında görün</SectionTitle>
+      <form action={updateDiscoverable} className="space-y-2">
+        <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-line bg-pitch-900/80 p-4 has-checked:border-accent has-checked:bg-accent/10">
+          <input type="checkbox" name="discoverable" value="1" defaultChecked={discoverable} className="mt-1 h-4 w-4 accent-[var(--color-accent)]" />
+          <span>
+            <span className="block font-semibold">Keşfet&apos;te oyuncu olarak listelen</span>
+            <span className="block text-xs text-muted">
+              Takım kaptanları seni bölge, mevki ve rating&apos;e göre bulabilir; ana sayfadaki &quot;öne çıkan oyuncular&quot;a girebilirsin. Kapatırsan listelenmezsin; kartın yine doğrudan bağlantıyla görünür.
+            </span>
+          </span>
+        </label>
+        <Button variant="secondary" className="w-full">
+          Kaydet
+        </Button>
       </form>
 
       <div id="bildirimler" className="scroll-mt-4">

@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { FEATURED_TAG } from "@/lib/featured-data";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { finalizeMatch, recomputePlayers } from "@/lib/finalize";
@@ -89,6 +90,16 @@ export async function updateStatsVisibility(fd: FormData) {
   if (value !== "teammates" && value !== "public") fail("/profil?sekme=ayarlar", "Geçersiz seçim");
   const { error } = await supabase.from("profiles").update({ stats_visibility: value }).eq("id", user.id);
   if (error) fail("/profil?sekme=ayarlar", "Ayar kaydedilemedi");
+  revalidatePath("/profil");
+  redirect("/profil?sekme=ayarlar&saved=1");
+}
+
+/** Oyuncu aramasında ve ana sayfadaki öne çıkanlarda görünme */
+export async function updateDiscoverable(fd: FormData) {
+  const { supabase, user } = await requireUser();
+  const { error } = await supabase.from("profiles").update({ discoverable: str(fd, "discoverable") === "1" }).eq("id", user.id);
+  if (error) fail("/profil?sekme=ayarlar", "Ayar kaydedilemedi");
+  revalidateTag(FEATURED_TAG); // gizlenen kişi öne çıkanlarda hemen kalksın
   revalidatePath("/profil");
   redirect("/profil?sekme=ayarlar&saved=1");
 }
