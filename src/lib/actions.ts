@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
-import { finalizeMatch } from "@/lib/finalize";
+import { finalizeMatch, recomputePlayers } from "@/lib/finalize";
 import { balanceTeams, pickVariant, type TeamCandidate } from "@/lib/teams";
 import { getGroupPlayers, parseLocalDateTime, POSITIONS, type Position } from "@/lib/data";
 import { canonicalDistrict, isProvince } from "@/lib/regions";
@@ -204,6 +204,8 @@ export async function claimGuest(fd: FormData) {
     p_member_id: str(fd, "memberId"),
   });
   if (error) fail(back, error.message);
+  // Misafirin geçmişi artık hesap sahibine ait: genel rating'i tüm maçlarla yeniden hesapla
+  await recomputePlayers([str(fd, "guestId")]);
   revalidatePath(back);
 }
 
@@ -324,6 +326,21 @@ export async function createMatch(fd: FormData) {
   redirect(`/g/${groupId}/m/${match.id}`);
 }
 
+/** Oylanabilecek oyuncular: maçın kadrosu; bağlı maçta rakip kadro da */
+async function loadVoteTargets(
+  supabase: Awaited<ReturnType<typeof requireUser>>["supabase"],
+  matchId: string,
+) {
+  const { data: m } = await supabase.from("matches").select("challenge_id").eq("id", matchId).single();
+  let ids = [matchId];
+  if (m?.challenge_id) {
+    const { data: linked } = await supabase.from("matches").select("id").eq("challenge_id", m.challenge_id);
+    ids = (linked ?? []).map((x) => x.id);
+  }
+  const { data } = await supabase.from("match_players").select("player_id").in("match_id", ids);
+  return data ?? [];
+}
+
 async function loadRoster(
   supabase: Awaited<ReturnType<typeof requireUser>>["supabase"],
   matchId: string,
@@ -434,7 +451,7 @@ export async function addToMatch(fd: FormData) {
     return { match_id: matchId, player_id: pl.id, team, position, is_goalkeeper: position === "GK" };
   });
   const { error } = await supabase.from("match_players").insert(rows);
-  if (error) fail(back, "Oyuncu eklenemedi");
+  if (error) fail(back, rpcMessage(error, "Oyuncu eklenemedi"));
   revalidatePath(back);
 }
 
@@ -518,7 +535,8 @@ export async function submitVotes(fd: FormData) {
   const { data: me } = await supabase.rpc("my_player_id", { p_group_id: groupId });
   if (!me) fail(back, "Bu grupta oyuncu değilsiniz");
 
-  const roster = await loadRoster(supabase, matchId);
+  // Takımlar arası maçta rakip takımın oyuncuları da oylanır (oy kendi maçıma yazılır)
+  const roster = await loadVoteTargets(supabase, matchId);
   const votes = roster
     .filter((r) => r.player_id !== me)
     .map((r) => ({
@@ -559,6 +577,10 @@ export async function closeVoting(fd: FormData) {
   const back = `/g/${groupId}/m/${matchId}`;
   const { data: allowed } = await supabase.rpc("can_manage_match", { p_match_id: matchId });
   if (!allowed) fail(back, "Oylamayı sadece maçı oluşturan veya yönetici kapatabilir");
+  const { data: cur } = await supabase.from("matches").select("challenge_id").eq("id", matchId).single();
+  if (cur?.challenge_id) {
+    fail(back, "Takımlar arası maçın oylaması süre dolunca veya herkes oy verince kapanır; rakip takım da oy veriyor");
+  }
   await finalizeMatch(matchId);
   revalidatePath(`/g/${groupId}`, "layout");
 }

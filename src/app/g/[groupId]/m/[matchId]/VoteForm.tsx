@@ -25,6 +25,7 @@ export function VoteForm({
   targets,
   initialScores,
   initialMvp,
+  rivalLabel = "Rakipler",
 }: {
   groupId: string;
   matchId: string;
@@ -32,6 +33,8 @@ export function VoteForm({
   targets: Target[];
   initialScores: Record<string, number>;
   initialMvp: string | null;
+  /** Rakip grubun başlığı (takımlar arası maçta rakip takımın adı) */
+  rivalLabel?: string;
 }) {
   const [scores, setScores] = useState<Record<string, number>>(() =>
     Object.fromEntries(targets.map((t) => [t.id, initialScores[t.id] ?? 6])),
@@ -41,7 +44,7 @@ export function VoteForm({
 
   const groups = [
     { label: "Takım arkadaşların", list: targets.filter((t) => t.team === myTeam) },
-    { label: "Rakipler", list: targets.filter((t) => t.team !== myTeam) },
+    { label: rivalLabel, list: targets.filter((t) => t.team !== myTeam) },
   ].filter((g) => g.list.length > 0);
 
   return (

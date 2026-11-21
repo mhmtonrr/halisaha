@@ -14,6 +14,7 @@ import {
   setMatchPositions,
   submitResult,
 } from "@/lib/actions";
+import { CONFIG } from "@/lib/rating";
 import { teamRating } from "@/lib/teams-data";
 import { TeamBadge } from "@/components/TeamBadge";
 import { Badge, Button, Card, ErrorNote, Header, Input, SectionTitle, cx } from "@/components/ui";
@@ -270,6 +271,7 @@ export default async function MatchPage({
           deadline={match.voting_deadline}
           canManage={!!canManage}
           justVoted={voted === "1"}
+          opp={opp}
         />
       )}
 
@@ -561,6 +563,7 @@ async function VotingView({
   deadline,
   canManage,
   justVoted,
+  opp,
 }: {
   groupId: string;
   matchId: string;
@@ -569,6 +572,7 @@ async function VotingView({
   deadline: string | null;
   canManage: boolean;
   justVoted: boolean;
+  opp: Opponent | null;
 }) {
   const { supabase } = await requireUser();
   const [{ data: progressRaw }, { data: myVotes }, { data: myMvp }] = await Promise.all([
@@ -614,9 +618,12 @@ async function VotingView({
             groupId={groupId}
             matchId={matchId}
             myTeam={me.team}
-            targets={roster
-              .filter((r) => r.id !== me.id)
-              .map((r) => ({
+            rivalLabel={opp ? `Rakip takım · ${opp.team.name}` : undefined}
+            targets={[
+              ...roster.filter((r) => r.id !== me.id),
+              // Takımlar arası maçta rakip takımın oyuncuları da oylanır
+              ...(opp?.roster.map((r) => ({ ...r, team: "B" as Team })) ?? []),
+            ].map((r) => ({
                 id: r.id,
                 name: r.name,
                 team: r.team,
@@ -632,7 +639,15 @@ async function VotingView({
         <Card className="text-center text-sm text-muted">Bu maçta oynamadığın için oy veremezsin.</Card>
       )}
 
-      {canManage && (
+      {opp && (
+        <p className="mt-4 rounded-xl bg-pitch-800 p-3 text-center text-xs text-muted">
+          Sahadaki herkes kendi dışındaki herkesi puanlar. Bir oyuncunun maç puanının %{Math.round(CONFIG.RIVAL_SHARE * 100)}&apos;ı
+          rakip takımın, %{Math.round((1 - CONFIG.RIVAL_SHARE) * 100)}&apos;ı kendi takımının oylarından gelir; böylece kimse
+          kendi takımını şişiremez. Oylama süre dolunca veya herkes oy verince iki takımda birden kapanır.
+        </p>
+      )}
+
+      {canManage && !opp && (
         <form action={closeVoting} className="mt-6">
           <Hidden groupId={groupId} matchId={matchId} />
           <Button variant="secondary" className="w-full">

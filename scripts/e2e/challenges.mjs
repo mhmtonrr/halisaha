@@ -37,6 +37,10 @@ try {
   const teamA = await mkTeam("E2E Kartallar", "#e11d48", users[0], users[1]);
   const teamB = await mkTeam("E2E Aslanlar", "#0ea5e9", users[2], users[3]);
   log("iki takım kuruldu:", teamA.slice(0, 8), teamB.slice(0, 8));
+  // Ayşe ayrıca bir toplulukta da: rating'i tüm gruplarında aynı olmalı
+  const { data: comm } = await admin.from("groups").insert({ name: "E2E Mahalle", kind: "community", created_by: users[0].id }).select("id").single();
+  groupIds.push(comm.id);
+  await admin.from("group_players").insert({ group_id: comm.id, user_id: users[1].id, display_name: users[1].name });
 
   browser = await chromium.launch();
   const open = async (u, scale = 1) => {
@@ -139,26 +143,42 @@ try {
   const { data: mid2 } = await admin.from("matches").select("status, voting_deadline").in("id", [mA, mB]);
   check("iki maç da oylamada, süre var", mid2.every((m) => m.status === "voting" && m.voting_deadline));
 
-  // 8) Oylar (servis anahtarıyla) ve kapanış (arayüzden)
+  // 8) Çapraz oylama: sahadaki herkes kendi dışındaki herkese oy verir (iki takım tek havuz)
   const gp = async (uid, gid) => (await admin.from("group_players").select("id").eq("user_id", uid).eq("group_id", gid).single()).data.id;
   const [a1, a2, b1, b2] = [await gp(users[0].id, teamA), await gp(users[1].id, teamA), await gp(users[2].id, teamB), await gp(users[3].id, teamB)];
   const vote = (m, v, t, s) => ({ match_id: m, voter_id: v, target_id: t, score: s });
-  await admin.from("votes").insert([vote(mA, a1, a2, 8), vote(mA, a2, a1, 7), vote(mB, b1, b2, 6), vote(mB, b2, b1, 9)]);
+  // a2 arayüzden oy verir, diğer üçü servis anahtarıyla
+  await admin.from("votes").insert([
+    vote(mA, a1, a2, 8), vote(mA, a1, b1, 6), vote(mA, a1, b2, 7),
+    vote(mB, b1, b2, 6), vote(mB, b1, a1, 8), vote(mB, b1, a2, 5),
+    vote(mB, b2, b1, 9), vote(mB, b2, a1, 6), vote(mB, b2, a2, 7),
+  ]);
   await A1.goto(`${BASE}/g/${teamA}/m/${mA}`);
-  await A1.click('button:has-text("Oylamayı şimdi kapat")'); await A1.waitForLoadState("networkidle");
-  await B1.goto(`${BASE}/g/${teamB}/m/${mB}`);
-  await B1.click('button:has-text("Oylamayı şimdi kapat")'); await B1.waitForLoadState("networkidle");
+  check("bağlı maçta elle 'oylamayı kapat' düğmesi yok", (await A1.locator('button:has-text("Oylamayı şimdi kapat")').count()) === 0);
+  check("oy oranı açıklaması görünür (%60 / %40)", (await A1.locator("text=%60").count()) > 0 && (await A1.locator("text=%40").count()) > 0);
+  await A2.goto(`${BASE}/g/${teamA}/m/${mA}`);
+  check("oy formunda rakip takım oyuncuları da var", (await A2.locator("text=Rakip takım · E2E Aslanlar").count()) > 0 && (await A2.locator('input[type="range"]').count()) === 3);
+  await shot(A2, "36b-capraz-oy-formu");
+  await A2.click('button:has-text("Oylarımı gönder")'); await A2.waitForURL(/voted=1/);
+  const { data: a2votes } = await admin.from("votes").select("target_id").eq("voter_id", a2).eq("match_id", mA);
+  check("a2'nin 3 oyu (takım arkadaşı + 2 rakip) kendi maçına yazıldı", a2votes.length === 3 && a2votes.some((v) => v.target_id === b1) && a2votes.some((v) => v.target_id === b2));
+  // Herkes oy verdi → iki maç birlikte kapanır
+  await A1.goto(`${BASE}/g/${teamA}/m/${mA}`);
   const { data: closed } = await admin.from("matches").select("status").in("id", [mA, mB]);
-  check("iki maç da kapandı", closed.every((m) => m.status === "closed"));
-  const { data: res } = await admin.from("match_results").select("match_id").in("match_id", [mA, mB]);
-  check("her iki takımın oyuncuları puanlandı (4 sonuç)", res.length === 4);
+  check("herkes oy verince iki maç birlikte kapandı", closed.every((m) => m.status === "closed"));
+  const { data: res } = await admin.from("match_results").select("match_id, is_mvp").in("match_id", [mA, mB]);
+  check("iki takımın oyuncuları puanlandı (4 sonuç)", res.length === 4 && res.filter((r) => r.match_id === mA).length === 2);
+  check("tek maçın adamı (iki takım arasından)", res.filter((r) => r.is_mvp).length <= 1);
 
   // 9) Sonuç: iki takımın puanları, rakip puanlar kendi kartlarını etkilemez
   await A1.goto(`${BASE}/g/${teamA}/m/${mA}`);
   check("sonuç ekranında rakip takımın oyuncu puanları", (await A1.locator("text=Rakip takım sonuçları · E2E Aslanlar").count()) > 0 && (await A1.locator("text=Berk Kaptan").count()) > 0);
   await shot(A1, "38-ortak-mac-sonuc");
   const { data: ratedA } = await admin.from("player_ratings").select("player_id").in("player_id", [a1, a2, b1, b2]);
-  check("her oyuncunun rating'i kendi grubunda", ratedA.length === 4);
+  check("4 oyuncunun da rating'i yazıldı", ratedA.length === 4);
+  const { data: mine } = await admin.from("group_players").select("group_id, player_ratings(overall, matches_played)").eq("user_id", users[1].id);
+  const rs = mine.map((m) => (Array.isArray(m.player_ratings) ? m.player_ratings[0] : m.player_ratings));
+  check("aynı oyuncunun iki grubundaki rating aynı (genel rating)", mine.length === 2 && rs.every(Boolean) && rs[0].overall === rs[1].overall && rs[0].matches_played === 1 && rs[1].matches_played === 1);
 
   // 10) İstatistik: Kartallar 4-2 kazandı
   await X.goto(`${BASE}/g/${teamA}/istatistik`);

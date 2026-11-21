@@ -45,6 +45,12 @@ export interface MatchInput {
   scoreB: number;
   votes: Vote[];
   mvpVotes?: MvpVote[];
+  /**
+   * Takımlar arası maçta iki takımın birleşik oylama havuzu: bir oyuncunun maç puanının bu oranı
+   * rakip takımın oylarından, kalanı kendi takımının oylarından gelir (ör. 0.6 → %60 rakip / %40 kendi).
+   * Tanımsızsa tüm oylar eşit sayılır (kendi aramızda maçlar). Bir taraftan hiç oy yoksa diğeri tam sayılır.
+   */
+  rivalShare?: number;
 }
 
 export interface PlayerMatchResult {
@@ -101,6 +107,8 @@ export const CONFIG = {
   COLLUSION_EXCESS: 1.0,
   /** Şüpheli ikililerin karşılıklı oy ağırlığı */
   COLLUSION_WEIGHT: 0.3,
+  /** Takımlar arası maçta rakip takımın oylarının payı; kalanı kendi takımının (şişirmeyi azaltır) */
+  RIVAL_SHARE: 0.6,
   /** FIFA ölçeği: ortalama oyuncu */
   OVR_BASE: 65,
   /** FIFA ölçeği: 1 birim göreli puan kaç OVR eder */
@@ -227,6 +235,25 @@ function trimmedWeightedMean(items: { z: number; w: number }[]): number {
   return kept.reduce((a, b) => a + b.z * b.w, 0) / totalW;
 }
 
+/**
+ * Kendi takım / rakip takım oylarına sabit pay verir: rakip toplam ağırlığın `rivalShare`'ı,
+ * kendi takım geri kalanı olur. Bir taraf boşsa diğer taraf tamamını alır.
+ */
+export function shareWeights(
+  items: { z: number; w: number; rival: boolean }[],
+  rivalShare: number | undefined,
+): { z: number; w: number }[] {
+  if (rivalShare === undefined) return items.map(({ z, w }) => ({ z, w }));
+  const rivalSum = items.filter((i) => i.rival).reduce((a, i) => a + i.w, 0);
+  const ownSum = items.filter((i) => !i.rival).reduce((a, i) => a + i.w, 0);
+  const rivalTarget = ownSum === 0 ? 1 : rivalSum === 0 ? 0 : rivalShare;
+  const ownTarget = 1 - rivalTarget;
+  return items.map(({ z, w, rival }) => ({
+    z,
+    w: w * (rival ? (rivalSum ? rivalTarget / rivalSum : 0) : ownSum ? ownTarget / ownSum : 0),
+  }));
+}
+
 /** MVP: en çok oyu alan; eşitlikte maç performansı yüksek olan. */
 function pickMvp(
   match: MatchInput,
@@ -257,16 +284,21 @@ export function computeMatch(
 ): MatchResult {
   const votes = normalizeVotes(match);
   const voters = match.players.filter((p) => p.canVote !== false).map((p) => p.playerId);
+  const teamOf = new Map(match.players.map((p) => [p.playerId, p.team]));
 
   const players: PlayerMatchResult[] = match.players.map((p) => {
-    const received = votes
-      .filter((v) => v.targetId === p.playerId)
-      .map((v) => ({
-        z: v.z,
-        w: suspiciousPairs.has(pairKey(v.voterId, v.targetId))
-          ? CONFIG.COLLUSION_WEIGHT
-          : 1,
-      }));
+    const received = shareWeights(
+      votes
+        .filter((v) => v.targetId === p.playerId)
+        .map((v) => ({
+          z: v.z,
+          w: suspiciousPairs.has(pairKey(v.voterId, v.targetId))
+            ? CONFIG.COLLUSION_WEIGHT
+            : 1,
+          rival: teamOf.get(v.voterId) !== p.team,
+        })),
+      match.rivalShare,
+    );
 
     const outcome = outcomeFor(p.team, match.scoreA, match.scoreB);
     const bonus =

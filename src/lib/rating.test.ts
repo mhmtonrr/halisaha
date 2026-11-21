@@ -4,6 +4,7 @@ import {
   computeRatings,
   detectCollusion,
   normalizeVotes,
+  shareWeights,
   type MatchInput,
   type Vote,
 } from "./rating";
@@ -316,5 +317,61 @@ describe("computeRatings", () => {
           : undefined,
     });
     expect(detectCollusion(matches).size).toBe(0);
+  });
+});
+
+describe("takımlar arası maçta kendi/rakip oy payı", () => {
+  // A takımı: a1,a2,a3 — B takımı: b1,b2,b3. Herkes herkese oy verir.
+  const players = ["a1", "a2", "a3", "b1", "b2", "b3"].map((id) => ({
+    playerId: id,
+    team: (id[0] === "a" ? "A" : "B") as "A" | "B",
+  }));
+  const ids = players.map((p) => p.playerId);
+  /** score(voter, target) ile tam oylama matrisi: herkes kendi dışındaki herkese oy verir */
+  const matchWith = (score: (v: string, t: string) => number, rivalShare?: number): MatchInput => ({
+    id: "m",
+    playedAt: "2026-01-01T18:00:00Z",
+    players,
+    scoreA: 2,
+    scoreB: 2,
+    rivalShare,
+    votes: ids.flatMap((v) =>
+      ids
+        .filter((t) => t !== v)
+        .map((t) => ({ voterId: v, targetId: t, score: score(v, t) })),
+    ),
+  });
+  // Herkes kendi takımına 9, rakibe 5 verir (kendi takımı şişirme)
+  const partisan = (v: string, t: string) => (v[0] === t[0] ? 9 : 5);
+  const perf = (m: MatchInput, id: string) => computeMatch(m).players.find((p) => p.playerId === id)!.performance;
+
+  it("rakip payı yükseldikçe kendi takımının şişirmesinin etkisi azalır", () => {
+    const equal = perf(matchWith(partisan, 0.5), "a1");
+    const rivalHeavy = perf(matchWith(partisan, 0.6), "a1");
+    const mostlyRival = perf(matchWith(partisan, 0.9), "a1");
+    expect(rivalHeavy).toBeLessThan(equal);
+    expect(mostlyRival).toBeLessThan(rivalHeavy);
+  });
+
+  it("rakip hiç oy vermediyse kendi takımının oyları tam sayılır", () => {
+    const m = matchWith(partisan, 0.6);
+    m.votes = m.votes.filter((v) => v.voterId[0] === "a");
+    const withShare = perf(m, "a1");
+    const noShare = perf({ ...m, rivalShare: undefined }, "a1");
+    expect(withShare).toBeCloseTo(noShare, 10);
+  });
+
+  it("shareWeights: toplam ağırlıklar tam pay oranında", () => {
+    const w = shareWeights(
+      [
+        { z: 1, w: 1, rival: false },
+        { z: 1, w: 1, rival: false },
+        { z: -1, w: 1, rival: true },
+      ],
+      0.6,
+    );
+    const own = w[0].w + w[1].w;
+    const rival = w[2].w;
+    expect(rival / (own + rival)).toBeCloseTo(0.6, 10);
   });
 });
