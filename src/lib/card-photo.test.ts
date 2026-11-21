@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alphaBounds, cardPhotoUrl, centerCrop, fitWithin, hasTransparency, isOwnCardPhotoUrl } from "./card-photo";
+import { alphaBounds, cardPhotoUrl, centerCrop, fitWithin, hardenAlpha, hasTransparency, isOwnCardPhotoUrl } from "./card-photo";
 
 const SB = "https://abc123.supabase.co";
 const UID = "11111111-2222-3333-4444-555555555555";
@@ -41,5 +41,13 @@ describe("şeffaflık ve kırpma", () => {
   it("yatayı ortadan, dikeyi üste yakın kırpar", () => {
     expect(centerCrop(2000, 1000, 1)).toEqual({ x: 500, y: 0, width: 1000, height: 1000 });
     expect(centerCrop(1000, 2000, 1)).toEqual({ x: 0, y: 250, width: 1000, height: 1000 });
+  });
+});
+
+describe("hardenAlpha", () => {
+  it("kalıntıyı siler, kişiyi tam opak yapar, kenarı yumuşak bırakır; rengi değiştirmez", () => {
+    const px = [10, 20, 30, 60, 10, 20, 30, 150, 10, 20, 30, 200, 10, 20, 30, 136];
+    hardenAlpha(px);
+    expect(px).toEqual([10, 20, 30, 0, 10, 20, 30, 172, 10, 20, 30, 255, 10, 20, 30, 128]);
   });
 });

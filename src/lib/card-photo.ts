@@ -43,6 +43,18 @@ export function alphaBounds(rgba: ArrayLike<number>, width: number, height: numb
   return { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 };
 }
 
+/**
+ * Modelin yumuşak maskesini sertleştirir (yerinde): alfa `lo` ve altı → tam şeffaf (arka plan kalıntısı),
+ * `hi` ve üstü → tam opak (kişi yarı saydam görünmesin); arası doğrusal (kenarda ince yumuşaklık kalsın).
+ */
+export function hardenAlpha(rgba: { length: number; [i: number]: number }, lo = 96, hi = 176) {
+  for (let i = 3; i < rgba.length; i += 4) {
+    const a = rgba[i];
+    rgba[i] = a <= lo ? 0 : a >= hi ? 255 : Math.round(((a - lo) / (hi - lo)) * 255);
+  }
+  return rgba;
+}
+
 /** En-boy oranını koruyarak sınırlara sığdırır (büyütmez) */
 export function fitWithin(width: number, height: number, maxW: number, maxH: number) {
   const scale = Math.min(1, maxW / width, maxH / height);

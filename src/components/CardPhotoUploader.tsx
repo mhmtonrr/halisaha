@@ -6,7 +6,7 @@ import { CardFace } from "./PlayerCard";
 import { Button } from "./ui";
 import { createClient } from "@/lib/supabase/client";
 import { deleteCardPhoto, saveCardPhoto } from "@/lib/actions";
-import { MAX_PHOTO_BYTES, alphaBounds, cardPhotoPath, centerCrop, fitWithin, hasTransparency } from "@/lib/card-photo";
+import { MAX_PHOTO_BYTES, alphaBounds, cardPhotoPath, centerCrop, fitWithin, hardenAlpha, hasTransparency } from "@/lib/card-photo";
 
 type Preview = Omit<ComponentProps<typeof CardFace>, "photoUrl" | "compact" | "fontSize" | "className">;
 type Box = { x: number; y: number; width: number; height: number };
@@ -68,7 +68,7 @@ async function encode(c: HTMLCanvasElement): Promise<Blob> {
 
 /**
  * Kart fotoğrafı: seç → arka planı tarayıcıda kaldır (fotoğraf sunucuya ham gitmez) → kartta önizle → Kaydet / Başka fotoğraf.
- * Model (~40 MB) sadece fotoğraf seçilince indirilir. Şeffaf PNG/WebP yüklenirse işlem atlanır; model çalışmazsa düz kırpılır.
+ * Model (~80 MB) sadece fotoğraf seçilince indirilir. Şeffaf PNG/WebP yüklenirse işlem atlanır; model çalışmazsa düz kırpılır.
  */
 export function CardPhotoUploader({ userId, currentUrl, preview }: { userId: string; currentUrl: string | null; preview: Preview }) {
   const router = useRouter();
@@ -100,7 +100,7 @@ export function CardPhotoUploader({ userId, currentUrl, preview }: { userId: str
           const { removeBackground } = await import("@imgly/background-removal");
           const input = (await toBlob(base, "image/jpeg", 0.92))!;
           const cut = await removeBackground(input, {
-            model: "isnet_quint8",
+            model: "isnet_fp16", // quint8 düşük kontrastta (beyaz duvar) kararsız, yüzü yarı saydam bırakıyordu
             output: { format: "image/png" },
             progress: (key, current, total) => {
               if (key.startsWith("fetch") && total > 0) setStatus(`Yapay zekâ modeli indiriliyor… %${Math.round((current / total) * 100)}`);
@@ -108,7 +108,13 @@ export function CardPhotoUploader({ userId, currentUrl, preview }: { userId: str
             },
           });
           const cutImg = await loadImage(cut);
-          out = trimmed(canvasOf(cutImg, cutImg.naturalWidth, cutImg.naturalHeight));
+          const cutCanvas = canvasOf(cutImg, cutImg.naturalWidth, cutImg.naturalHeight);
+          // Yumuşak maske yüzü yarı saydam, arka planı yarım silinmiş bırakabiliyor → sertleştir
+          const ctx = cutCanvas.getContext("2d")!;
+          const data = ctx.getImageData(0, 0, cutCanvas.width, cutCanvas.height);
+          hardenAlpha(data.data);
+          ctx.putImageData(data, 0, 0);
+          out = trimmed(cutCanvas);
         } catch (e) {
           console.warn("Arka plan kaldırılamadı", e);
           const crop = centerCrop(base.width, base.height);
@@ -189,7 +195,7 @@ export function CardPhotoUploader({ userId, currentUrl, preview }: { userId: str
         </div>
       )}
       <p className="text-center text-xs text-muted">
-        Arka plan telefonunda/bilgisayarında kaldırılır; fotoğrafın sadece kartında görünür. İlk seferde ~40 MB model indirilir.
+        Arka plan telefonunda/bilgisayarında kaldırılır; fotoğrafın sadece kartında görünür. İlk seferde ~80 MB model indirilir (sonra önbellekte).
       </p>
     </div>
   );
