@@ -71,7 +71,7 @@ async function fetchRoster(supabase: SupabaseClient, matchId: string, groupId: s
       .from("match_players")
       .select("player_id, team, is_goalkeeper, position, slot, goals, assists, saves, group_players(display_name, user_id, position)")
       .eq("match_id", matchId),
-    getGroupSummaries(supabase, groupId),
+    getGroupSummaries(supabase, groupId, { includeLeft: true }),
   ]);
   const summary = new Map(players.map((p) => [p.id, p]));
   return (rows ?? [])

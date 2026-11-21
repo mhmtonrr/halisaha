@@ -288,16 +288,60 @@ export async function setPosition(fd: FormData) {
   revalidatePath(`/g/${groupId}`, "layout");
 }
 
+/** Yetkili oyuncuyu çıkarır: hesaplı üye ayrılmış sayılır (geçmişi kalır), misafir silinir */
 export async function removePlayer(fd: FormData) {
   const { supabase } = await requireUser();
   const groupId = str(fd, "groupId");
   const back = `/g/${groupId}/players`;
-  const { error } = await supabase
-    .from("group_players")
-    .delete()
-    .eq("id", str(fd, "playerId"));
-  if (error) fail(back, "Oyuncu çıkarılamadı");
+  const { error } = await supabase.rpc("remove_member", { p_player_id: str(fd, "playerId") });
+  if (error) fail(back, rpcMessage(error, "Oyuncu çıkarılamadı"));
   revalidatePath(back);
+  revalidatePath(`/g/${groupId}`, "layout");
+}
+
+/**
+ * Kendi isteğiyle gruptan/takımdan ayrıl. Geçmiş (maçlar, oylar, rating) korunur; gelecekteki maçlardan ve açık
+ * çağrılardan çıkarılır. Kaptan önce devretmeli; oylaması süren maçı olan bekler (kurallar veritabanında).
+ */
+export async function leaveGroup(fd: FormData) {
+  const { supabase, user } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const back = `/g/${groupId}/players`;
+  const [{ data: profile }, { data: group }] = await Promise.all([
+    supabase.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
+    supabase.from("groups").select("name").eq("id", groupId).maybeSingle(),
+  ]);
+  const { error } = await supabase.rpc("leave_group", { p_group: groupId });
+  if (error) fail(back, rpcMessage(error, "Ayrılınamadı"));
+  later(async () => {
+    const admin = createAdminClient();
+    const ids = await groupMemberIds(admin, groupId, { adminsOnly: true });
+    await notify(ids, "match", text.memberLeft(group?.name ?? "Grup", profile?.display_name ?? "Bir oyuncu", groupId), { excludeUserId: user.id });
+  });
+  revalidatePath("/", "layout");
+  redirect("/?left=1");
+}
+
+/** Tek başına kalan kaptan grubu/takımı siler (adını yazarak onaylar); kişinin genel rating'i yeniden hesaplanır */
+export async function deleteGroup(fd: FormData) {
+  const { supabase, user } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const back = `/g/${groupId}/players`;
+  const { data: group } = await supabase.from("groups").select("name").eq("id", groupId).maybeSingle();
+  if (!group) fail(back, "Grup bulunamadı");
+  if (str(fd, "confirm").toLocaleLowerCase("tr") !== group.name.toLocaleLowerCase("tr")) {
+    fail(back, "Silmek için grubun adını aynen yazmalısın");
+  }
+  const { error } = await supabase.rpc("delete_group", { p_group: groupId });
+  if (error) fail(back, rpcMessage(error, "Grup silinemedi"));
+  // Silinen grubun maçları kişinin istatistiğinden de gitti: kalan satırlardan genel rating'i yeniden hesapla
+  later(async () => {
+    const admin = createAdminClient();
+    const { data: rows } = await admin.from("group_players").select("id").eq("user_id", user.id);
+    if (rows?.length) await recomputePlayers(rows.map((r) => r.id));
+  });
+  revalidatePath("/", "layout");
+  redirect("/?deleted=1");
 }
 
 // ---------------------------------------------------------------------------

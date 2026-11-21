@@ -25,7 +25,7 @@ export default async function PlayerPage({
   const { supabase, user } = await requireUser();
 
   const [players, { data: group }] = await Promise.all([
-    getGroupSummaries(supabase, groupId),
+    getGroupSummaries(supabase, groupId, { includeLeft: true }),
     supabase.from("groups").select("kind").eq("id", groupId).maybeSingle(),
   ]);
   const roleLabels = ROLE_LABEL[(group?.kind ?? "community") as GroupKind];

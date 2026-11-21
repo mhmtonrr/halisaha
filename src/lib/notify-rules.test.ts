@@ -134,3 +134,13 @@ describe("push gönderimi sonucu", () => {
     expect(r).toEqual({ sent: 0, dead: [], failed: 1 });
   });
 });
+
+describe("üye ayrıldı metni", () => {
+  it("gruba ve kişiye işaret eder, oyuncular sayfasına götürür", () => {
+    const c = text.memberLeft("Cuma Halısaha", "Ali Veli", "g1");
+    expect(c.title).toContain("ayrıldı");
+    expect(c.body).toContain("Ali Veli");
+    expect(c.body).toContain("Cuma Halısaha");
+    expect(c.url).toBe("/g/g1/players");
+  });
+});

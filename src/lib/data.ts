@@ -30,6 +30,8 @@ export interface GroupPlayer {
   user_id: string | null;
   /** Ödünç oyuncu: hesabı var, bir maça başvuruyla alındı ama takımın asıl kadrosunda değil */
   is_loan: boolean;
+  /** Gruptan/takımdan ayrılmış (kayıt geçmiş için kalır); aktif üye sayılmaz */
+  left_at: string | null;
   role: "captain" | "admin" | "member";
   position: Position | null;
   overall: number;
@@ -57,9 +59,9 @@ type ProfileRow = {
 };
 
 /** Asıl kadro: hesabı olan ve ödünç olmayan oyuncular (davetle/kodla katılanlar) */
-export const isSquadMember = (p: { user_id: string | null; is_loan?: boolean }) => !!p.user_id && !p.is_loan;
+export const isSquadMember = (p: { user_id: string | null; is_loan?: boolean; left_at?: string | null }) => !!p.user_id && !p.is_loan && !p.left_at;
 /** Misafirler sekmesi: hesapsız misafirler ve ödünç oyuncular */
-export const isGuestLike = (p: { user_id: string | null; is_loan?: boolean }) => !isSquadMember(p);
+export const isGuestLike = (p: { user_id: string | null; is_loan?: boolean; left_at?: string | null }) => !isSquadMember(p);
 
 /** Supabase 1-1 ilişkileri bazen nesne bazen dizi döndürür. */
 export function one<T>(x: T | T[] | null | undefined): T | null {
@@ -67,13 +69,23 @@ export function one<T>(x: T | T[] | null | undefined): T | null {
   return x ?? null;
 }
 
-export async function getGroupPlayers(supabase: SupabaseClient, groupId: string): Promise<GroupPlayer[]> {
-  const { data, error } = await supabase
+/**
+ * Grubun oyuncuları. Ayrılmış üyeler varsayılan olarak gelmez (listeler, kadro seçimi, sıralama); geçmiş maç ve
+ * oyuncu sayfaları isimleri ve ratingleri göstermek için `includeLeft` ile ister.
+ */
+export async function getGroupPlayers(
+  supabase: SupabaseClient,
+  groupId: string,
+  opts: { includeLeft?: boolean } = {},
+): Promise<GroupPlayer[]> {
+  let query = supabase
     .from("group_players")
     .select(
-      "id, display_name, user_id, is_loan, role, position, player_ratings(overall, matches_played, confidence), player_skills(skills), profiles(secondary_positions, preferred_foot, shirt_number, bio, city, district)",
+      "id, display_name, user_id, is_loan, left_at, role, position, player_ratings(overall, matches_played, confidence), player_skills(skills), profiles(secondary_positions, preferred_foot, shirt_number, bio, city, district)",
     )
     .eq("group_id", groupId);
+  if (!opts.includeLeft) query = query.is("left_at", null);
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []).map((p) => {
     const r = one(p.player_ratings as RatingRow | RatingRow[] | null);
@@ -84,6 +96,7 @@ export async function getGroupPlayers(supabase: SupabaseClient, groupId: string)
       display_name: p.display_name,
       user_id: p.user_id,
       is_loan: !!p.is_loan,
+      left_at: (p.left_at as string | null) ?? null,
       role: p.role,
       position: p.position,
       overall: r?.overall ?? DEFAULT_OVERALL,
@@ -169,9 +182,13 @@ export interface PlayerSummary extends GroupPlayer {
 }
 
 /** Oyuncular + istatistikler + kart özellikleri, tek seferde. */
-export async function getGroupSummaries(supabase: SupabaseClient, groupId: string): Promise<PlayerSummary[]> {
+export async function getGroupSummaries(
+  supabase: SupabaseClient,
+  groupId: string,
+  opts: { includeLeft?: boolean } = {},
+): Promise<PlayerSummary[]> {
   const [players, history] = await Promise.all([
-    getGroupPlayers(supabase, groupId),
+    getGroupPlayers(supabase, groupId, opts),
     getGroupHistory(supabase, groupId),
   ]);
   return players.map((p) => {

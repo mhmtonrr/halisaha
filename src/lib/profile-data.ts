@@ -32,6 +32,8 @@ export interface PersonGroup {
   color: string | null;
   role: "captain" | "admin" | "member";
   isLoan: boolean;
+  /** Ayrılmış: maç geçmişi için kayıt durur ama üye değil */
+  left: boolean;
 }
 
 export interface Person {
@@ -54,7 +56,7 @@ export async function loadPerson(admin: SupabaseClient, userId: string): Promise
       .select("id, display_name, city, district, preferred_position, secondary_positions, preferred_foot, shirt_number, bio, stats_visibility")
       .eq("id", userId)
       .maybeSingle(),
-    admin.from("group_players").select("id, group_id, role, is_loan, groups(name, kind, color)").eq("user_id", userId),
+    admin.from("group_players").select("id, group_id, role, is_loan, left_at, groups(name, kind, color)").eq("user_id", userId),
   ]);
   if (error) throw error;
   if (!p) return null;
@@ -92,6 +94,7 @@ export async function loadPerson(admin: SupabaseClient, userId: string): Promise
         color: g?.color ?? null,
         role: r.role as PersonGroup["role"],
         isLoan: !!r.is_loan,
+        left: !!r.left_at,
       };
     }),
     overall: rating?.overall ?? DEFAULT_OVERALL,
@@ -109,7 +112,8 @@ export async function canViewStats(admin: SupabaseClient, viewerId: string, targ
     .from("group_players")
     .select("group_id, user_id")
     .in("user_id", [viewerId, target.profile.id])
-    .eq("is_loan", false);
+    .eq("is_loan", false)
+    .is("left_at", null);
   if (error) throw error;
   const mine = new Set((data ?? []).filter((r) => r.user_id === viewerId).map((r) => r.group_id));
   return (data ?? []).some((r) => r.user_id === target.profile.id && mine.has(r.group_id));
@@ -117,7 +121,7 @@ export async function canViewStats(admin: SupabaseClient, viewerId: string, targ
 
 /** İzleyicinin üye olduğu gruplar: maç bağlantısı ve özel grup adı göstermek için */
 export async function viewerGroupIds(admin: SupabaseClient, viewerId: string): Promise<Set<string>> {
-  const { data, error } = await admin.from("group_players").select("group_id").eq("user_id", viewerId);
+  const { data, error } = await admin.from("group_players").select("group_id").eq("user_id", viewerId).is("left_at", null);
   if (error) throw error;
   return new Set((data ?? []).map((r) => r.group_id));
 }

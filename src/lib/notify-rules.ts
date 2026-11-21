@@ -74,6 +74,12 @@ const oneLine = (text: string) => text.replace(/\s+/g, " ").trim();
 const join = (...parts: (string | null | undefined | false)[]) => parts.filter(Boolean).join(" · ");
 
 export const text = {
+  memberLeft: (groupName: string, who: string, groupId: string): Content => ({
+    title: "👋 Bir üye ayrıldı",
+    body: truncate(join(groupName, `${who} gruptan ayrıldı`), 300),
+    url: `/g/${groupId}/players`,
+    tag: `member-left:${groupId}`,
+  }),
   voteOpened: (groupId: string, matchId: string, opponent?: string | null): Content => ({
     title: "🗳️ Oylama açıldı",
     body: join(opponent ? `vs ${opponent}` : "Maç bitti", "arkadaşlarını puanla, oyunu bekliyorlar"),

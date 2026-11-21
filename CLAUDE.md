@@ -81,7 +81,7 @@ src/lib/authErrors.ts    Supabase Auth hatalarının Türkçesi
 src/lib/supabase/        server.ts (requireUser + karşılama yönlendirmesi), client.ts, admin.ts
 src/middleware.ts        Oturum yenileme, girişsiz yönlendirme, x-pathname başlığı
 src/app/                 Sayfalar (aşağıda)
-supabase/migrations/     0001..0020 SQL (sırayla; hepsi canlıya uygulandı)
+supabase/migrations/     0001..0021 SQL (sırayla; hepsi canlıya uygulandı)
 scripts/db-checks/       PGlite ile RLS/yetki kontrolleri (npm run db:check)
 scripts/e2e/             Canlı veritabanına karşı Playwright akış testleri
 scripts/recompute-all.ts Tüm ratingleri baştan hesaplar (vite-node ile, aşağıda)
@@ -262,6 +262,15 @@ kapanmış maçlar; grup sayfasındaki istatistik hâlâ sadece kapanmış maçl
 sadece o grubun üyelerine görünür ("Özel grup"); takımlar herkese açık. "Gruplarımdaki kartlarım" kaldırıldı (rating ve yetenekler genel olduğundan kartlar aynı). Tuzak: başlıklar CSS ile BÜYÜK harf;
 e2e'de metin karşılaştırması Türkçe küçük harfe göre yapılır. Test: `profile-stats.test.ts`, `db-checks/stats-visibility.mjs`, `e2e/profile.mjs`.
 
+**Gruptan/takımdan ayrılma (migration 0021)**: kayıt **silinmez**; `group_players.left_at` dolar (maç kadroları, oylar, sonuçlar ve kişinin genel rating'i `group_players`'a bağlı, silmek geçmişi götürürdü).
+`my_player_id`/`is_group_member`/`is_group_admin`/`is_group_captain`/`unread_counts` `left_at is null` ister; TS tarafında `getGroupPlayers` (varsayılan) ve `getMemberships`, `recipients`, `teams-data`, `profile-data`
+ayrılmışları saymaz; **geçmiş gösteren** yerler (maç ekranı, oyuncu sayfası) `getGroupSummaries(..., { includeLeft: true })` kullanır, `isSquadMember` `left_at`'i dışlar. `leave_group` RPC (kullanıcı kararları):
+**kaptan/kurucu önce devreder** (yoksa hata), **oylaması süren (`voting`/`played`) maçı olan oylama bitince ayrılır**; ayrılırken `deactivate_member` gelecekteki planlanmış maç kadrolarından ve açık çağrı yanıtlarından çıkarır,
+kaptan/yetkililere "üye ayrıldı" bildirimi gider (`text.memberLeft`, tür `match`). Aynı davet koduyla `join_group` satırı yeniden açar (rol `member`). **Yetkili çıkarma** artık `remove_member` RPC'si: hesaplı üye aynı şekilde
+ayrılmış sayılır, misafir silinir; `group_players` DELETE politikası sadece misafir kayıtları içindir. Tek başına kalan kaptan `delete_group` ile grubu/takımı siler (adını yazarak onaylar; maçlar da gider, kişinin
+rating'i `recomputePlayers` ile yeniden hesaplanır); doğrudan `groups` silme politikası kaldırıldı. UI: `/g/[id]/players` sayfasının altında "Gruptan/Takımdan ayrıl". Bilinen küçük boşluk: ayrılan takım üyesi aynı takımın ilanına
+`apply_listing` ile ödünç başvuramaz ("bu takımın oyuncususun" kontrolü `left_at`'i saymıyor). Test: `db-checks/leave-group.mjs`, `e2e/leave.mjs`.
+
 **Menü**: her sayfada sağ üstte bildirim çanı + ☰ (`Header` içinde `MenuControls`; ana sayfada kendi satırı). ☰ sağdan açılan çekmecedir: profil özeti, Ana sayfa, Keşfet, Bildirimler,
 Yetenek değerlendirmesi (bekleyen sayısı), İstatistiklerim, Ayarlar, **Takımlarım ve gruplarım** (her biri açılır: ana sayfa, kadro, sohbet, takımda teklifler/istatistik, oyuncular), Takım/Grup kur, Gizlilik,
 **Çıkış yap** (`POST /auth/signout`). **Alt çubuk kaldı** (kullanıcı kararı). Layout her istekte `loadMenuData()` çağırır (giriş yoksa null → menü hiç görünmez); çekmece sayfa değişince/Escape/karartma ile kapanır.
@@ -305,7 +314,7 @@ Uçtan uca (canlı Supabase'e karşı; test kullanıcıları/grupları oluşturu
 (NODE_USE_ENV_PROXY=1 npx next start -p 3000 > /tmp/server.log 2>&1 &)
 NODE_USE_ENV_PROXY=1 NO_PROXY=localhost,127.0.0.1 node scripts/e2e/chat.mjs /tmp/shots
 ```
-Senaryolar: `menu`, `profile`, `skills`, `positions-external`, `auth-onboarding`, `teams-polls`, `regions-community`, `chat`, `challenges`, `guest-match`, `realtime`, `member-poll`, `listings`, `notifications`.
+Senaryolar: `leave`, `menu`, `profile`, `skills`, `positions-external`, `auth-onboarding`, `teams-polls`, `regions-community`, `chat`, `challenges`, `guest-match`, `realtime`, `member-poll`, `listings`, `notifications`.
 Ekran görüntülerine bak (390px genişlik, telefon) — görsel sorunlar çoğu zaman sadece orada yakalanıyor.
 Port doluysa: `fuser -k 3000/tcp`. Arayüzden kayıt (signUp) test etme: onay maili gönderir, limit saatte 2.
 

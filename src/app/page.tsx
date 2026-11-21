@@ -16,8 +16,8 @@ import { TeamBadge } from "@/components/TeamBadge";
 import { SkillQueueBanner } from "@/components/SkillQueueBanner";
 import { MenuControls } from "@/components/AppMenu";
 
-export default async function Home({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const { error } = await searchParams;
+export default async function Home({ searchParams }: { searchParams: Promise<{ error?: string; left?: string; deleted?: string }> }) {
+  const { error, left, deleted } = await searchParams;
   const { supabase, user } = await requireUser();
 
   const [{ data: profile }, memberships] = await Promise.all([
@@ -130,6 +130,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
         ]}
       />
       <ErrorNote message={error} />
+      {left && <p className="mb-4 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">Gruptan ayrıldın. Geçmişin korunuyor; davet koduyla istediğin zaman geri dönebilirsin.</p>}
+      {deleted && <p className="mb-4 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">Silindi.</p>}
 
       {/* Karşılama + kişisel kart */}
       <Link href="/profil" className="mb-6 flex items-center gap-4">

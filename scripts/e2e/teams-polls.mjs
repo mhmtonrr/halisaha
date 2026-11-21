@@ -32,7 +32,7 @@ try {
   const [A, B, C, D] = [await open(users[0], 2), await open(users[1]), await open(users[2]), await open(users[3], 2)];
 
   // Takım
-  await A.page.goto(BASE + "/yeni?tur=takim");
+  await A.page.goto(BASE + "/takim-kur");
   await A.page.fill('input[name="name"]', "Kadıköy Kartalları");
   await A.page.locator('input[name="color"]').nth(5).check({ force: true });
   await A.page.fill('textarea[name="description"]', "Perşembe akşamları Moda'da oynuyoruz, maç tekliflerine açığız.");
@@ -61,7 +61,7 @@ try {
   log("keşfet İstanbul'da takımı listeliyor:", (await D.page.locator("text=Kadıköy Kartalları").count()) ? "✓" : "HATA");
 
   // Grup + maç çağrısı
-  await A.page.goto(BASE + "/yeni?tur=grup"); await A.page.fill('input[name="name"]', "Cuma Halısaha Ekibi");
+  await A.page.goto(BASE + "/grup-kur"); await A.page.fill('input[name="name"]', "Cuma Halısaha Ekibi");
   await A.page.click('button:has-text("Grubu kur")'); await A.page.waitForURL(/\/g\//);
   const gid = A.page.url().split("/g/")[1]; groupIds.push(gid);
   const { data: g } = await admin.from("groups").select("invite_code").eq("id", gid).single();

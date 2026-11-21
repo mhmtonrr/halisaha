@@ -2,7 +2,7 @@ import { LiveRefresh } from "@/components/LiveRefresh";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
-import { claimGuest, removePlayer, setMemberRole, setPosition, updateTeam } from "@/lib/actions";
+import { claimGuest, deleteGroup, leaveGroup, removePlayer, setMemberRole, setPosition, updateTeam } from "@/lib/actions";
 import { getGroupSummaries, isGuestLike, isSquadMember, type Position } from "@/lib/data";
 import { ROLE_LABEL, type GroupKind, type Role } from "@/lib/teams-data";
 import { Badge, Button, Card, ErrorNote, Header, SectionTitle } from "@/components/ui";
@@ -78,13 +78,14 @@ export default async function ManagePage({
   const guests = players.filter(isGuestLike);
   // Misafir geçmişi sadece henüz maçı olmayan üyelere aktarılabilir
   const claimable = players.filter((p) => isSquadMember(p) && p.totals.played === 0);
+  const squadCount = players.filter(isSquadMember).length;
   const sorted = players.filter(isSquadMember).sort(
     (a, b) => ROLE_ORDER[a.role as Role] - ROLE_ORDER[b.role as Role] || a.display_name.localeCompare(b.display_name, "tr"),
   );
 
   /** Bu oyuncuyu ben çıkarabilir miyim? (veritabanı kuralıyla aynı) */
   const canRemove = (p: (typeof players)[number]) =>
-    canManage && p.id !== me?.id && p.role !== "captain" && (p.role === "member" || isCaptain) && p.totals.played === 0;
+    canManage && p.id !== me?.id && p.role !== "captain" && (p.role === "member" || isCaptain) && (!!p.user_id || p.totals.played === 0);
 
   return (
     <main>
@@ -271,6 +272,62 @@ export default async function ManagePage({
                 </form>
               </Card>
             </>
+          )}
+        </>
+      )}
+
+      {me && (
+        <>
+          <SectionTitle>{isTeam ? "Takımdan ayrıl" : "Gruptan ayrıl"}</SectionTitle>
+          {isCaptain ? (
+            squadCount > 1 ? (
+              <Card className="text-sm text-muted">
+                {isTeam ? "Kaptan" : "Kurucu"} olarak ayrılmadan önce {isTeam ? "kaptanlığı" : "kuruculuğu"} listeden birine devretmelisin (üyenin altındaki
+                “{isTeam ? "Kaptanlığı devret" : "Kuruculuğu devret"}…” düğmesi). Devrettikten sonra bu bölümden ayrılabilirsin.
+              </Card>
+            ) : (
+              <Card className="space-y-3">
+                <p className="text-sm text-muted">
+                  {isTeam ? "Takımda" : "Grupta"} tek üye sensin, devredecek kimse yok. İstersen {isTeam ? "takımı" : "grubu"} tamamen silebilirsin: tüm maçlar, oylar ve sohbet
+                  geri dönüşsüz silinir; genel rating&apos;in diğer maçlarından yeniden hesaplanır.
+                </p>
+                <details>
+                  <summary className="cursor-pointer text-sm text-red-300">{isTeam ? "Takımı sil" : "Grubu sil"}…</summary>
+                  <form action={deleteGroup} className="mt-3 space-y-2">
+                    <input type="hidden" name="groupId" value={groupId} />
+                    <label className="block text-xs text-muted">
+                      Onaylamak için adını aynen yaz: <b className="text-white">{group.name}</b>
+                      <input
+                        name="confirm"
+                        autoComplete="off"
+                        className="mt-1 min-h-11 w-full rounded-xl border border-line bg-pitch-950 px-3 text-sm text-white outline-none focus:border-red-400"
+                      />
+                    </label>
+                    <Button variant="danger" className="w-full">
+                      Kalıcı olarak sil
+                    </Button>
+                  </form>
+                </details>
+              </Card>
+            )
+          ) : (
+            <Card>
+              <details>
+                <summary className="cursor-pointer text-sm text-red-300">{isTeam ? "Takımdan ayrıl" : "Gruptan ayrıl"}…</summary>
+                <form action={leaveGroup} className="mt-3 space-y-3">
+                  <input type="hidden" name="groupId" value={groupId} />
+                  <ul className="list-disc space-y-1 pl-5 text-xs text-muted">
+                    <li>Geçmiş maçların, oyların ve rating&apos;in korunur; istatistiklerin yerinde kalır.</li>
+                    <li>Gelecekteki maç kadrolarından ve açık çağrılardan çıkarılırsın.</li>
+                    <li>{isTeam ? "Takım sohbeti ve teklifler" : "Grup sohbeti ve maçlar"} sana kapanır; davet koduyla istediğin zaman geri dönebilirsin.</li>
+                    <li>Oylaması süren bir maçın varsa oylama bitince ayrılabilirsin.</li>
+                  </ul>
+                  <Button variant="danger" className="w-full">
+                    Evet, {isTeam ? "takımdan" : "gruptan"} ayrıl
+                  </Button>
+                </form>
+              </details>
+            </Card>
           )}
         </>
       )}

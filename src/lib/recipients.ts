@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Grubun/takımın hesabı olan asıl üyeleri (misafir ve ödünç oyuncu hariç); `adminsOnly` ile sadece kaptan/yetkililer */
 export async function groupMemberIds(admin: SupabaseClient, groupId: string, opts: { adminsOnly?: boolean } = {}): Promise<string[]> {
-  let q = admin.from("group_players").select("user_id").eq("group_id", groupId).eq("is_loan", false).not("user_id", "is", null);
+  let q = admin.from("group_players").select("user_id").eq("group_id", groupId).eq("is_loan", false).is("left_at", null).not("user_id", "is", null);
   if (opts.adminsOnly) q = q.in("role", ["captain", "admin"]);
   const { data } = await q.limit(2000);
   return [...new Set((data ?? []).map((r) => r.user_id as string))];

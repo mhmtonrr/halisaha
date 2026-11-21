@@ -78,11 +78,11 @@ function GeneralPanel({
 }) {
   const p = person.profile;
   const keeper = p.position === "GK";
-  const team = person.groups.find((g) => g.kind === "team" && !g.isLoan);
+  const team = person.groups.find((g) => g.kind === "team" && !g.isLoan && !g.left);
   const rel = stats && noShows !== null ? reliability(stats.totals.played, noShows) : null;
   const mostPlayed = stats?.byPosition[0];
   // Başkasının profilinde sadece herkese açık takımlar görünür; özel topluluklar gizli kalır
-  const shownGroups = person.groups.filter((g) => !g.isLoan && (isMe || g.kind === "team"));
+  const shownGroups = person.groups.filter((g) => !g.isLoan && !g.left && (isMe || g.kind === "team"));
 
   const facts = [
     p.city ? { label: "Bölge", value: formatRegion(p.city, p.district) } : null,
@@ -348,8 +348,9 @@ function MatchesPanel({ matches, isMe, viewerGroups }: { matches: ProfileMatch[]
     <Card className="p-0">
       <ul className="divide-y divide-line">
         {matches.slice(0, 50).map((h) => {
-          // Özel topluluğun adı ve maç ekranı sadece üyelerine açık; takımlar herkese açık
-          const open = isMe || h.groupKind === "team" || viewerGroups.has(h.groupId);
+          // Özel topluluğun adı sadece üyelerine (ve geçmişi kendisine) açık; maç ekranı sadece aktif üyelere; takımlar herkese açık
+          const nameOpen = isMe || h.groupKind === "team" || viewerGroups.has(h.groupId);
+          const open = h.groupKind === "team" || viewerGroups.has(h.groupId);
           const body = (
             <div className="flex items-center gap-3 px-4 py-3">
               <ResultChip outcome={h.outcome} />
@@ -360,7 +361,7 @@ function MatchesPanel({ matches, isMe, viewerGroups }: { matches: ProfileMatch[]
                   {h.mvp && "⭐"}
                 </div>
                 <div className="truncate text-xs text-muted">
-                  {open ? h.groupName : "Özel grup"} · {formatDate(h.playedAt)}
+                  {nameOpen ? h.groupName : "Özel grup"} · {formatDate(h.playedAt)}
                   {h.goals > 0 && ` · ${h.goals} gol`}
                   {h.assists > 0 && ` · ${h.assists} asist`}
                   {h.saves > 0 && ` · ${h.saves} kurtarış`}
