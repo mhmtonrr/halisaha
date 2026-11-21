@@ -10,9 +10,11 @@ import { Badge, Card, Header, LinkButton, SectionTitle } from "@/components/ui";
 import { OvrBadge, initials } from "@/components/PlayerCard";
 import { InviteLink } from "./InviteLink";
 import { regenerateInvite } from "@/lib/actions";
+import { countIncoming } from "@/lib/challenges-data";
 
 const STATUS: Record<string, { label: string; tone: "default" | "accent" | "warn" }> = {
   planned: { label: "Planlandı", tone: "default" },
+  played: { label: "Skor onayı", tone: "warn" },
   voting: { label: "Oylama açık", tone: "warn" },
   closed: { label: "Tamamlandı", tone: "accent" },
 };
@@ -50,6 +52,9 @@ export default async function GroupPage({ params }: { params: Promise<{ groupId:
       .limit(10),
     supabase.rpc("unread_counts"),
   ]);
+  const pendingOffers = isTeam && (await supabase.rpc("is_group_member", { p_group_id: groupId })).data
+    ? ((await countIncoming(supabase, [groupId])).get(groupId) ?? 0)
+    : 0;
   const unreadHere = ((unread ?? []) as { group_id: string; unread: number }[]).find((u) => u.group_id === groupId)?.unread ?? 0;
 
   const me = players.find((p) => p.user_id === user.id);
@@ -140,7 +145,8 @@ export default async function GroupPage({ params }: { params: Promise<{ groupId:
       )}
 
       {isTeam && (
-        <div className="mb-4 grid grid-cols-4 gap-2 text-center">
+        <Link href={`/g/${groupId}/istatistik`} className="mb-4 block">
+        <div className="grid grid-cols-4 gap-2 text-center">
           {[
             { v: record.w + record.d + record.l, l: "Maç" },
             { v: record.w, l: "Galibiyet", c: "text-accent" },
@@ -153,6 +159,14 @@ export default async function GroupPage({ params }: { params: Promise<{ groupId:
             </Card>
           ))}
         </div>
+        <div className="mt-1 text-right text-[11px] text-accent">Tüm istatistikler ›</div>
+        </Link>
+      )}
+
+      {isTeam && !me && (
+        <LinkButton href={`/g/${groupId}/teklif`} className="mb-2 w-full">
+          🤝 Maç teklif et
+        </LinkButton>
       )}
 
       {me && (
@@ -173,6 +187,16 @@ export default async function GroupPage({ params }: { params: Promise<{ groupId:
             {isTeam ? "+ Maç kur" : "+ Doğrudan maç"}
           </LinkButton>
         </div>
+      )}
+      {isTeam && me && (
+        <LinkButton href={`/g/${groupId}/teklifler`} variant="secondary" className="mb-2 w-full justify-between">
+          <span>🤝 Maç teklifleri</span>
+          {pendingOffers > 0 ? (
+            <span className="rounded-full bg-amber-400 px-2 py-0.5 text-xs font-bold text-pitch-950">{pendingOffers} yeni</span>
+          ) : (
+            <span className="text-muted">›</span>
+          )}
+        </LinkButton>
       )}
       <div className="grid grid-cols-2 gap-2">
         <LinkButton href={`/g/${groupId}/kadro`} variant="secondary">

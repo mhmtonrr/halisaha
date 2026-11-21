@@ -1,0 +1,179 @@
+// Takımlar arası maç teklifi: teklif → kabul → kadro → skor eşleşmesi → oylama → sonuç → istatistik.
+// Canlı Supabase'e karşı çalışır; test kullanıcıları ve takımlarını sonunda siler.
+import { createRequire } from "module";
+import fs from "fs";
+const PROJ = process.cwd();
+const require = createRequire(PROJ + "/package.json");
+const { createClient } = require("@supabase/supabase-js");
+const { chromium } = require("playwright");
+const SHOTS = process.argv[2] ?? "/tmp/halisaha-shots";
+fs.mkdirSync(SHOTS, { recursive: true });
+const env = Object.fromEntries(fs.readFileSync(PROJ + "/.env.local", "utf8").trim().split("\n").map((l) => l.split(/=(.*)/s).slice(0, 2)));
+const admin = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+const BASE = "http://localhost:3000";
+const log = (...a) => console.log("•", ...a);
+let failed = 0;
+const check = (label, cond) => { console.log(cond ? "  ✓" : "  ✗ HATA:", label); if (!cond) failed++; };
+
+const names = ["Ali Kaptan", "Ayşe Oyuncu", "Berk Kaptan", "Buse Oyuncu", "Can Yabancı"];
+const users = []; const groupIds = [];
+let browser;
+try {
+  for (const [i, n] of names.entries()) {
+    const email = `e2e-challenge-${Date.now()}-${i}@example.com`, password = "Sifre-" + Math.random().toString(36).slice(2, 8) + "9";
+    const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name: n } });
+    if (error) throw error;
+    await admin.from("profiles").update({ city: "İstanbul", district: "Kadıköy", preferred_position: i % 2 ? "DEF" : "MID", onboarded_at: new Date().toISOString() }).eq("id", data.user.id);
+    users.push({ id: data.user.id, email, password, name: n });
+  }
+  // Takımları servis anahtarıyla kur (kurucu tetikleyiciyle kaptan olur), oyuncuları ekle
+  const mkTeam = async (name, color, captain, member) => {
+    const { data: t, error } = await admin.from("groups").insert({ name, kind: "team", city: "İstanbul", district: "Kadıköy", color, created_by: captain.id }).select("id").single();
+    if (error) throw error;
+    groupIds.push(t.id);
+    await admin.from("group_players").insert({ group_id: t.id, user_id: member.id, display_name: member.name, position: "DEF" });
+    return t.id;
+  };
+  const teamA = await mkTeam("E2E Kartallar", "#e11d48", users[0], users[1]);
+  const teamB = await mkTeam("E2E Aslanlar", "#0ea5e9", users[2], users[3]);
+  log("iki takım kuruldu:", teamA.slice(0, 8), teamB.slice(0, 8));
+
+  browser = await chromium.launch();
+  const open = async (u, scale = 1) => {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: scale });
+    const page = await ctx.newPage(); page.on("pageerror", (e) => console.log("  [sayfa hatası]", e.message));
+    await page.goto(BASE + "/login"); await page.fill('input[type="email"]', u.email); await page.fill('input[type="password"]', u.password);
+    await page.click('form button:has-text("Giriş yap")'); await page.waitForURL(BASE + "/");
+    return page;
+  };
+  const shot = (p, n) => p.screenshot({ path: `${SHOTS}/${n}.png`, fullPage: true });
+  const [A1, A2, B1, B2, X] = [await open(users[0], 2), await open(users[1]), await open(users[2], 2), await open(users[3]), await open(users[4])];
+
+  // 1) Yabancı: takım sayfasında "Maç teklif et" görür ama gönderemez (takımı yok)
+  await X.goto(`${BASE}/g/${teamB}`);
+  check("takımı olmayan ziyaretçi 'Maç teklif et' görür", (await X.locator("text=Maç teklif et").count()) > 0);
+  await X.goto(`${BASE}/g/${teamB}/teklif`);
+  check("takımı olmayan için form yerine 'takım kur' çağrısı", (await X.locator("text=Takım kur").count()) > 0 && (await X.locator('button:has-text("Teklifi gönder")').count()) === 0);
+  await X.goto(`${BASE}/g/${teamB}/teklifler`); await X.waitForURL(new RegExp(`/g/${teamB}$`));
+  check("üye olmayan teklif kutusuna giremez", true);
+
+  // 2) Kartal kaptanı teklif gönderir
+  await A1.goto(`${BASE}/g/${teamB}/teklif`); await shot(A1, "30-teklif-formu");
+  await A1.fill('input[name="venue"]', "Petroller Halısaha"); await A1.fill('input[name="fee"]', "Saha yarı yarıya");
+  await A1.fill('textarea[name="message"]', "Cuma akşamı 7'ye 7 yapalım mı?");
+  await A1.click('button:has-text("Teklifi gönder")'); await A1.waitForURL(/teklifler\?sent=1/);
+  check("teklif gönderildi, onay mesajı var", (await A1.locator("text=Teklif gönderildi").count()) > 0);
+  check("gönderilen listede 'Yanıt bekliyor'", (await A1.locator("text=Yanıt bekliyor").count()) > 0);
+  await shot(A1, "31-gonderilen");
+  // aynı takıma 4. teklif
+  const { data: ch } = await admin.from("match_challenges").select("id, status").eq("from_group_id", teamA);
+  check("tek teklif kaydı, pending", ch.length === 1 && ch[0].status === "pending");
+
+  // 3) Aslan oyuncusu teklifi görür ama yanıtlayamaz; kaptan ana sayfada kart görür
+  await B2.goto(`${BASE}/g/${teamB}/teklifler`);
+  check("oyuncu gelen teklifi görür", (await B2.locator("text=E2E Kartallar").count()) > 0);
+  check("oyuncuda Kabul/Reddet düğmesi yok", (await B2.locator('button:has-text("Kabul et")').count()) === 0);
+  await B1.goto(BASE + "/");
+  check("kaptanın ana sayfasında teklif kartı", (await B1.locator("text=maç teklifi yanıtını bekliyor").count()) > 0);
+  await shot(B1, "32-anasayfa-teklif");
+  await B1.goto(`${BASE}/g/${teamB}`);
+  check("takım sayfasında 'yeni' rozeti", (await B1.locator("text=1 yeni").count()) > 0);
+
+  // 4) Kabul
+  await B1.goto(`${BASE}/g/${teamB}/teklifler`); await shot(B1, "33-gelen-teklif");
+  await B1.click('button:has-text("Kabul et")'); await B1.waitForURL(/\/m\/[0-9a-f-]+\?kabul=1/);
+  const mB = B1.url().match(/\/m\/([0-9a-f-]+)/)[1];
+  check("kabulde maç ekranına yönlendi, kadro boş uyarısı", (await B1.locator("text=Kadro boş").count()) > 0);
+  const { data: ms } = await admin.from("matches").select("id, group_id, kind, status, opponent_name, opponent_group_id, challenge_id").eq("challenge_id", ch[0].id);
+  check("iki takımda da external maç oluştu", ms.length === 2 && ms.every((m) => m.kind === "external" && m.status === "planned"));
+  const mA = ms.find((m) => m.group_id === teamA).id;
+  await shot(B1, "34-mac-bos-kadro");
+
+  // 5) Kadrolar (her takım kendininkini seçer)
+  for (const [page, gid, mid] of [[B1, teamB, mB], [A1, teamA, mA]]) {
+    await page.goto(`${BASE}/g/${gid}/m/${mid}`);
+    const boxes = page.locator('input[name="playerId"]');
+    // Kadro boşken bölüm zaten açık gelir; doluysa özete tıklayıp aç
+    if (!(await boxes.first().isVisible())) await page.locator("summary:has-text('Kadroya oyuncu ekle')").click();
+    const n = await boxes.count();
+    for (let i = 0; i < n; i++) await boxes.nth(i).check({ force: true });
+    await page.click('button:has-text("Seçilenleri ekle")'); await page.waitForLoadState("networkidle");
+  }
+  const { data: rosters } = await admin.from("match_players").select("match_id").in("match_id", [mA, mB]);
+  check("her maçta 2 oyuncu (toplu ekleme çalıştı)", rosters.filter((r) => r.match_id === mA).length === 2 && rosters.filter((r) => r.match_id === mB).length === 2);
+
+  // 6) Ortak ekran: rakip kadro görünür
+  await A1.goto(`${BASE}/g/${teamA}/m/${mA}`);
+  check("Kartal kaptanı rakip kadroyu görür", (await A1.locator("text=Rakip kadro · E2E Aslanlar").count()) > 0 && (await A1.locator("text=Berk").count()) > 0);
+  check("karşılaşma kartında iki takım", (await A1.locator("text=VS").count()) > 0);
+  await shot(A1, "35-ortak-mac-planli");
+  await A2.goto(`${BASE}/g/${teamA}/m/${mA}`);
+  check("oyuncu rakip kadroyu görür", (await A2.locator("text=Rakip kadro").count()) > 0);
+  check("oyuncuda skor formu yok", (await A2.locator('button:has-text("Skoru kaydet")').count()) === 0);
+
+  // 7) Skor: uyuşmazlık → düzeltme → eşleşme
+  const submitScore = async (page, gid, mid, a, b) => {
+    await page.goto(`${BASE}/g/${gid}/m/${mid}`);
+    const form = page.locator('form:has(input[name="scoreA"])').first();
+    if (!(await form.locator('input[name="scoreA"]').isVisible())) await page.locator("summary:has-text('Skoru ve istatistikleri')").click();
+    await page.fill('input[name="scoreA"]', String(a)); await page.fill('input[name="scoreB"]', String(b));
+    await page.locator('button:has-text("Skoru kaydet")').click(); await page.waitForURL(/skor=/);
+    return new URL(page.url()).searchParams.get("skor");
+  };
+  check("ilk skor: rakip bekleniyor", (await submitScore(A1, teamA, mA, 4, 2)) === "waiting");
+  check("bekleme bilgisi görünüyor", (await A1.locator("text=Rakibin skor girmesi bekleniyor").count()) > 0);
+  await shot(A1, "36-skor-bekleniyor");
+  check("uyuşmayan skor: mismatch", (await submitScore(B1, teamB, mB, 2, 3)) === "mismatch");
+  check("uyuşmazlık metni iki skoru gösterir", (await B1.locator("text=Skorlar uyuşmuyor").count()) > 0);
+  await shot(B1, "37-skor-uyusmuyor");
+  const { data: mid1 } = await admin.from("matches").select("status").in("id", [mA, mB]);
+  check("uyuşmazken oylama açılmadı", mid1.every((m) => m.status === "played"));
+  check("düzeltilmiş skor: settled", (await submitScore(B1, teamB, mB, 2, 4)) === "settled");
+  const { data: mid2 } = await admin.from("matches").select("status, voting_deadline").in("id", [mA, mB]);
+  check("iki maç da oylamada, süre var", mid2.every((m) => m.status === "voting" && m.voting_deadline));
+
+  // 8) Oylar (servis anahtarıyla) ve kapanış (arayüzden)
+  const gp = async (uid, gid) => (await admin.from("group_players").select("id").eq("user_id", uid).eq("group_id", gid).single()).data.id;
+  const [a1, a2, b1, b2] = [await gp(users[0].id, teamA), await gp(users[1].id, teamA), await gp(users[2].id, teamB), await gp(users[3].id, teamB)];
+  const vote = (m, v, t, s) => ({ match_id: m, voter_id: v, target_id: t, score: s });
+  await admin.from("votes").insert([vote(mA, a1, a2, 8), vote(mA, a2, a1, 7), vote(mB, b1, b2, 6), vote(mB, b2, b1, 9)]);
+  await A1.goto(`${BASE}/g/${teamA}/m/${mA}`);
+  await A1.click('button:has-text("Oylamayı şimdi kapat")'); await A1.waitForLoadState("networkidle");
+  await B1.goto(`${BASE}/g/${teamB}/m/${mB}`);
+  await B1.click('button:has-text("Oylamayı şimdi kapat")'); await B1.waitForLoadState("networkidle");
+  const { data: closed } = await admin.from("matches").select("status").in("id", [mA, mB]);
+  check("iki maç da kapandı", closed.every((m) => m.status === "closed"));
+  const { data: res } = await admin.from("match_results").select("match_id").in("match_id", [mA, mB]);
+  check("her iki takımın oyuncuları puanlandı (4 sonuç)", res.length === 4);
+
+  // 9) Sonuç: iki takımın puanları, rakip puanlar kendi kartlarını etkilemez
+  await A1.goto(`${BASE}/g/${teamA}/m/${mA}`);
+  check("sonuç ekranında rakip takımın oyuncu puanları", (await A1.locator("text=Rakip kadro · E2E Aslanlar").count()) > 0 && (await A1.locator("text=Berk Kaptan").count()) > 0);
+  await shot(A1, "38-ortak-mac-sonuc");
+  const { data: ratedA } = await admin.from("player_ratings").select("player_id").in("player_id", [a1, a2, b1, b2]);
+  check("her oyuncunun rating'i kendi grubunda", ratedA.length === 4);
+
+  // 10) İstatistik: Kartallar 4-2 kazandı
+  await X.goto(`${BASE}/g/${teamA}/istatistik`);
+  check("istatistik herkese açık: 1 maç, 1 galibiyet", (await X.locator("text=Takım istatistikleri").count()) > 0 && (await X.locator("text=Galibiyet %").count()) > 0 && (await X.locator("text=%100").count()) > 0);
+  check("rakipler listesinde Aslanlar", (await X.locator("text=E2E Aslanlar").count()) > 0);
+  await shot(X, "39-istatistik-kartallar");
+  await X.goto(`${BASE}/g/${teamB}/istatistik`);
+  check("Aslanlar: 1 mağlubiyet, rakip Kartallar", (await X.locator("text=E2E Kartallar").count()) > 0 && (await X.locator("text=%0").count()) > 0);
+  await shot(X, "40-istatistik-aslanlar");
+
+  // 11) Kapanmış maç iptal edilemez
+  const { error: cancelErr } = await admin.rpc("cancel_challenge", { p_challenge_id: ch[0].id });
+  log("(servis anahtarıyla iptal, yetki kontrolü auth.uid yok → bekleneni:)", cancelErr?.message ?? "hata yok");
+} catch (e) {
+  failed++;
+  console.log("  ✗ ÇÖKTÜ:", e.message);
+} finally {
+  await browser?.close();
+  if (groupIds.length) await admin.from("groups").delete().in("id", groupIds);
+  for (const u of users) await admin.auth.admin.deleteUser(u.id);
+  const { count } = await admin.from("groups").select("id", { count: "exact", head: true }).in("id", groupIds);
+  log(`temizlik: ${users.length} kullanıcı, ${groupIds.length} takım silindi (kalan takım: ${count})`);
+}
+console.log(failed ? `\n${failed} kontrol BAŞARISIZ` : "\nTüm e2e kontrolleri geçti");
+process.exit(failed ? 1 : 0);

@@ -5,6 +5,7 @@ import { formatDate } from "@/lib/data";
 import { formatRegion } from "@/lib/regions";
 import { DEFAULT_OVERALL } from "@/lib/rating";
 import { ROLE_LABEL, findTeams, getMemberships, type Membership } from "@/lib/teams-data";
+import { countIncoming } from "@/lib/challenges-data";
 import { Badge, Card, ErrorNote, LinkButton, SectionTitle, cx } from "@/components/ui";
 import { OvrBadge, initials, tierOf } from "@/components/PlayerCard";
 import { TeamBadge } from "@/components/TeamBadge";
@@ -27,7 +28,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
           .from("matches")
           .select("id, group_id, played_at, status, kind, opponent_name, voting_deadline, match_players(player_id)")
           .in("group_id", groupIds)
-          .in("status", ["planned", "voting"])
+          .in("status", ["planned", "played", "voting"])
           .order("played_at")
           .limit(20)
       : Promise.resolve({ data: [] as never[] }),
@@ -49,6 +50,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
     supabase.rpc("unread_counts"),
   ]);
   const unread = new Map(((unreadRows ?? []) as { group_id: string; unread: number }[]).map((u) => [u.group_id, u.unread]));
+
+  const adminTeamIds = memberships.filter((m) => m.group.kind === "team" && m.role !== "member").map((m) => m.group.id);
+  const incoming = await countIncoming(supabase, adminTeamIds);
 
   const voted = new Set((myVotes ?? []).map((v) => v.match_id));
   const myPlayerIds = new Set(memberships.map((m) => m.playerId));
@@ -98,6 +102,20 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
           </div>
         </div>
       </Link>
+
+      {/* Takımıma gelen maç teklifleri (kaptan/yetkili) */}
+      {[...incoming].map(([groupId, count]) => (
+        <Link key={groupId} href={`/g/${groupId}/teklifler`}>
+          <Card className="mb-3 flex items-center gap-3 border-amber-400/40 bg-amber-400/10">
+            <span className="text-2xl">🤝</span>
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold">{count} maç teklifi yanıtını bekliyor</div>
+              <div className="truncate text-xs text-muted">{byGroup.get(groupId)?.group.name}</div>
+            </div>
+            <span className="text-amber-300">›</span>
+          </Card>
+        </Link>
+      ))}
 
       {/* Yanıt bekleyen maç çağrıları */}
       {toAnswer.map((p) => {
@@ -150,7 +168,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
                   <div className="mt-2 text-sm">{m.kind === "external" ? `vs ${m.opponent_name}` : "Kendi aramızda"}</div>
                   <div className="text-xs text-muted">{formatDate(m.played_at)}</div>
                   <div className="mt-2">
-                    {m.status === "voting" ? <Badge tone="warn">Oylama</Badge> : m.inRoster ? <Badge tone="accent">Kadrodasın</Badge> : <Badge>Planlandı</Badge>}
+                    {m.status === "voting" ? <Badge tone="warn">Oylama</Badge> : m.status === "played" ? <Badge tone="warn">Skor onayı</Badge> : m.inRoster ? <Badge tone="accent">Kadrodasın</Badge> : <Badge>Planlandı</Badge>}
                   </div>
                 </Card>
               </Link>

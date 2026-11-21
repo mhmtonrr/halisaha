@@ -16,6 +16,12 @@ function fail(path: string, message: string): never {
   redirect(`${path}${sep}error=${encodeURIComponent(message)}`);
 }
 
+/** RPC'lerin Türkçe hata metinlerini kullanıcıya gösterir; beklenmeyen hatada genel metin */
+function rpcMessage(error: { message?: string; code?: string }, fallback: string) {
+  // P0001: raise exception ile bizim yazdığımız mesaj
+  return error.code === "P0001" && error.message ? error.message : fallback;
+}
+
 const str = (fd: FormData, key: string) => String(fd.get(key) ?? "").trim();
 const int = (fd: FormData, key: string) => {
   const n = Number(fd.get(key));
@@ -411,22 +417,23 @@ export async function addToMatch(fd: FormData) {
   const groupId = str(fd, "groupId");
   const matchId = str(fd, "matchId");
   const back = `/g/${groupId}/m/${matchId}`;
-  const playerId = str(fd, "playerId");
-  const [roster, { data: match }, { data: player }] = await Promise.all([
+  const playerIds = [...new Set(fd.getAll("playerId").map(String).filter(Boolean))];
+  if (!playerIds.length) fail(back, "Eklenecek oyuncuyu seçin");
+  const [roster, { data: match }, { data: players }] = await Promise.all([
     loadRoster(supabase, matchId),
     supabase.from("matches").select("kind").eq("id", matchId).single(),
-    supabase.from("group_players").select("position").eq("id", playerId).single(),
+    supabase.from("group_players").select("id, position").in("id", playerIds),
   ]);
-  const countA = roster.filter((r) => r.team === "A").length;
-  const team = match?.kind === "external" || countA <= roster.length - countA ? "A" : "B";
-  const position = (player?.position as Position | null) ?? null;
-  const { error } = await supabase.from("match_players").insert({
-    match_id: matchId,
-    player_id: playerId,
-    team,
-    position,
-    is_goalkeeper: position === "GK",
+  let countA = roster.filter((r) => r.team === "A").length;
+  let countB = roster.length - countA;
+  const rows = (players ?? []).map((pl) => {
+    const team = match?.kind === "external" || countA <= countB ? "A" : "B";
+    if (team === "A") countA++;
+    else countB++;
+    const position = (pl.position as Position | null) ?? null;
+    return { match_id: matchId, player_id: pl.id, team, position, is_goalkeeper: position === "GK" };
   });
+  const { error } = await supabase.from("match_players").insert(rows);
   if (error) fail(back, "Oyuncu eklenemedi");
   revalidatePath(back);
 }
@@ -445,7 +452,11 @@ export async function removeFromMatch(fd: FormData) {
   revalidatePath(back);
 }
 
-/** Skor ve istatistikler girilir, oylama 24 saatliğine açılır. */
+/**
+ * Skor ve istatistikler girilir, oylama 24 saatliğine açılır.
+ * Takımlar arası (bağlı) maçta skoru iki takım da girer: ikisi birbirinin aynası olunca
+ * iki maçın da oylaması açılır; o zamana kadar maç "skor onayı bekliyor" durumunda kalır.
+ */
 export async function submitResult(fd: FormData) {
   const { supabase } = await requireUser();
   const groupId = str(fd, "groupId");
@@ -453,7 +464,13 @@ export async function submitResult(fd: FormData) {
   const back = `/g/${groupId}/m/${matchId}`;
   if (fd.get("scoreA") === "" || fd.get("scoreB") === "") fail(back, "Skoru girin");
 
-  const roster = await loadRoster(supabase, matchId);
+  const [roster, { data: cur }] = await Promise.all([
+    loadRoster(supabase, matchId),
+    supabase.from("matches").select("challenge_id").eq("id", matchId).single(),
+  ]);
+  const linked = !!cur?.challenge_id;
+  if (linked && roster.length < 2) fail(back, "Skoru girmeden önce kadroya en az 2 oyuncu ekleyin");
+
   const updates = await Promise.all(
     roster.map((r) =>
       supabase
@@ -475,13 +492,20 @@ export async function submitResult(fd: FormData) {
     .update({
       score_a: int(fd, "scoreA"),
       score_b: int(fd, "scoreB"),
-      status: "voting",
-      voting_deadline: deadline,
+      status: linked ? "played" : "voting",
+      ...(linked ? {} : { voting_deadline: deadline }),
     })
     .eq("id", matchId)
-    .eq("status", "planned")
+    .in("status", linked ? ["planned", "played"] : ["planned"])
     .select("id");
   if (error || !data?.length) fail(back, "Maç güncellenemedi (yetkiniz olmayabilir)");
+
+  if (linked) {
+    const { data: state, error: settleError } = await supabase.rpc("settle_linked_match", { p_match_id: matchId });
+    if (settleError) fail(back, "Skor eşleştirilemedi");
+    revalidatePath(back);
+    redirect(`${back}?skor=${state}`);
+  }
   revalidatePath(back);
 }
 
@@ -545,10 +569,16 @@ export async function deleteMatch(fd: FormData) {
   const matchId = str(fd, "matchId");
   const { data: match } = await supabase
     .from("matches")
-    .select("status")
+    .select("status, challenge_id")
     .eq("id", matchId)
     .single();
   if (match?.status === "closed") fail(`/g/${groupId}/m/${matchId}`, "Kapanmış maç silinemez");
+  if (match?.challenge_id) {
+    // Karşı takımla ortak maç: iki taraftaki maç birlikte iptal edilir
+    const { error } = await supabase.rpc("cancel_challenge", { p_challenge_id: match.challenge_id });
+    if (error) fail(`/g/${groupId}/m/${matchId}`, rpcMessage(error, "Maç iptal edilemedi"));
+    redirect(`/g/${groupId}`);
+  }
   const { error } = await supabase.from("matches").delete().eq("id", matchId);
   if (error) fail(`/g/${groupId}/m/${matchId}`, "Maç silinemedi");
   redirect(`/g/${groupId}`);
@@ -642,4 +672,57 @@ export async function deletePoll(fd: FormData) {
   const { data, error } = await supabase.from("match_polls").delete().eq("id", pollId).select("id");
   if (error || !data?.length) fail(`/g/${groupId}/cagri/${pollId}`, "Çağrı silinemedi");
   redirect(`/g/${groupId}`);
+}
+
+// ---------------------------------------------------------------------------
+// Takımlar arası maç teklifi
+// ---------------------------------------------------------------------------
+
+/** Kendi takımımızdan (fromGroupId) karşı takıma (toGroupId) teklif gönderir */
+export async function createChallenge(fd: FormData) {
+  const { supabase } = await requireUser();
+  const from = str(fd, "fromGroupId");
+  const to = str(fd, "toGroupId");
+  const back = `/g/${to}/teklif`;
+  if (!from) fail(back, "Hangi takımınızla teklif göndereceğinizi seçin");
+  const when = str(fd, "playedAt");
+  if (!when) fail(back, "Maç zamanını seçin");
+
+  const { error } = await supabase.rpc("create_challenge", {
+    p_from: from,
+    p_to: to,
+    p_at: parseLocalDateTime(when),
+    p_venue: str(fd, "venue").slice(0, 80),
+    p_fee: str(fd, "fee").slice(0, 120),
+    p_message: str(fd, "message").slice(0, 300),
+  });
+  if (error) fail(`${back}?from=${from}`, rpcMessage(error, "Teklif gönderilemedi"));
+  revalidatePath(`/g/${from}/teklifler`);
+  redirect(`/g/${from}/teklifler?sent=1`);
+}
+
+export async function respondChallenge(fd: FormData) {
+  const { supabase } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const back = `/g/${groupId}/teklifler`;
+  const accept = str(fd, "answer") === "accept";
+  const { data: matchId, error } = await supabase.rpc("respond_challenge", {
+    p_challenge_id: str(fd, "challengeId"),
+    p_accept: accept,
+  });
+  if (error) fail(back, rpcMessage(error, "Teklif yanıtlanamadı"));
+  revalidatePath(back);
+  // Kabulde doğrudan oluşan maça git: kadroyu belirlemek için
+  if (accept && matchId) redirect(`/g/${groupId}/m/${matchId}?kabul=1`);
+  redirect(back);
+}
+
+export async function cancelChallenge(fd: FormData) {
+  const { supabase } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const back = `/g/${groupId}/teklifler`;
+  const { error } = await supabase.rpc("cancel_challenge", { p_challenge_id: str(fd, "challengeId") });
+  if (error) fail(back, rpcMessage(error, "Teklif iptal edilemedi"));
+  revalidatePath(back);
+  redirect(back);
 }

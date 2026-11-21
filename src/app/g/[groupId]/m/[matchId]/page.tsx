@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { finalizeExpired } from "@/lib/finalize";
 import { formatDate, getGroupPlayers, one, POSITION_NAME, POSITIONS, type Position } from "@/lib/data";
 import {
@@ -13,6 +14,8 @@ import {
   setMatchPositions,
   submitResult,
 } from "@/lib/actions";
+import { teamRating } from "@/lib/teams-data";
+import { TeamBadge } from "@/components/TeamBadge";
 import { Badge, Button, Card, ErrorNote, Header, Input, SectionTitle, cx } from "@/components/ui";
 import { OvrBadge, PositionChip, shortName } from "@/components/PlayerCard";
 import { VoteForm } from "./VoteForm";
@@ -41,6 +44,79 @@ interface RosterEntry {
   overall: number;
 }
 
+type GP = { display_name: string; user_id: string | null; position: Position | null };
+
+/** Bir maçın kadrosu; ratingler maçın kendi grubundan (rakip takımınki de okunabilir) */
+async function fetchRoster(supabase: SupabaseClient, matchId: string, groupId: string): Promise<RosterEntry[]> {
+  const [{ data: rows }, players] = await Promise.all([
+    supabase
+      .from("match_players")
+      .select("player_id, team, is_goalkeeper, position, goals, assists, saves, group_players(display_name, user_id, position)")
+      .eq("match_id", matchId),
+    getGroupPlayers(supabase, groupId),
+  ]);
+  const overall = new Map(players.map((p) => [p.id, p.overall]));
+  return (rows ?? [])
+    .map((r) => {
+      const gp = one(r.group_players as GP | GP[]);
+      return {
+        id: r.player_id,
+        name: gp?.display_name ?? "?",
+        userId: gp?.user_id ?? null,
+        // Maça özel mevki; yoksa oyuncunun genel mevkisi
+        position: (r.position as Position | null) ?? (r.is_goalkeeper ? "GK" : (gp?.position ?? null)),
+        team: r.team as Team,
+        isGoalkeeper: r.is_goalkeeper,
+        goals: r.goals,
+        assists: r.assists,
+        saves: r.saves,
+        overall: overall.get(r.player_id) ?? 65,
+      };
+    })
+    .sort(
+      (a, b) =>
+        POSITIONS.indexOf(a.position ?? ("Z" as Position)) - POSITIONS.indexOf(b.position ?? ("Z" as Position)) ||
+        b.overall - a.overall,
+    );
+}
+
+interface TeamInfo {
+  id: string;
+  name: string;
+  color: string | null;
+  city: string | null;
+  district: string | null;
+}
+
+interface Opponent {
+  team: TeamInfo;
+  match: { id: string; status: string; score_a: number | null; score_b: number | null };
+  roster: RosterEntry[];
+}
+
+/** Takımlar arası maçta karşı tarafın maçı, takımı ve kadrosu (takımlar herkese açık olduğundan okunabilir) */
+async function loadOpponent(
+  supabase: SupabaseClient,
+  challengeId: string,
+  myMatchId: string,
+  oppGroupId: string | null,
+): Promise<Opponent | null> {
+  const { data: m } = await supabase
+    .from("matches")
+    .select("id, group_id, status, score_a, score_b")
+    .eq("challenge_id", challengeId)
+    .neq("id", myMatchId)
+    .maybeSingle();
+  const groupId = m?.group_id ?? oppGroupId;
+  if (!m || !groupId) return null;
+  const [{ data: team }, roster] = await Promise.all([
+    supabase.from("groups").select("id, name, color, city, district").eq("id", groupId).single(),
+    fetchRoster(supabase, m.id, groupId),
+  ]);
+  if (!team) return null;
+  return { team, match: m, roster };
+}
+
 function Hidden({ groupId, matchId }: { groupId: string; matchId: string }) {
   return (
     <>
@@ -64,10 +140,10 @@ export default async function MatchPage({
   searchParams,
 }: {
   params: Promise<{ groupId: string; matchId: string }>;
-  searchParams: Promise<{ error?: string; voted?: string; positions?: string }>;
+  searchParams: Promise<{ error?: string; voted?: string; positions?: string; kabul?: string }>;
 }) {
   const { groupId, matchId } = await params;
-  const { error, voted, positions } = await searchParams;
+  const { error, voted, positions, kabul } = await searchParams;
   const { supabase, user } = await requireUser();
 
   const { data: first } = await supabase
@@ -79,47 +155,28 @@ export default async function MatchPage({
   if (!first) notFound();
   if (first.status === "voting") await finalizeExpired(groupId);
 
-  const [{ data: match }, { data: rosterRows }, players, { data: canManage }] = await Promise.all([
+  const [{ data: match }, roster, players, { data: canManage }, { data: myTeam }] = await Promise.all([
     supabase
       .from("matches")
-      .select("id, played_at, venue, status, score_a, score_b, voting_deadline, kind, opponent_name")
+      .select("id, played_at, venue, status, score_a, score_b, voting_deadline, kind, opponent_name, challenge_id, opponent_group_id")
       .eq("id", matchId)
       .single(),
-    supabase
-      .from("match_players")
-      .select("player_id, team, is_goalkeeper, position, goals, assists, saves, group_players(display_name, user_id, position)")
-      .eq("match_id", matchId),
+    fetchRoster(supabase, matchId, groupId),
     getGroupPlayers(supabase, groupId),
     supabase.rpc("can_manage_match", { p_match_id: matchId }),
+    supabase.from("groups").select("name, color").eq("id", groupId).single(),
   ]);
   if (!match) notFound();
+  const myTeamName = myTeam?.name ?? "Biz";
+  const myTeamColor = myTeam?.color ?? null;
+  const opp = match.challenge_id
+    ? await loadOpponent(supabase, match.challenge_id, matchId, match.opponent_group_id)
+    : null;
+  const linked = !!match.challenge_id;
 
-  const overall = new Map(players.map((p) => [p.id, p.overall]));
-  type GP = { display_name: string; user_id: string | null; position: Position | null };
-  const roster: RosterEntry[] = (rosterRows ?? [])
-    .map((r) => {
-      const gp = one(r.group_players as GP | GP[]);
-      return {
-        id: r.player_id,
-        name: gp?.display_name ?? "?",
-        userId: gp?.user_id ?? null,
-        // Maça özel mevki; yoksa oyuncunun genel mevkisi
-        position: (r.position as Position | null) ?? (r.is_goalkeeper ? "GK" : (gp?.position ?? null)),
-        team: r.team as Team,
-        isGoalkeeper: r.is_goalkeeper,
-        goals: r.goals,
-        assists: r.assists,
-        saves: r.saves,
-        overall: overall.get(r.player_id) ?? 65,
-      };
-    })
-    .sort(
-      (a, b) =>
-        POSITIONS.indexOf(a.position ?? ("Z" as Position)) - POSITIONS.indexOf(b.position ?? ("Z" as Position)) ||
-        b.overall - a.overall,
-    );
   const external = match.kind === "external";
-  const labels = labelsFor(external, match.opponent_name);
+  const oppName = opp?.team.name ?? match.opponent_name;
+  const labels = labelsFor(external, oppName);
 
   const me = roster.find((r) => r.userId === user.id);
   const teams = { A: roster.filter((r) => r.team === "A"), B: roster.filter((r) => r.team === "B") };
@@ -129,6 +186,8 @@ export default async function MatchPage({
   const statusBadge =
     match.status === "planned" ? (
       <Badge>Planlandı</Badge>
+    ) : match.status === "played" ? (
+      <Badge tone="warn">Skor onayı</Badge>
     ) : match.status === "voting" ? (
       <Badge tone="warn">Oylama</Badge>
     ) : (
@@ -138,7 +197,7 @@ export default async function MatchPage({
   return (
     <main>
       <Header
-        title={external ? `vs ${match.opponent_name}` : formatDate(match.played_at)}
+        title={external ? `vs ${oppName}` : formatDate(match.played_at)}
         back={`/g/${groupId}`}
         right={statusBadge}
       />
@@ -147,9 +206,16 @@ export default async function MatchPage({
         {match.venue ? ` · ${match.venue}` : ""}
       </p>
       <ErrorNote message={error} />
+      {kabul && (
+        <p className="mb-4 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">
+          Teklif kabul edildi ✓ Şimdi kadronu belirle. Rakip takım da kendi kadrosunu belirliyor.
+        </p>
+      )}
       {positions && (
         <p className="mb-4 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">Mevkiler kaydedildi ✓</p>
       )}
+
+      {linked && opp && <VersusCard mine={{ id: groupId, name: myTeamName, color: myTeamColor, roster }} opp={opp} />}
 
       {match.status !== "planned" && (
         <Card className="mb-4 flex items-center justify-around py-5">
@@ -176,9 +242,22 @@ export default async function MatchPage({
           canManage={!!canManage}
           external={external}
           labels={labels}
+          linked={linked}
           bench={players
             .filter((p) => !roster.some((r) => r.id === p.id))
             .sort((a, b) => a.display_name.localeCompare(b.display_name, "tr"))}
+        />
+      )}
+
+      {match.status === "played" && (
+        <PlayedView
+          groupId={groupId}
+          matchId={matchId}
+          roster={roster}
+          canManage={!!canManage}
+          labels={labels}
+          mine={{ a: match.score_a, b: match.score_b }}
+          opp={opp}
         />
       )}
 
@@ -197,6 +276,8 @@ export default async function MatchPage({
       {match.status === "closed" && (
         <ResultsView groupId={groupId} matchId={matchId} roster={roster} myId={me?.id} external={external} />
       )}
+
+      {linked && opp && <OpponentSection opp={opp} />}
     </main>
   );
 }
@@ -211,6 +292,7 @@ async function PlannedView({
   canManage,
   external,
   labels,
+  linked,
   bench,
 }: {
   groupId: string;
@@ -220,6 +302,7 @@ async function PlannedView({
   canManage: boolean;
   external: boolean;
   labels: Labels;
+  linked: boolean;
   bench: { id: string; display_name: string }[];
 }) {
   const all = [...teams.A, ...teams.B];
@@ -227,6 +310,11 @@ async function PlannedView({
 
   return (
     <>
+      {linked && all.length === 0 && (
+        <Card className="mb-3 border-amber-400/40 bg-amber-400/10 text-center text-sm text-amber-200">
+          Kadro boş. {canManage ? "Aşağıdan oyuncuları ekle; rakip takım da bu ekrandan kadronu görebilir." : "Kaptan veya yetkililer kadroyu belirler."}
+        </Card>
+      )}
       {external ? (
         <Card className="p-3">
           <div className="mb-2 flex items-baseline justify-between font-bold">
@@ -324,7 +412,7 @@ async function PlannedView({
             </form>
           </details>
 
-          <details className="mt-1">
+          <details className="mt-1" open={linked && all.length === 0}>
             <summary className="cursor-pointer py-2 text-sm text-muted">Kadroya oyuncu ekle / çıkar</summary>
             <Card className="mt-2 space-y-3">
               <ul className="space-y-1">
@@ -342,84 +430,35 @@ async function PlannedView({
                 ))}
               </ul>
               {bench.length > 0 && (
-                <form action={addToMatch} className="flex gap-2">
+                <form action={addToMatch} className="space-y-2">
                   <Hidden groupId={groupId} matchId={matchId} />
-                  <select
-                    name="playerId"
-                    className="min-h-11 min-w-0 flex-1 rounded-xl border border-line bg-pitch-950 px-2 text-sm"
-                  >
+                  <div className="text-xs uppercase tracking-wide text-muted">Eklenecekleri seç</div>
+                  <ul className="grid max-h-56 grid-cols-2 gap-1 overflow-y-auto">
                     {bench.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.display_name}
-                      </option>
+                      <li key={p.id}>
+                        <label className="flex min-h-9 cursor-pointer items-center gap-2 rounded-lg border border-line px-2 text-sm has-checked:border-accent has-checked:bg-accent/10">
+                          <input type="checkbox" name="playerId" value={p.id} className="accent-accent" />
+                          <span className="truncate">{p.display_name}</span>
+                        </label>
+                      </li>
                     ))}
-                  </select>
-                  <Button variant="secondary">Ekle</Button>
+                  </ul>
+                  <Button variant="secondary" className="w-full">
+                    Seçilenleri ekle
+                  </Button>
                 </form>
               )}
             </Card>
           </details>
 
           <SectionTitle>Maç bitti mi? Sonucu gir</SectionTitle>
-          <form action={submitResult} className="space-y-3">
-            <Hidden groupId={groupId} matchId={matchId} />
-            <Card className="flex items-center justify-center gap-4">
-              {(["A", "B"] as const).map((t, i) => (
-                <div key={t} className="flex items-center gap-4">
-                  {i === 1 && <span className="text-2xl text-muted">-</span>}
-                  <label className="text-center">
-                    <Input
-                      type="number"
-                      inputMode="numeric"
-                      min={0}
-                      max={99}
-                      name={t === "A" ? "scoreA" : "scoreB"}
-                      required
-                      className={cx("h-16 w-20 text-center text-3xl font-black", !external && TEAM[t].text)}
-                    />
-                    <span className="mt-1 block max-w-20 truncate text-xs uppercase text-muted">{labels[t]}</span>
-                  </label>
-                </div>
-              ))}
-            </Card>
-            <Card className="p-0">
-              <div className="grid grid-cols-[1fr_repeat(3,3.25rem)] gap-1 border-b border-line px-3 py-2 text-[11px] uppercase text-muted">
-                <span>Oyuncu</span>
-                <span className="text-center">Gol</span>
-                <span className="text-center">Asist</span>
-                <span className="text-center">Kurt.</span>
-              </div>
-              {all.map((p) => (
-                <div key={p.id} className="grid grid-cols-[1fr_repeat(3,3.25rem)] items-center gap-1 px-3 py-1.5">
-                  <span className="flex min-w-0 items-center gap-2 text-sm">
-                    {!external && <span className={cx("h-2 w-2 shrink-0 rounded-full", TEAM[p.team].bg)} />}
-                    <span className="truncate">{p.name}</span>
-                  </span>
-                  {(["goals", "assists", "saves"] as const).map((k) => (
-                    <input
-                      key={k}
-                      type="number"
-                      inputMode="numeric"
-                      min={0}
-                      max={99}
-                      name={`${k}_${p.id}`}
-                      placeholder="0"
-                      className={cx(
-                        "h-9 w-full rounded-lg border border-line bg-pitch-950 text-center text-sm",
-                        k === "saves" && p.position !== "GK" && "opacity-40",
-                      )}
-                    />
-                  ))}
-                </div>
-              ))}
-            </Card>
-            <Button className="w-full">Kaydet ve oylamayı başlat</Button>
-            <p className="text-center text-xs text-muted">Oylama 24 saat açık kalır. Herkes oy verince sonuçlar hemen açıklanır.</p>
-          </form>
+          <ResultForm groupId={groupId} matchId={matchId} all={all} external={external} labels={labels} linked={linked} />
 
           <form action={deleteMatch} className="mt-8 text-center">
             <Hidden groupId={groupId} matchId={matchId} />
-            <button className="text-xs text-muted hover:text-red-300">Maçı iptal et</button>
+            <button className="text-xs text-muted hover:text-red-300">
+              {linked ? "Maçı iptal et (rakip takımda da silinir)" : "Maçı iptal et"}
+            </button>
           </form>
         </>
       )}
@@ -429,6 +468,88 @@ async function PlannedView({
         </p>
       )}
     </>
+  );
+}
+
+function ResultForm({
+  groupId,
+  matchId,
+  all,
+  external,
+  labels,
+  linked,
+  score,
+}: {
+  groupId: string;
+  matchId: string;
+  all: RosterEntry[];
+  external: boolean;
+  labels: Labels;
+  linked: boolean;
+  score?: { a: number | null; b: number | null };
+}) {
+  return (
+    <form action={submitResult} className="space-y-3">
+      <Hidden groupId={groupId} matchId={matchId} />
+      <Card className="flex items-center justify-center gap-4">
+        {(["A", "B"] as const).map((t, i) => (
+          <div key={t} className="flex items-center gap-4">
+            {i === 1 && <span className="text-2xl text-muted">-</span>}
+            <label className="text-center">
+              <Input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={99}
+                name={t === "A" ? "scoreA" : "scoreB"}
+                defaultValue={(t === "A" ? score?.a : score?.b) ?? undefined}
+                required
+                className={cx("h-16 w-20 text-center text-3xl font-black", !external && TEAM[t].text)}
+              />
+              <span className="mt-1 block max-w-20 truncate text-xs uppercase text-muted">{labels[t]}</span>
+            </label>
+          </div>
+        ))}
+      </Card>
+      <Card className="p-0">
+        <div className="grid grid-cols-[1fr_repeat(3,3.25rem)] gap-1 border-b border-line px-3 py-2 text-[11px] uppercase text-muted">
+          <span>Oyuncu</span>
+          <span className="text-center">Gol</span>
+          <span className="text-center">Asist</span>
+          <span className="text-center">Kurt.</span>
+        </div>
+        {all.map((p) => (
+          <div key={p.id} className="grid grid-cols-[1fr_repeat(3,3.25rem)] items-center gap-1 px-3 py-1.5">
+            <span className="flex min-w-0 items-center gap-2 text-sm">
+              {!external && <span className={cx("h-2 w-2 shrink-0 rounded-full", TEAM[p.team].bg)} />}
+              <span className="truncate">{p.name}</span>
+            </span>
+            {(["goals", "assists", "saves"] as const).map((k) => (
+              <input
+                key={k}
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={99}
+                name={`${k}_${p.id}`}
+                defaultValue={p[k] || undefined}
+                placeholder="0"
+                className={cx(
+                  "h-9 w-full rounded-lg border border-line bg-pitch-950 text-center text-sm",
+                  k === "saves" && p.position !== "GK" && "opacity-40",
+                )}
+              />
+            ))}
+          </div>
+        ))}
+      </Card>
+      <Button className="w-full">{linked ? "Skoru kaydet" : "Kaydet ve oylamayı başlat"}</Button>
+      <p className="text-center text-xs text-muted">
+              {linked
+                ? "Rakip takım da skoru girer. Skorlar eşleşince iki takımda da 24 saatlik oylama açılır."
+                : "Oylama 24 saat açık kalır. Herkes oy verince sonuçlar hemen açıklanır."}
+            </p>
+    </form>
   );
 }
 
@@ -613,6 +734,145 @@ async function ResultsView({
       </Card>
       <p className="mt-3 text-center text-xs text-muted">
         Puanlar, herkesin kendi oy verme ölçeğine göre düzeltilmiş ve uç oylar atılmış ortalamadır.
+      </p>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Takımlar arası maç: karşılaşma kartı, skor onayı, rakip kadro
+// ---------------------------------------------------------------------------
+
+/** İki takım yan yana: ad, takım rating'i (en iyi 7), maçtaki kadro sayısı */
+function VersusCard({
+  mine,
+  opp,
+}: {
+  mine: { id: string; name: string; color: string | null; roster: RosterEntry[] };
+  opp: Opponent;
+}) {
+  const sides = [
+    { id: mine.id, name: mine.name, color: mine.color, roster: mine.roster, self: true },
+    { id: opp.team.id, name: opp.team.name, color: opp.team.color, roster: opp.roster, self: false },
+  ];
+  return (
+    <Card className="mb-4 grid grid-cols-[1fr_auto_1fr] items-start gap-2 py-4">
+      {sides.map((t, i) => (
+        <div key={t.id} className={cx("contents")}>
+          {i === 1 && <span className="mt-3 text-sm font-bold text-muted">VS</span>}
+          <div className="flex min-w-0 flex-col items-center gap-1.5 text-center">
+            <TeamBadge name={t.name} color={t.color} size="md" />
+            {t.self ? (
+              <span className="max-w-full truncate text-sm font-bold">{t.name}</span>
+            ) : (
+              <Link href={`/g/${t.id}`} className="max-w-full truncate text-sm font-bold hover:text-accent">
+                {t.name}
+              </Link>
+            )}
+            <div className="flex items-center gap-1.5">
+              <OvrBadge overall={teamRating(t.roster.map((p) => p.overall))} className={cx("h-7 w-7 text-xs", t.roster.length === 0 && "opacity-40")} />
+              <span className="text-xs text-muted">{t.roster.length} kişi</span>
+            </div>
+          </div>
+        </div>
+      ))}
+    </Card>
+  );
+}
+
+/** Skor girildi ama rakip henüz girmedi / skorlar uyuşmuyor */
+function PlayedView({
+  groupId,
+  matchId,
+  roster,
+  canManage,
+  labels,
+  mine,
+  opp,
+}: {
+  groupId: string;
+  matchId: string;
+  roster: RosterEntry[];
+  canManage: boolean;
+  labels: Labels;
+  mine: { a: number | null; b: number | null };
+  opp: Opponent | null;
+}) {
+  const oppEntered = opp?.match.status === "played";
+  // Rakibin girdiği skor bizim açımızdan: biz = onların kalesine attığımız (score_b), onlar = score_a
+  const theirView = oppEntered ? { us: opp!.match.score_b, them: opp!.match.score_a } : null;
+  return (
+    <>
+      <Card className={cx("mb-4 space-y-1 text-sm", oppEntered ? "border-red-400/40" : "border-amber-400/40")}>
+        {oppEntered ? (
+          <>
+            <div className="font-semibold text-red-300">Skorlar uyuşmuyor</div>
+            <p className="text-muted">
+              Senin girdiğin: <b className="text-white">{mine.a}-{mine.b}</b> · {opp!.team.name} takımının girdiği:{" "}
+              <b className="text-white">{theirView!.us}-{theirView!.them}</b>. İki takım da doğru skoru girene kadar
+              oylama açılmaz; aşağıdan düzeltebilirsin.
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="font-semibold text-amber-300">Rakibin skor girmesi bekleniyor</div>
+            <p className="text-muted">
+              {opp?.team.name ?? "Rakip takım"} skoru girince ve skorlar eşleşince iki takımda da oylama açılır.
+              Yanlış girdiysen aşağıdan düzeltebilirsin.
+            </p>
+          </>
+        )}
+      </Card>
+      {canManage ? (
+        <details open={oppEntered}>
+          <summary className="cursor-pointer py-2 text-sm text-muted">Skoru ve istatistikleri düzenle</summary>
+          <ResultForm groupId={groupId} matchId={matchId} all={roster} external labels={labels} linked score={mine} />
+        </details>
+      ) : (
+        <p className="text-center text-sm text-muted">Skoru kaptan veya yetkililer girer.</p>
+      )}
+    </>
+  );
+}
+
+/** Rakip takımın kadrosu (ve maç kapanınca oyuncu puanları) */
+function OpponentSection({ opp }: { opp: Opponent }) {
+  const closed = opp.match.status === "closed";
+  return (
+    <>
+      <SectionTitle
+        action={
+          <Link href={`/g/${opp.team.id}`} className="text-xs text-accent">
+            Takım sayfası ›
+          </Link>
+        }
+      >
+        Rakip kadro · {opp.team.name}
+      </SectionTitle>
+      {closed ? (
+        <ResultsView groupId={opp.team.id} matchId={opp.match.id} roster={opp.roster} external />
+      ) : opp.roster.length === 0 ? (
+        <Card className="text-center text-sm text-muted">Rakip takım henüz kadrosunu belirlemedi.</Card>
+      ) : (
+        <Card className="p-0">
+          <ul className="divide-y divide-line">
+            {opp.roster.map((p) => (
+              <li key={p.id}>
+                <Link
+                  href={`/g/${opp.team.id}/p/${p.id}`}
+                  className="flex items-center gap-3 px-3 py-2.5 transition hover:bg-pitch-800"
+                >
+                  <OvrBadge overall={p.overall} className="h-8 w-8 text-sm" />
+                  <span className="min-w-0 flex-1 truncate font-medium">{p.name}</span>
+                  <PositionChip position={p.position} />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+      <p className="mt-2 text-center text-xs text-muted">
+        Her takım kendi oyuncularını puanlar; rakip oyuncuların puanları senin kartlarını etkilemez.
       </p>
     </>
   );
