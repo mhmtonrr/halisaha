@@ -26,6 +26,7 @@ type GP = {
 type ProfileRow = {
   id: string;
   display_name: string;
+  card_name: string | null;
   city: string | null;
   district: string | null;
   preferred_position: string | null;
@@ -34,7 +35,7 @@ type ProfileRow = {
   shirt_number: number | null;
 };
 
-const PROFILE_COLS = "id, display_name, city, district, preferred_position, secondary_positions, preferred_foot, shirt_number";
+const PROFILE_COLS = "id, display_name, card_name, city, district, preferred_position, secondary_positions, preferred_foot, shirt_number";
 
 /** Profil satırlarından, rating/yetenek/takım/gelmedi bilgisiyle aday listesi kurar */
 async function buildCandidates(admin: SupabaseClient, profiles: ProfileRow[]): Promise<PlayerCandidate[]> {
@@ -70,6 +71,7 @@ async function buildCandidates(admin: SupabaseClient, profiles: ProfileRow[]): P
     return {
       userId: p.id,
       name: p.display_name,
+      cardName: p.card_name,
       city: p.city,
       district: p.district,
       position: (p.preferred_position ?? null) as Position | null,

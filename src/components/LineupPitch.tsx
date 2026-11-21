@@ -8,6 +8,8 @@ import { cardWidthPct, type Slot } from "@/lib/formations";
 export interface PitchPlayer {
   id: string;
   name: string;
+  /** Kartta görünen ad (isteğe bağlı) */
+  cardName?: string | null;
   overall: number;
   position: Position | null;
   /** Kartın 6 yeteneği (HIZ, ŞUT, PAS, DRİ, DEF, FİZ; kalecide REF…); oylanmadıysa tireler görünür */
@@ -87,6 +89,7 @@ export function PitchCard({ player, fontSize, className }: { player: PitchPlayer
     <CardFace
       compact
       name={player.name}
+      cardName={player.cardName}
       overall={player.overall}
       position={player.position}
       skills={player.attributes ?? []}

@@ -5,7 +5,7 @@ import { Button, Card, ErrorNote } from "@/components/ui";
 import { ProfileFields, type ProfileValues } from "@/components/ProfileFields";
 
 const PROFILE_COLUMNS =
-  "display_name, city, district, birth_year, preferred_position, secondary_positions, preferred_foot, shirt_number, bio, onboarded_at";
+  "display_name, card_name, city, district, birth_year, preferred_position, secondary_positions, preferred_foot, shirt_number, bio, onboarded_at";
 
 export default async function WelcomePage({
   searchParams,

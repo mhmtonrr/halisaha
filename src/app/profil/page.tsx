@@ -22,7 +22,7 @@ export default async function ProfilePage({
     tab === "ayarlar"
       ? supabase
           .from("profiles")
-          .select("display_name, city, district, birth_year, preferred_position, secondary_positions, preferred_foot, shirt_number, bio")
+          .select("display_name, card_name, city, district, birth_year, preferred_position, secondary_positions, preferred_foot, shirt_number, bio")
           .eq("id", user.id)
           .single()
       : Promise.resolve({ data: null }),

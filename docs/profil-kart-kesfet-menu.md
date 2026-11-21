@@ -62,7 +62,9 @@ Formlarda `RegionSelect` (il seçilince ilçeler) kullan.
 - Takım rozeti tasarımı ayrı, sonraki geliştirme (kart şimdilik takım baş harflerini gösterir).
 - Önerilen model/efor: opus + high (depolama güvenliği + model entegrasyonu); `/clear` sonrası "Parça 2'ye geç" yeter, bu bölümü oku.
 
-## Sıradaki: "kartta görünen ad" (kullanıcı onaylı kararlar)
+## Kartta görünen ad (yapıldı: 0025; kullanıcı onaylı kararlar)
+
+**Uygulama**: `profiles.card_name` + `group_players.card_name` (kopya; ekleme tetikleyicisi doldurur, profil değişince `sync_card_name` eşitler); check `card_name_ok()`. Kartlara `cardName` prop'u (`cardDisplayName`), `getGroupPlayers`/profil/arama/öne çıkanlar/saha bağlı. Form alanı `cardName` (Ayarlar + hoş geldin), action `saveCardName`. Arama (`q`) hâlâ gerçek ada bakar.
 
 - Karttaki ad şu an `fitCardName(gerçek ad)` (src/lib/card-name.ts: sığmazsa "Mehmet Onur D." gibi kısaltır). Yeni: `profiles.card_name` (isteğe bağlı). Boşsa gerçek ad kullanılır; doluysa o kısaltma kuralından geçerek kartta görünür. Kartın kullanıldığı her yerde (Profil, oyuncu sayfası, kadro, saha, öne çıkanlar, arama) bu alan kullanılır.
 - Düzenleme: Profil → Ayarlar'da "Kartta görünen ad" alanı (ve hoş geldin ekranında isteğe bağlı).

@@ -1,6 +1,6 @@
 import { cx } from "./ui";
 import { plateOf } from "@/lib/regions";
-import { fitCardName } from "@/lib/card-name";
+import { cardDisplayName } from "@/lib/card-name";
 import { POSITION_LABEL, type Position } from "@/lib/data";
 import type { Attribute } from "@/lib/attributes";
 
@@ -123,9 +123,9 @@ function Silhouette() {
  * altında 6 yetenek; en altta koyu şeritte plaka | ilçe.
  */
 function FullCard({
-  name, overall, position, skills, city, district, team, unrated, photoUrl, fontSize, className,
+  name, cardName, overall, position, skills, city, district, team, unrated, photoUrl, fontSize, className,
 }: {
-  name: string; overall: number; position: Position | null; skills: { key: string; value: number | null }[];
+  name: string; cardName?: string | null; overall: number; position: Position | null; skills: { key: string; value: number | null }[];
   city?: string | null; district?: string | null; team?: CardTeam | null; unrated?: boolean;
   photoUrl?: string | null; fontSize?: string; className?: string;
 }) {
@@ -170,8 +170,8 @@ function FullCard({
       </div>
 
       {/* ad kuşağı */}
-      <div className="absolute truncate text-center font-extrabold" style={{ left: "10%", right: "5%", top: "56%", fontSize: fitCardName(name).length > 12 ? "0.88em" : "1em", lineHeight: 1.25 }}>
-        {fitCardName(name)}
+      <div className="absolute truncate text-center font-extrabold" style={{ left: "10%", right: "5%", top: "56%", fontSize: cardDisplayName(name, cardName).length > 12 ? "0.88em" : "1em", lineHeight: 1.25 }}>
+        {cardDisplayName(name, cardName)}
       </div>
 
       {/* 6 yetenek */}
@@ -201,6 +201,7 @@ function FullCard({
  */
 export function CardFace({
   name,
+  cardName,
   overall,
   position,
   skills,
@@ -216,6 +217,8 @@ export function CardFace({
   className,
 }: {
   name: string;
+  /** Oyuncunun seçtiği kartta görünen ad; boşsa `name` kullanılır */
+  cardName?: string | null;
   overall: number;
   position: Position | null;
   skills: Pick<Attribute, "key" | "value">[] | { key: string; value: number | null }[];
@@ -234,7 +237,7 @@ export function CardFace({
   if (!compact) {
     return (
       <FullCard
-        name={name} overall={overall} position={position} skills={skills} city={city} district={district}
+        name={name} cardName={cardName} overall={overall} position={position} skills={skills} city={city} district={district}
         team={team} unrated={unrated} photoUrl={photoUrl} fontSize={fontSize} className={className}
       />
     );
@@ -324,7 +327,7 @@ export function CardFace({
         className="relative truncate border-b border-black/15 text-center font-extrabold uppercase"
         style={{ marginTop: compact ? "0.4em" : "0.7em", paddingBottom: "0.12em", fontSize: compact ? "0.82em" : "1em" }}
       >
-        {compact ? shortName(name) : name}
+        {compact ? (cardName?.trim() || shortName(name)) : (cardName?.trim() || name)}
       </div>
       <div className="relative grid grid-cols-2" style={{ marginTop: "0.3em", fontSize: compact ? "0.72em" : "0.82em" }}>
         {cols.map((col, i) => (
@@ -361,6 +364,8 @@ export function PlayerCard({
   ...rest
 }: {
   name: string;
+  /** Oyuncunun seçtiği kartta görünen ad; boşsa `name` kullanılır */
+  cardName?: string | null;
   overall: number;
   position: Position | null;
   /** Karttaki 6 yetenek; yoksa "–" */

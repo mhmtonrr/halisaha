@@ -4,6 +4,7 @@ import { Input, Label } from "./ui";
 
 export interface ProfileValues {
   display_name: string;
+  card_name?: string | null;
   city: string | null;
   district: string | null;
   birth_year: number | null;
@@ -34,6 +35,20 @@ export function ProfileFields({ values, full }: { values: ProfileValues; full: b
           autoComplete="name"
           placeholder="Örn. Ahmet Yılmaz"
         />
+      </label>
+
+      <label className="block">
+        <Label>Kartta görünen ad (isteğe bağlı)</Label>
+        <Input
+          name="cardName"
+          defaultValue={values.card_name ?? ""}
+          minLength={2}
+          maxLength={20}
+          pattern="[A-Za-zÀ-ÖØ-öø-ɏ .]+"
+          title="Sadece harf, boşluk ve nokta (2-20 karakter)"
+          placeholder="Örn. Memo veya Mehmet O."
+        />
+        <p className="mt-1 text-xs text-muted">Boş bırakırsan kartında adın görünür. Sadece harf, boşluk ve nokta.</p>
       </label>
 
       <RegionSelect defaultCity={values.city} defaultDistrict={values.district} />

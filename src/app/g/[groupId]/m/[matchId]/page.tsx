@@ -47,6 +47,7 @@ const labelsFor = (external: boolean, opponent: string | null): Labels =>
 interface RosterEntry {
   id: string;
   name: string;
+  cardName: string | null;
   userId: string | null;
   position: Position | null;
   team: Team;
@@ -81,6 +82,7 @@ async function fetchRoster(supabase: SupabaseClient, matchId: string, groupId: s
       return {
         id: r.player_id,
         name: gp?.display_name ?? "?",
+        cardName: summary.get(r.player_id)?.card_name ?? null,
         userId: gp?.user_id ?? null,
         // Maça özel mevki; yoksa oyuncunun genel mevkisi
         position: (r.position as Position | null) ?? (r.is_goalkeeper ? "GK" : (gp?.position ?? null)),
@@ -107,6 +109,7 @@ async function fetchRoster(supabase: SupabaseClient, matchId: string, groupId: s
 const toPitch = (r: RosterEntry): PitchPlayer => ({
   id: r.id,
   name: r.name,
+  cardName: r.cardName,
   overall: r.overall,
   position: r.position,
   attributes: r.attributes,

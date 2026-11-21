@@ -73,6 +73,7 @@ export default async function PlayerPage({
 
       <PlayerCard
         name={player.display_name}
+        cardName={player.card_name}
         overall={player.overall}
         position={player.position}
         shirtNumber={player.shirt_number}

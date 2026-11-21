@@ -41,6 +41,7 @@ export default async function SquadPage({
         players={players.map((p) => ({
           id: p.id,
           name: p.display_name,
+          cardName: p.card_name,
           overall: p.overall,
           position: p.position,
           secondary: p.secondary_positions,

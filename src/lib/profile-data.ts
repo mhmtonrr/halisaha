@@ -15,6 +15,8 @@ export type StatsVisibility = "teammates" | "public";
 export interface PersonProfile {
   id: string;
   displayName: string;
+  /** Kartta görünen ad (isteğe bağlı) */
+  cardName: string | null;
   city: string | null;
   district: string | null;
   position: Position | null;
@@ -55,7 +57,7 @@ export async function loadPerson(admin: SupabaseClient, userId: string): Promise
   const [{ data: p }, { data: rows, error }] = await Promise.all([
     admin
       .from("profiles")
-      .select("id, display_name, city, district, preferred_position, secondary_positions, preferred_foot, shirt_number, bio, stats_visibility, discoverable")
+      .select("id, display_name, card_name, city, district, preferred_position, secondary_positions, preferred_foot, shirt_number, bio, stats_visibility, discoverable")
       .eq("id", userId)
       .maybeSingle(),
     admin.from("group_players").select("id, group_id, role, is_loan, left_at, groups(name, kind, color)").eq("user_id", userId),
@@ -77,6 +79,7 @@ export async function loadPerson(admin: SupabaseClient, userId: string): Promise
     profile: {
       id: p.id,
       displayName: p.display_name,
+      cardName: p.card_name ?? null,
       city: p.city,
       district: p.district,
       position: (p.preferred_position ?? null) as Position | null,

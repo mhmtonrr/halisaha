@@ -14,6 +14,8 @@ export interface PublicTeamRef {
 export interface PlayerCandidate {
   userId: string;
   name: string;
+  /** Kartta görünen ad (isteğe bağlı) */
+  cardName?: string | null;
   city: string | null;
   district: string | null;
   position: Position | null;

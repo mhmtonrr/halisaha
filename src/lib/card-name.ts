@@ -64,10 +64,10 @@ export function validateCardName(input: string | null | undefined): CardNameResu
   if (v === "") return { ok: true, value: null };
   if (v.length < CARD_NAME_MIN_LEN || v.length > CARD_NAME_MAX_LEN)
     return { ok: false, error: `Kartta görünen ad ${CARD_NAME_MIN_LEN}-${CARD_NAME_MAX_LEN} karakter olmalı.` };
-  if (!/^[\p{Script=Latin} .]+$/u.test(v))
+  if (!/^[A-Za-zÀ-ÖØ-öø-ɏ .]+$/.test(v))
     return { ok: false, error: "Kartta görünen adda sadece harf, boşluk ve nokta olabilir." };
   // Nokta: sadece bir harfin hemen arkasından; ardışık iki nokta ve noktayla başlama yok
-  if (/(^|[^\p{Script=Latin}])\./u.test(v))
+  if (/(^|[^A-Za-zÀ-ÖØ-öø-ɏ])\./.test(v))
     return { ok: false, error: "Nokta sadece bir harfin hemen arkasından gelebilir (örn. \"Mehmet O.\")." };
   if (hasProfanity(v)) return { ok: false, error: "Bu ad uygun değil, lütfen başka bir ad seç." };
   return { ok: true, value: v };

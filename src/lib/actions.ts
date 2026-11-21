@@ -2,6 +2,7 @@
 
 import { revalidatePath, revalidateTag } from "next/cache";
 import { FEATURED_TAG } from "@/lib/featured-data";
+import { validateCardName } from "@/lib/card-name";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { finalizeMatch, recomputePlayers } from "@/lib/finalize";
@@ -75,10 +76,20 @@ function profileArgs(fd: FormData) {
   };
 }
 
+/** Kartta görünen adı kaydeder (doğrulanmış değer); group_players kopyasını veritabanı tetikleyicisi eşitler */
+async function saveCardName(supabase: Awaited<ReturnType<typeof requireUser>>["supabase"], userId: string, value: string | null, back: string) {
+  const { error } = await supabase.from("profiles").update({ card_name: value }).eq("id", userId);
+  if (error) fail(back, "Kartta görünen ad kaydedilemedi");
+}
+
 export async function updateProfile(fd: FormData) {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
+  const back = "/profil?sekme=ayarlar";
+  const card = validateCardName(str(fd, "cardName"));
+  if (!card.ok) fail(back, card.error);
   const { error } = await supabase.rpc("update_my_profile", profileArgs(fd));
-  if (error) fail("/profil?sekme=ayarlar", error.message);
+  if (error) fail(back, error.message);
+  await saveCardName(supabase, user.id, card.ok ? card.value : null, back);
   revalidatePath("/", "layout");
   redirect("/profil?sekme=ayarlar&saved=1");
 }
@@ -106,15 +117,18 @@ export async function updateDiscoverable(fd: FormData) {
 
 /** İlk girişteki karşılama formu */
 export async function completeOnboarding(fd: FormData) {
-  const { supabase } = await requireUser({ allowIncomplete: true });
+  const { supabase, user } = await requireUser({ allowIncomplete: true });
   const rawNext = str(fd, "next");
   const next = rawNext.startsWith("/") && !rawNext.startsWith("//") && !rawNext.startsWith("/hosgeldin") ? rawNext : "/";
   const args = profileArgs(fd);
   const back = `/hosgeldin?next=${encodeURIComponent(next)}`;
   if (!args.p_city) fail(back, "İlini seç");
   if (!args.p_position) fail(back, "Ana mevkini seç");
+  const card = validateCardName(str(fd, "cardName"));
+  if (!card.ok) fail(back, card.error);
   const { error } = await supabase.rpc("update_my_profile", { ...args, p_complete_onboarding: true });
   if (error) fail(back, error.message);
+  await saveCardName(supabase, user.id, card.ok ? card.value : null, back);
   revalidatePath("/", "layout");
   redirect(next);
 }
