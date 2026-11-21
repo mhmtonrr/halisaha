@@ -55,6 +55,8 @@ Formlarda `RegionSelect` (il seçilince ilçeler) kullan.
 
 ## Parça 2 planı: kart fotoğrafı (kullanıcı onaylı kararlar)
 
+**Uygulama durumu**: 1) veri/DB yapıldı (0026): `avatars` deposu (herkese açık, 512 KB, webp/png; yol `<user_id>/<dosya>`, sadece sahibi yazar/siler), `profiles.photo_url` (check `photo_url_ok`: sadece kendi klasöründeki depo adresi, isteğe bağlı `?v=<sayı>` önbellek kırıcı), `group_players.photo_url` kopya (tetikleyici hep profilden doldurur, elle değişmez). db-check: `card-photo.mjs` (PGlite'ta `storage` şeması taklit edilir). Sırada: 2) yükleme + arka plan kaldırma + önizleme arayüzü (Ayarlar + hoş geldin), 3) kartlara `photoUrl` bağlama + test.
+
 - Oyuncu fotoğraf yükler; kartta `photoUrl` olarak görünür (`FullCard` hazır, yoksa silüet). Yükleme **hoş geldin ekranında isteğe bağlı** ve sonradan **Profil → Ayarlar**'da.
 - **Arka plan kaldırma tarayıcıda** (`@imgly/background-removal`, ücretsiz, fotoğraf sunucuya ham gitmez; model ~40 MB, sadece yükleme ekranı açılınca `dynamic import`, model dosyaları üçüncü taraf CDN'den iner, repoya konmaz). Yedek: işlem başarısız/cihaz yetersizse düz kırpma. Kullanıcı **şeffaf PNG** yüklerse işlem atlanır.
 - Akış: seç → arka plan kaldır → kart üzerinde **canlı önizleme** → "Kaydet" / "Başka fotoğraf". Sonuç şeffaf **WebP (~100-200 KB, kırpılmış/küçültülmüş)** olarak Supabase Storage'a (yeni migration: avatar deposu, oyuncu sadece kendi dosyasını yazar/siler, herkes okur; sunucuda tür ve boyut doğrulanır). Oyuncu kendi fotoğrafını silebilir.
