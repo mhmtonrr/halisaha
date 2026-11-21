@@ -2,7 +2,7 @@
 
 (CLAUDE.md'den taşındı; ilgili konuda çalışırken oku. Konu değişirse sadece bu dosyayı güncelle.)
 
-**Kart tasarımı (kullanıcı şablonu)**: tam kart `FullCard` (PlayerCard.tsx): üstte çentikli kalkan, sol üstte rating/mevki/takım rozeti, sağda oyuncu fotoğrafı (`photoUrl`; yoksa silüet), altta ad, 6 yetenek, plaka+ilçe. Seviye: **≤64 bronz, 65-74 gümüş, ≥75 altın** (`tierOf`); maçsız oyuncu gri. Saha (`compact`) kartı eski sade düzende. Sıradaki: fotoğraf yükleme + tarayıcıda arka plan kaldırma (parça 2).
+**Kart tasarımı (kullanıcı şablonu)**: tam kart `FullCard` (PlayerCard.tsx): zemin `public/cards/{gold,silver,bronze}.webp` (640x925, şeffaf kenar; kullanıcının ürettiği boş şablonlar, üzerinde metin/logo yok), üstüne canlı metin yüzde konumlarla: sol üst rating/mevki/takım rozeti, sağda fotoğraf (`photoUrl`; yoksa silüet), ad kuşağı, 6 yetenek, alt koyu şeritte plaka | ilçe. Her öğe kendi yazı boyutunu taşır (`em` birikmesi olmasın). Seviye: **≤64 bronz, 65-74 gümüş, ≥75 altın** (`tierOf`); maçsız oyuncu gri (gümüş zemin + grayscale). Saha (`compact`) kartı eski sade düzende. Middleware `/cards/` yolunu atlar. Sıradaki: fotoğraf yükleme + tarayıcıda arka plan kaldırma (parça 2).
 
 **Oyuncu kartı ve yetenek değerlendirmesi (migration 0018 + 0019)**: kart (`PlayerCard`/`CardFace`, saha için `compact`) FIFA kalkanıdır: rating, mevki,
 **il plaka kodu + ilçe** (bayrak yerine; `plateOf`), takım rozeti (sadece profilde), 6 yetenek (Türkçe kısaltma). Maçı olmayan oyuncunun kartı gri ("new" seviye);

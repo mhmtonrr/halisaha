@@ -98,21 +98,12 @@ function PitchLines() {
 }
 
 
-/** Kart gövdesinin ana hatları (üstte yanlarda çentik, altta sivri uç); yüzde koordinatlı, her boyutta ölçeklenir */
-const CARD_SHAPE = `polygon(${[
-  [0, 10], [2.5, 9.5], [6, 7.5], [9, 4.5], [14, 2.5], [22, 1.2], [32, 0.4], [42, 0], [58, 0], [68, 0.4], [78, 1.2], [86, 2.5],
-  [91, 4.5], [94, 7.5], [97.5, 9.5], [100, 10], [100, 86], [99, 89], [95, 92], [88, 94.5], [78, 96.5], [66, 98.2], [56, 99.4],
-  [50, 100], [44, 99.4], [34, 98.2], [22, 96.5], [12, 94.5], [5, 92], [1, 89], [0, 86],
-]
-  .map(([x, y]) => `${x}% ${y}%`)
-  .join(", ")})`;
-
-/** Seviye başına zemin (çapraz gradyan), ışık bandı ve yazı rengi */
-const FULL_TIER: Record<Tier, { bg: string; sheen: string; text: string }> = {
-  gold: { bg: "linear-gradient(160deg,#f6dc82 0%,#e2b94a 38%,#c99a2e 70%,#e6c460 100%)", sheen: "rgba(255,246,190,.55)", text: "#2a1d03" },
-  silver: { bg: "linear-gradient(160deg,#f1f4f7 0%,#c5ccd3 38%,#9aa4ae 70%,#d3d9df 100%)", sheen: "rgba(255,255,255,.6)", text: "#1b2127" },
-  bronze: { bg: "linear-gradient(160deg,#e8b88c 0%,#c4814c 38%,#935630 70%,#c98e5c 100%)", sheen: "rgba(255,226,196,.45)", text: "#2e1708" },
-  new: { bg: "linear-gradient(160deg,#e2e8f0 0%,#a9b4c3 45%,#7b8794 100%)", sheen: "rgba(255,255,255,.5)", text: "#111827" },
+/** Seviye başına kart zemini (public/cards/*.webp, şeffaf kenarlı) ve yazı renkleri; maçsız oyuncu gri */
+const FULL_TIER: Record<Tier, { img: string; text: string; light: string; filter?: string }> = {
+  gold: { img: "gold", text: "#1a1203", light: "#f3dc92" },
+  silver: { img: "silver", text: "#13171b", light: "#dfe5ec" },
+  bronze: { img: "bronze", text: "#2a1305", light: "#f4cfa8" },
+  new: { img: "silver", text: "#13171b", light: "#dfe5ec", filter: "grayscale(1) brightness(.92)" },
 };
 
 /** Fotoğrafı olmayan oyuncu için yer tutucu siluet */
@@ -125,7 +116,11 @@ function Silhouette() {
   );
 }
 
-/** Profil/liste kartı (tasarım: şablon kart). Rating + mevki + takım rozeti solda, oyuncu fotoğrafı sağda, altta ad, 6 yetenek, plaka/ilçe. */
+/**
+ * Profil/liste kartı. Zemin hazır görsel (640x925); üstüne canlı metin yerleştirilir. Tüm konumlar kartın yüzdesidir ve her öğe
+ * kendi yazı boyutunu taşır (`em` birikmesi olmasın). Sol üst: rating/mevki/takım rozeti; sağ: fotoğraf; orta kuşak: ad;
+ * altında 6 yetenek; en altta koyu şeritte plaka | ilçe.
+ */
 function FullCard({
   name, overall, position, skills, city, district, team, unrated, photoUrl, fontSize, className,
 }: {
@@ -137,55 +132,63 @@ function FullCard({
   const plate = plateOf(city);
   return (
     <div
-      className={cx("relative overflow-hidden shadow-xl", className)}
-      style={{ width: "11em", height: "15.2em", fontSize, clipPath: CARD_SHAPE, background: t.bg, color: t.text }}
+      className={cx("relative", className)}
+      style={{
+        width: "11em", height: "15.9em", fontSize, color: t.text,
+        backgroundImage: `url(/cards/${t.img}.webp)`, backgroundSize: "100% 100%",
+        filter: `${t.filter ? t.filter + " " : ""}drop-shadow(0 0.35em 0.5em rgba(0,0,0,.45))`,
+      }}
     >
-      {/* ince çizgili doku + çapraz ışık bandı */}
-      <div aria-hidden className="absolute inset-0 opacity-40" style={{ background: "repeating-linear-gradient(115deg,rgba(255,255,255,.35) 0 1px,transparent 1px 4px)" }} />
-      <div aria-hidden className="absolute inset-0" style={{ background: `linear-gradient(115deg,transparent 28%,${t.sheen} 40%,transparent 52%,${t.sheen} 66%,transparent 76%)`, opacity: 0.55 }} />
-
-      <div className="absolute flex flex-col items-center leading-none" style={{ left: "1.15em", top: "2.2em", width: "2.8em" }}>
-        <div className="font-black" style={{ fontSize: "2.7em" }}>{overall}</div>
-        <div className="font-extrabold" style={{ fontSize: "1.15em", marginTop: "0.15em" }}>{position ? POSITION_LABEL[position] : "—"}</div>
-        {team && (
+      {/* sol üst: rating, mevki, takım rozeti */}
+      <div className="absolute flex flex-col items-center leading-none" style={{ left: "6%", top: "9%", width: "30%" }}>
+        <div className="font-black" style={{ fontSize: "2.35em", letterSpacing: "-0.02em" }}>{overall}</div>
+        <div className="font-extrabold" style={{ fontSize: "1.05em", marginTop: "0.2em" }}>{position ? POSITION_LABEL[position] : "—"}</div>
+        <div style={{ width: "88%", height: 1, background: t.text, opacity: 0.35, margin: "0.55em 0 0.6em" }} />
+        {team ? (
           <span
-            className="mt-[0.7em] inline-flex items-center justify-center rounded-[0.35em] font-black text-white shadow"
-            style={{ width: "2.6em", height: "2.6em", fontSize: "0.9em", background: team.color ?? "#1a5a36" }}
+            className="inline-flex items-center justify-center rounded-full font-black text-white"
+            style={{ width: "2.1em", height: "2.1em", fontSize: "0.9em", background: team.color ?? "#1a5a36", boxShadow: "0 0 0 0.12em rgba(0,0,0,.65)" }}
             title={team.name}
           >
             {initials(team.name)}
           </span>
-        )}
+        ) : null}
       </div>
 
-      {/* fotoğraf alanı: sağ üst; alt kenarı isme doğru solar */}
+      {/* sağ: oyuncu fotoğrafı (şeffaf kesim); alt kenarı isim kuşağına doğru solar */}
       <div
         className="absolute flex items-end justify-center overflow-hidden"
-        style={{ right: "0.7em", top: "1.5em", width: "6.9em", height: "7.4em", WebkitMaskImage: "linear-gradient(#000 80%,transparent)", maskImage: "linear-gradient(#000 80%,transparent)" }}
+        style={{ left: "38%", right: "2%", top: "6%", height: "49%", WebkitMaskImage: "linear-gradient(#000 82%,transparent)", maskImage: "linear-gradient(#000 82%,transparent)" }}
       >
         {photoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={photoUrl} alt={name} className="h-full w-full object-contain object-bottom" draggable={false} />
         ) : (
-          <div className="h-[85%] w-[85%] opacity-25"><Silhouette /></div>
+          <div className="h-[80%] w-[70%] opacity-20"><Silhouette /></div>
         )}
       </div>
 
-      <div className="absolute left-0 right-0 truncate px-[1em] text-center font-extrabold" style={{ top: "7.1em", fontSize: "1.3em", lineHeight: 1.1 }}>{name}</div>
+      {/* ad kuşağı */}
+      <div className="absolute truncate text-center font-extrabold" style={{ left: "10%", right: "5%", top: "58%", fontSize: "1em", lineHeight: 1.2 }}>
+        {name}
+      </div>
 
-      <div className="absolute left-0 right-0 flex justify-center" style={{ top: "13.7em", gap: "0.3em", fontSize: "0.82em" }}>
-        {skills.map((a) => (
-          <div key={a.key} className="flex flex-col items-center leading-tight" style={{ minWidth: "1.6em" }}>
-            <span className="font-bold opacity-80" style={{ fontSize: "0.78em" }}>{a.key}</span>
-            <span className="font-black tabular-nums" style={{ fontSize: "1.2em" }}>{a.value ?? "–"}</span>
+      {/* 6 yetenek */}
+      <div className="absolute grid grid-cols-6" style={{ left: "7%", right: "7%", top: "68%" }}>
+        {skills.slice(0, 6).map((a, i) => (
+          <div key={a.key} className="flex flex-col items-center leading-none" style={{ borderLeft: i ? `1px solid ${t.text}33` : undefined }}>
+            <span className="font-bold" style={{ fontSize: "0.46em", opacity: 0.85 }}>{a.key}</span>
+            <span className="font-black tabular-nums" style={{ fontSize: "0.82em", marginTop: "0.18em" }}>{a.value ?? "–"}</span>
           </div>
         ))}
       </div>
 
-      <div className="absolute left-0 right-0 flex items-baseline justify-center truncate px-[1.2em] font-bold" style={{ top: "14.85em", gap: "0.7em", fontSize: "0.92em" }}>
+      {/* alt koyu şerit: plaka | ilçe */}
+      <div className="absolute flex items-center justify-center whitespace-nowrap font-bold" style={{ left: "24%", right: "24%", top: "81.2%", gap: "0.5em", fontSize: "0.62em", color: t.light }}>
         {plate && <span className="font-black">{plate}</span>}
+        {plate && district && <span style={{ width: 1, height: "1.1em", background: t.light, opacity: 0.6 }} />}
         {district && <span className="truncate">{district}</span>}
-        {!plate && !district && <span className="opacity-50">—</span>}
+        {!plate && !district && <span style={{ opacity: 0.6 }}>—</span>}
       </div>
     </div>
   );
