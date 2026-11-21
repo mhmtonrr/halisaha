@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   computeMatch,
+  CONFIG,
   computeRatings,
   detectCollusion,
   normalizeVotes,
@@ -373,5 +374,45 @@ describe("takımlar arası maçta kendi/rakip oy payı", () => {
     const own = w[0].w + w[1].w;
     const rival = w[2].w;
     expect(rival / (own + rival)).toBeCloseTo(0.6, 10);
+  });
+});
+
+describe("maçın önemi (resmî takım maçı tam, arkadaş/antrenman maçı yarım)", () => {
+  const players = ids(6);
+  // Oy ölçeğinde (1-10) farklı seviyeler: p1 en iyi, p6 en zayıf
+  const skill = Object.fromEntries(players.map((p, i) => [p, 9 - i * 1.2]));
+  const build = (importance?: number) => ({
+    ...makeMatch({ id: "m1", playedAt: "2026-01-01T18:00:00Z", players, skill }),
+    importance,
+  });
+
+  it("önem çarpanı maçın ağırlığını orantılı düşürür, maç puanını değiştirmez", () => {
+    const full = computeMatch(build()).players[0];
+    const half = computeMatch(build(CONFIG.CASUAL_IMPORTANCE)).players[0];
+    expect(full.weight).toBeGreaterThan(0); // 0 = 0 ile boşa geçmesin
+    expect(full.performance).toBeGreaterThan(0);
+    expect(half.weight).toBeCloseTo(full.weight * CONFIG.CASUAL_IMPORTANCE, 10);
+    expect(half.matchScore).toBe(full.matchScore);
+    expect(half.performance).toBe(full.performance);
+  });
+
+  it("tanımsız önem 1'e eşittir (eski davranış)", () => {
+    expect(computeMatch(build(undefined)).players[0].weight).toBe(computeMatch(build(1)).players[0].weight);
+  });
+
+  it("yarım etkili maç rating'i ortalamaya (65) daha az uzaklaştırır", () => {
+    const rating = (importance: number | undefined) =>
+      computeRatings([build(importance)]).ratings.get(players[0])!.overall;
+    const full = rating(undefined);
+    const half = rating(CONFIG.CASUAL_IMPORTANCE);
+    expect(full).toBeGreaterThan(65);
+    expect(half).toBeGreaterThan(65);
+    expect(half).toBeLessThan(full);
+  });
+
+  it("az oylu maç yine hiç sayılmaz (önem çarpanı eşiği gevşetmez)", () => {
+    const m = build(CONFIG.CASUAL_IMPORTANCE);
+    m.votes = m.votes.filter((v) => v.voterId === "p1" || v.voterId === "p2").slice(0, 3);
+    expect(computeMatch(m).players.every((p) => p.weight === 0 || p.votesReceived >= CONFIG.MIN_VOTES_RECEIVED)).toBe(true);
   });
 });

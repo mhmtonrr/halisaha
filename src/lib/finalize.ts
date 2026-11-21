@@ -107,8 +107,10 @@ async function loadInputs(admin: SupabaseClient, scope: Scope): Promise<Loaded> 
     score_a: number | null;
     score_b: number | null;
     challenge_id: string | null;
+    kind: "internal" | "external";
+    groups: { kind: string } | { kind: string }[] | null;
   };
-  const MATCH_COLS = "id, group_id, played_at, score_a, score_b, challenge_id";
+  const MATCH_COLS = "id, group_id, played_at, score_a, score_b, challenge_id, kind, groups!matches_group_id_fkey(kind)";
   let seedMatchIds: string[];
   if ("all" in scope) {
     seedMatchIds = (
@@ -241,6 +243,8 @@ async function loadInputs(admin: SupabaseClient, scope: Scope): Promise<Loaded> 
         .filter((v) => matchSet.has(v.match_id))
         .map((v) => ({ voterId: key(v.voter_id), targetId: key(v.target_id) })),
       rivalShare: linked ? CONFIG.RIVAL_SHARE : undefined,
+      // Takımın rakibe karşı maçı tam; grup maçı ve antrenman/iç maç yarım etki eder
+      importance: sorted.every((m) => m.kind === "external" && one(m.groups)?.kind === "team") ? 1 : CONFIG.CASUAL_IMPORTANCE,
     });
     rows.set(inputId, here);
   }

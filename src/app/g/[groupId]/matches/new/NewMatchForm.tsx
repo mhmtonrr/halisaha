@@ -41,7 +41,8 @@ export function NewMatchForm({
   const [selected, setSelected] = useState<Set<string>>(new Set(preselected));
   const [gks, setGks] = useState<Set<string>>(new Set(players.filter((p) => p.isGoalkeeper).map((p) => p.id)));
   const [pending, setPending] = useState(false);
-  const [kind, setKind] = useState<"internal" | "external">(defaultKind);
+  // Tür grubun cinsinden gelir: takım rakibe karşı, grup kendi aralarında maç kurar
+  const kind = defaultKind;
   const external = kind === "external";
 
   const toggle = (set: Set<string>, id: string) => {
@@ -79,29 +80,6 @@ export function NewMatchForm({
         .map((p) => (
           <input key={p.id} type="hidden" name="gk" value={p.id} />
         ))}
-
-      <div className="grid grid-cols-2 gap-1 rounded-2xl border border-line bg-pitch-900/80 p-1">
-        {(
-          [
-            ["internal", "⚔️ Kendi aramızda", "Grubu ikiye bölüp oynuyoruz"],
-            ["external", "🆚 Rakip takıma karşı", "Biz bir takımız, rakip dışarıdan"],
-          ] as const
-        ).map(([k, label, hint]) => (
-          <button
-            key={k}
-            type="button"
-            onClick={() => setKind(k)}
-            className={cx(
-              "rounded-xl px-3 py-2.5 text-left transition",
-              kind === k ? "bg-accent text-pitch-950" : "text-muted hover:bg-pitch-800",
-            )}
-            aria-pressed={kind === k}
-          >
-            <div className="text-sm font-semibold">{label}</div>
-            <div className={cx("text-[11px]", kind === k ? "text-pitch-900" : "text-muted")}>{hint}</div>
-          </button>
-        ))}
-      </div>
 
       {external && (
         <Card>

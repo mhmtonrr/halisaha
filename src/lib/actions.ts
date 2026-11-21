@@ -316,7 +316,10 @@ export async function createMatch(fd: FormData) {
   const playerIds = [...new Set(fd.getAll("players").map(String))];
   const goalkeepers = new Set(fd.getAll("gk").map(String).filter((id) => playerIds.includes(id)));
   const when = str(fd, "playedAt");
-  const external = str(fd, "kind") === "external";
+  // Takım sadece rakibe karşı, grup sadece kendi aralarında maç kurar (veritabanı da zorunlu kılar)
+  const { data: groupRow } = await supabase.from("groups").select("kind").eq("id", groupId).maybeSingle();
+  if (!groupRow) fail(back, "Grup bulunamadı");
+  const external = groupRow.kind === "team";
   const opponent = str(fd, "opponent");
 
   if (!when) fail(back, "Maç tarihini seçin");

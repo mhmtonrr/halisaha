@@ -51,6 +51,11 @@ export interface MatchInput {
    * Tanımsızsa tüm oylar eşit sayılır (kendi aramızda maçlar). Bir taraftan hiç oy yoksa diğeri tam sayılır.
    */
   rivalShare?: number;
+  /**
+   * Maçın rating'e etki çarpanı (0-1, varsayılan 1): resmî takım maçı tam, arkadaş/antrenman maçı
+   * `CONFIG.CASUAL_IMPORTANCE`. Maçın ağırlığını çarpar; az oylu maçın sayılmaması kuralı değişmez.
+   */
+  importance?: number;
 }
 
 export interface PlayerMatchResult {
@@ -107,6 +112,8 @@ export const CONFIG = {
   COLLUSION_EXCESS: 1.0,
   /** Şüpheli ikililerin karşılıklı oy ağırlığı */
   COLLUSION_WEIGHT: 0.3,
+  /** Grup (topluluk) ve antrenman/iç maçlarının rating'e etkisi; takımın rakip maçı 1'dir */
+  CASUAL_IMPORTANCE: 0.5,
   /** Takımlar arası maçta rakip takımın oylarının payı; kalanı kendi takımının (şişirmeyi azaltır) */
   RIVAL_SHARE: 0.6,
   /** FIFA ölçeği: ortalama oyuncu */
@@ -321,7 +328,8 @@ export function computeMatch(
       received.length < CONFIG.MIN_VOTES_RECEIVED
         ? 0
         : Math.min(1, participation / CONFIG.FULL_WEIGHT_PARTICIPATION) *
-          Math.min(1, received.length / CONFIG.FULL_TRUST_VOTES);
+          Math.min(1, received.length / CONFIG.FULL_TRUST_VOTES) *
+          (match.importance ?? 1);
 
     return {
       playerId: p.playerId,
