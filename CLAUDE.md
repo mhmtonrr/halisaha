@@ -85,6 +85,7 @@ src/app/                 Sayfalar (aşağıda)
 supabase/migrations/     0001..0023 SQL (sırayla; hepsi canlıya uygulandı)
 scripts/db-checks/       PGlite ile RLS/yetki kontrolleri (npm run db:check)
 scripts/e2e/             Canlı veritabanına karşı Playwright akış testleri
+scripts/perf/ttfb.mjs   Sayfa yanıt süresi ölçümü (geçici kullanıcıyla canlı site, TTFB)
 scripts/recompute-all.ts Tüm ratingleri baştan hesaplar (vite-node ile, aşağıda)
 ```
 
@@ -292,8 +293,8 @@ karar → oyuncu, yetkili çıkışı → diğer yetkililer. UI: `m/[matchId]/Wi
 Yapılmadı: onaydan sonra çağrının yedek listesinden otomatik öneri (kaptan "Kadroya oyuncu ekle / çıkar" listesinden elle ekler). Test: `db-checks/withdrawals.mjs`, `e2e/withdrawal.mjs`.
 
 **Menü**: her sayfada sağ üstte bildirim çanı + ☰ (`Header` içinde `MenuControls`; ana sayfada kendi satırı). ☰ sağdan açılan çekmecedir: profil özeti, Ana sayfa, Keşfet, Bildirimler,
-Yetenek değerlendirmesi (bekleyen sayısı), İstatistiklerim, Ayarlar, **Takımlarım ve gruplarım** (her biri açılır: ana sayfa, kadro, sohbet, takımda teklifler/istatistik, oyuncular), Takım/Grup kur, Gizlilik,
-**Çıkış yap** (`POST /auth/signout`). **Alt çubuk kaldı** (kullanıcı kararı). Layout her istekte `loadMenuData()` çağırır (giriş yoksa null → menü hiç görünmez); çekmece sayfa değişince/Escape/karartma ile kapanır.
+Yetenek değerlendirmesi (bekleyen sayısı), İstatistiklerim, Ayarlar, **ayrı Takımlarım ve Gruplarım bölümleri** (her biri açılır: ana sayfa, kadro, sohbet, takımda teklifler/istatistik, oyuncular; her başlıkta Katıl/Kur), Gizlilik,
+**Çıkış yap** (`POST /auth/signout`). **Alt çubuk kaldı** (kullanıcı kararı). Menü verisi layout'ta değil, `loadMenu` server action'ıyla boşta zamanda ve çekmece açılırken gelir (`AppMenuShell`; veri gelene dek iskelet); giriş sayfalarında menü yoktur (`HIDDEN`); çekmece sayfa değişince/Escape/karartma ile kapanır.
 
 **Hız (kullanıcı raporu: "uygulama yavaş")**: ölçüm `node scripts/perf/ttfb.mjs [adres]` (geçici kullanıcıyla sayfa TTFB'si; ilk ölçüm 0,7-1,7 sn). Kök neden: Vercel fonksiyonları `iad1` (ABD) çalışıyordu, Supabase Frankfurt;
 her sorgu/kimlik çağrısı okyanus aşıyordu. Yapılanlar: `vercel.json` `regions: ["fra1"]` (Supabase ile aynı bölge); **JWT yerelde doğrulanır** (`getClaims`, ES256 JWKS; middleware ve `getAuthUser`/`requireUser`) — `getUser()` her istekte
@@ -340,6 +341,8 @@ Uçtan uca (canlı Supabase'e karşı; test kullanıcıları/grupları oluşturu
 (NODE_USE_ENV_PROXY=1 npx next start -p 3000 > /tmp/server.log 2>&1 &)
 NODE_USE_ENV_PROXY=1 NO_PROXY=localhost,127.0.0.1 node scripts/e2e/chat.mjs /tmp/shots
 ```
+**Bilinen bozuk/kırılgan senaryolar (benim değişikliklerimle ilgisiz)**: `teams-polls` ("grup üyesi maç/çağrı açamıyor" ve "Doğrudan maç" eski varsayımlar, üye çağrısından/0013'ten önce yazıldı), `auth-onboarding` (ilçe artık `input[name=district]` değil seçim listesi),
+`member-poll` (akşam saatlerinde formun varsayılan 21:00 maçı "en az 3 saat sonra" kuralına takılır → günün saatine bağlı). Menü/davet testlerinde çekmece içeriği `waitFor` ile beklenir.
 Senaryolar: `profile-links`, `invite`, `withdrawal`, `leave`, `menu`, `profile`, `skills`, `positions-external`, `auth-onboarding`, `teams-polls`, `regions-community`, `chat`, `challenges`, `guest-match`, `realtime`, `member-poll`, `listings`, `notifications`.
 Ekran görüntülerine bak (390px genişlik, telefon) — görsel sorunlar çoğu zaman sadece orada yakalanıyor.
 Port doluysa: `fuser -k 3000/tcp`. Arayüzden kayıt (signUp) test etme: onay maili gönderir, limit saatte 2.
@@ -359,8 +362,10 @@ Port doluysa: `fuser -k 3000/tcp`. Arayüzden kayıt (signUp) test etme: onay ma
 - **E-posta onayı kapatıldı** (kullanıcı yaptı): şifreyle kayıt artık mail limitine takılmaz. Risk: başkasının
   e-postasıyla kayıt olunabilir; Resend/SMTP kurulunca "Confirm email" tekrar açılmalı.
 - **Resend/SMTP**: alan adı gerekiyor (vercel.app doğrulanamaz). Kullanıcı şimdilik erteledi.
-- **Web push için Vercel ortam değişkenleri** (bildirimler kodu hazır, anahtarlar yoksa sadece uygulama içi kutu çalışır): `NEXT_PUBLIC_VAPID_PUBLIC_KEY`,
-  `VAPID_PRIVATE_KEY` (`npx web-push generate-vapid-keys`), `CRON_SECRET` (rastgele uzun metin). Eklenince yeniden dağıtım gerekir. Sonra telefonda gerçek bildirim denemesi yapılmalı.
+- **Web push**: Vercel ortam değişkenleri **eklendi** (kullanıcı yaptı); iPhone'da bildirim çalışıyor. **Android'de ekran kapalıyken gelmiyordu**: gönderim `urgency: "high"` yapıldı (6f009ba), kullanıcının telefonda yeniden denemesi bekleniyor;
+  gelmezse cihaz tarafı (pil "Sınırsız", bildirim önemi "Yüksek") ve telefon modeli sorulmalı.
+- **Hız**: kullanıcı konuyu "sonra döneriz" dedi. Ölçüm: ana sayfa 1512→539 ms, diğerleri 0,35-0,56 sn (kalanın çoğu ölçüm bağlantısı). Olası devam: ana sayfa her açılışta tüm grupların `finalizeExpired`/`settleExpiredPolls` kontrolünü yapıyor
+  (çok grupta ilk aday); kök `loading.tsx` güvenli bir yolla (sadece `/g/[groupId]` gibi segment geçişlerinde) yeniden denenebilir; `scripts/perf/ttfb.mjs` ile önce/sonra ölç.
 - Google OAuth uygulaması yayınlandı (Publish app yapıldı); artık sadece test kullanıcıları değil herkes girebilir.
 
 ## Yol haritası (kullanıcıyla konuşulan)
