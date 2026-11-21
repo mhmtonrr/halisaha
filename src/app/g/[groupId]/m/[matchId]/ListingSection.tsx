@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { closeListing, createListing, decideApplication } from "@/lib/actions";
 import { POSITIONS, POSITION_NAME, type Position } from "@/lib/data";
 import { APPLICATION_STATUS, LISTING_STATUS, type Applicant, type Listing } from "@/lib/listings-data";
@@ -128,7 +129,9 @@ export function ListingSection({
               <OvrBadge overall={a.overall} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
-                  <span className="truncate font-semibold">{a.name}</span>
+                  <Link href={`/oyuncu/${a.userId}`} className="truncate font-semibold hover:underline">
+                    {a.name}
+                  </Link>
                   <PositionChip position={a.position ?? a.preferredPosition} />
                 </div>
                 <div className={cx("text-xs", TONE[rel.tone])}>{rel.label}</div>
@@ -159,7 +162,9 @@ export function ListingSection({
       {accepted.map((a) => (
         <div key={a.userId} className="flex items-center gap-3 rounded-xl border border-accent/30 bg-accent/5 px-3 py-2">
           <OvrBadge overall={a.overall} className="h-8 w-8 text-xs" />
-          <span className="min-w-0 flex-1 truncate font-medium">{a.name}</span>
+          <Link href={`/oyuncu/${a.userId}`} className="min-w-0 flex-1 truncate font-medium hover:underline">
+            {a.name}
+          </Link>
           <Badge tone="accent">{APPLICATION_STATUS.accepted.label} · ödünç</Badge>
         </div>
       ))}
@@ -169,7 +174,9 @@ export function ListingSection({
           <ul className="mt-1 space-y-1">
             {past.map((a) => (
               <li key={a.userId} className="flex items-center justify-between rounded-lg px-2 py-1">
-                <span>{a.name}</span>
+                <Link href={`/oyuncu/${a.userId}`} className="hover:underline">
+                  {a.name}
+                </Link>
                 <Badge>{APPLICATION_STATUS[a.status].label}</Badge>
               </li>
             ))}

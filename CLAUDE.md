@@ -266,7 +266,8 @@ kapanmış maçlar; grup sayfasındaki istatistik hâlâ sadece kapanmış maçl
 **Görünürlük (kullanıcı kararı)**: `profiles.stats_visibility` = `teammates` (varsayılan: ödünç olmayan ortak grup/takım) veya `public` (giriş yapmış herkes); ayar Ayarlar sekmesinde
 (`updateStatsVisibility`). Kart (rating, yetenekler, bölge) her zaman herkese görünür; sadece istatistik ve maç geçmişi ayara bağlı. Başkasının maç geçmişinde özel topluluğun adı ve maç bağlantısı
 sadece o grubun üyelerine görünür ("Özel grup"); takımlar herkese açık. "Gruplarımdaki kartlarım" kaldırıldı (rating ve yetenekler genel olduğundan kartlar aynı). Tuzak: başlıklar CSS ile BÜYÜK harf;
-e2e'de metin karşılaştırması Türkçe küçük harfe göre yapılır. Test: `profile-stats.test.ts`, `db-checks/stats-visibility.mjs`, `e2e/profile.mjs`.
+e2e'de metin karşılaştırması Türkçe küçük harfe göre yapılır. **Profile giden bağlantılar**: Oyuncular sayfası, maç kadrosu (planlanmış), grup/takım sayfası, kadro, istatistik liderleri → `/g/[id]/p/[playerId]` (oradan "Tüm gruplardaki istatistikleri gör" → `/oyuncu/[userId]`);
+ilan başvuranları doğrudan `/oyuncu/[userId]` (rating/yetenek kartı açık, istatistik görünürlük ayarına bağlı). Tuzak: zaten `<Link>` olan satırın içine ikinci `<Link>` koyma (iç içe `<a>` → React #418 hydration hatası). Test: `profile-stats.test.ts`, `db-checks/stats-visibility.mjs`, `e2e/profile.mjs`.
 
 **Gruptan/takımdan ayrılma (migration 0021)**: kayıt **silinmez**; `group_players.left_at` dolar (maç kadroları, oylar, sonuçlar ve kişinin genel rating'i `group_players`'a bağlı, silmek geçmişi götürürdü).
 `my_player_id`/`is_group_member`/`is_group_admin`/`is_group_captain`/`unread_counts` `left_at is null` ister; TS tarafında `getGroupPlayers` (varsayılan) ve `getMemberships`, `recipients`, `teams-data`, `profile-data`
@@ -328,7 +329,7 @@ Uçtan uca (canlı Supabase'e karşı; test kullanıcıları/grupları oluşturu
 (NODE_USE_ENV_PROXY=1 npx next start -p 3000 > /tmp/server.log 2>&1 &)
 NODE_USE_ENV_PROXY=1 NO_PROXY=localhost,127.0.0.1 node scripts/e2e/chat.mjs /tmp/shots
 ```
-Senaryolar: `invite`, `withdrawal`, `leave`, `menu`, `profile`, `skills`, `positions-external`, `auth-onboarding`, `teams-polls`, `regions-community`, `chat`, `challenges`, `guest-match`, `realtime`, `member-poll`, `listings`, `notifications`.
+Senaryolar: `profile-links`, `invite`, `withdrawal`, `leave`, `menu`, `profile`, `skills`, `positions-external`, `auth-onboarding`, `teams-polls`, `regions-community`, `chat`, `challenges`, `guest-match`, `realtime`, `member-poll`, `listings`, `notifications`.
 Ekran görüntülerine bak (390px genişlik, telefon) — görsel sorunlar çoğu zaman sadece orada yakalanıyor.
 Port doluysa: `fuser -k 3000/tcp`. Arayüzden kayıt (signUp) test etme: onay maili gönderir, limit saatte 2.
 

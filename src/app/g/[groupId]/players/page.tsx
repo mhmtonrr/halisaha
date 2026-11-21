@@ -123,7 +123,10 @@ export default async function ManagePage({
                   <OvrBadge overall={p.overall} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 truncate font-medium">
-                      {p.display_name} <PositionChip position={p.position} />
+                      <Link href={`/g/${groupId}/p/${p.id}`} className="truncate hover:underline">
+                        {p.display_name}
+                      </Link>{" "}
+                      <PositionChip position={p.position} />
                     </div>
                     <div className="flex flex-wrap items-center gap-1 pt-0.5">
                       {role !== "member" && <Badge tone={role === "captain" ? "warn" : "accent"}>{labels[role]}</Badge>}
@@ -183,7 +186,10 @@ export default async function ManagePage({
                   <OvrBadge overall={p.overall} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 truncate font-medium">
-                      {p.display_name} <PositionChip position={p.position} />
+                      <Link href={`/g/${groupId}/p/${p.id}`} className="truncate hover:underline">
+                        {p.display_name}
+                      </Link>{" "}
+                      <PositionChip position={p.position} />
                     </div>
                     <div className="flex flex-wrap items-center gap-1 pt-0.5">
                       <Badge>{p.is_loan ? "Ödünç" : "Misafir"}</Badge>

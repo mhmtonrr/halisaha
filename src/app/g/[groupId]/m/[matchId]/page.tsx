@@ -478,7 +478,9 @@ async function PlannedView({
             {all.map((p) => (
               <li key={p.id} className="flex items-center gap-2">
                 <OvrBadge overall={p.overall} className="h-7 w-7 text-xs" />
-                <span className="min-w-0 flex-1 truncate text-sm">{shortName(p.name)}</span>
+                <Link href={`/g/${groupId}/p/${p.id}`} className="min-w-0 flex-1 truncate text-sm hover:underline">
+                  {shortName(p.name)}
+                </Link>
                 <PositionChip position={p.position} />
               </li>
             ))}
@@ -498,7 +500,9 @@ async function PlannedView({
                 {teams[t].map((p) => (
                   <li key={p.id} className="flex items-center gap-1.5">
                     <OvrBadge overall={p.overall} className="h-7 w-7 text-xs" />
-                    <span className="min-w-0 flex-1 truncate text-sm">{shortName(p.name)}</span>
+                    <Link href={`/g/${groupId}/p/${p.id}`} className="min-w-0 flex-1 truncate text-sm hover:underline">
+                      {shortName(p.name)}
+                    </Link>
                     <PositionChip position={p.position} />
                     {canManage && (
                       <form action={movePlayer}>
