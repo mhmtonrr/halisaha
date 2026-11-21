@@ -14,6 +14,7 @@ import { inList } from "@/lib/live";
 import { OvrBadge, initials, tierOf } from "@/components/PlayerCard";
 import { TeamBadge } from "@/components/TeamBadge";
 import { SkillQueueBanner } from "@/components/SkillQueueBanner";
+import { MenuControls } from "@/components/AppMenu";
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { error } = await searchParams;
@@ -107,7 +108,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
   const firstName = (profile?.display_name ?? "").split(" ")[0];
 
   return (
-    <main className="pt-5">
+    <main className="pt-1">
+      <div className="flex justify-end">
+        <MenuControls className="-mr-2" />
+      </div>
       <LiveRefresh
         watches={[
           { table: "listing_applications", filter: `user_id=eq.${user.id}` },

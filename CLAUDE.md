@@ -76,6 +76,7 @@ src/lib/finalize.ts      Oylama kapanışı, hesap bazlı genel rating hesabı v
 src/components/LiveRefresh.tsx  Canlı güncelleme: Realtime dinler, router.refresh() yapar (filtre yardımcısı src/lib/live.ts)
 src/components/SubmitButton.tsx  Form gönderilirken anında "…" durumu (useFormStatus)
 src/components/NavHistory.tsx  Uygulama içi gezinti geçmişi; Header geri oku geldiği sayfaya döner
+src/components/AppMenu.tsx  ☰ çekmecesi (AppMenuShell layout'ta) ve başlık düğmeleri (MenuControls: bildirim çanı + ☰); veri src/lib/menu-data.ts
 src/lib/authErrors.ts    Supabase Auth hatalarının Türkçesi
 src/lib/supabase/        server.ts (requireUser + karşılama yönlendirmesi), client.ts, admin.ts
 src/middleware.ts        Oturum yenileme, girişsiz yönlendirme, x-pathname başlığı
@@ -261,6 +262,10 @@ kapanmış maçlar; grup sayfasındaki istatistik hâlâ sadece kapanmış maçl
 sadece o grubun üyelerine görünür ("Özel grup"); takımlar herkese açık. "Gruplarımdaki kartlarım" kaldırıldı (rating ve yetenekler genel olduğundan kartlar aynı). Tuzak: başlıklar CSS ile BÜYÜK harf;
 e2e'de metin karşılaştırması Türkçe küçük harfe göre yapılır. Test: `profile-stats.test.ts`, `db-checks/stats-visibility.mjs`, `e2e/profile.mjs`.
 
+**Menü**: her sayfada sağ üstte bildirim çanı + ☰ (`Header` içinde `MenuControls`; ana sayfada kendi satırı). ☰ sağdan açılan çekmecedir: profil özeti, Ana sayfa, Keşfet, Bildirimler,
+Yetenek değerlendirmesi (bekleyen sayısı), İstatistiklerim, Ayarlar, **Takımlarım ve gruplarım** (her biri açılır: ana sayfa, kadro, sohbet, takımda teklifler/istatistik, oyuncular), Takım/Grup kur, Gizlilik,
+**Çıkış yap** (`POST /auth/signout`). **Alt çubuk kaldı** (kullanıcı kararı). Layout her istekte `loadMenuData()` çağırır (giriş yoksa null → menü hiç görünmez); çekmece sayfa değişince/Escape/karartma ile kapanır.
+
 **Sohbet** (group_messages/chat_reads): Realtime postgres_changes, RLS'e uyar (sadece üyeler; takım sohbeti de
 sadece oyunculara). İstemci abone olmadan önce `realtime.setAuth(token)` çağırır ve (yeniden) bağlanınca
 kaçırılanları çeker — bunu kaldırma, yoksa mesajlar ara sıra düşmüyor. Etkinlik kartları DB tetikleyicileriyle
@@ -300,7 +305,7 @@ Uçtan uca (canlı Supabase'e karşı; test kullanıcıları/grupları oluşturu
 (NODE_USE_ENV_PROXY=1 npx next start -p 3000 > /tmp/server.log 2>&1 &)
 NODE_USE_ENV_PROXY=1 NO_PROXY=localhost,127.0.0.1 node scripts/e2e/chat.mjs /tmp/shots
 ```
-Senaryolar: `profile`, `skills`, `positions-external`, `auth-onboarding`, `teams-polls`, `regions-community`, `chat`, `challenges`, `guest-match`, `realtime`, `member-poll`, `listings`, `notifications`.
+Senaryolar: `menu`, `profile`, `skills`, `positions-external`, `auth-onboarding`, `teams-polls`, `regions-community`, `chat`, `challenges`, `guest-match`, `realtime`, `member-poll`, `listings`, `notifications`.
 Ekran görüntülerine bak (390px genişlik, telefon) — görsel sorunlar çoğu zaman sadece orada yakalanıyor.
 Port doluysa: `fuser -k 3000/tcp`. Arayüzden kayıt (signUp) test etme: onay maili gönderir, limit saatte 2.
 

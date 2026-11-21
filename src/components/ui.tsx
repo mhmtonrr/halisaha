@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ComponentProps, ReactNode } from "react";
 import { BackLink } from "./NavHistory";
+import { MenuControls } from "./AppMenu";
 
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -95,6 +96,7 @@ export function Header({ title, back, right }: { title: ReactNode; back?: string
       )}
       <h1 className="min-w-0 flex-1 truncate text-lg font-bold">{title}</h1>
       {right}
+      <MenuControls className="-mr-2" />
     </header>
   );
 }

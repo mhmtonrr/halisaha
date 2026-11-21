@@ -4,8 +4,8 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-/** Okunmamış bildirim sayısı rozeti: sayfa değişince ve yeni bildirim gelince (Realtime) güncellenir */
-export function NotificationBadge() {
+/** Okunmamış bildirim sayısı: sayfa değişince ve yeni bildirim gelince (Realtime) güncellenir */
+export function useUnreadCount() {
   const path = usePathname();
   const [count, setCount] = useState(0);
   const loadRef = useRef<() => void>(() => {});
@@ -38,6 +38,12 @@ export function NotificationBadge() {
     loadRef.current();
   }, [path]);
 
+  return count;
+}
+
+/** Alt çubuktaki bildirim rozeti */
+export function NotificationBadge() {
+  const count = useUnreadCount();
   if (count === 0) return null;
   return (
     <span className="absolute right-[calc(50%-18px)] top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-400 px-1 text-[10px] font-black text-pitch-950">

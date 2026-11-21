@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { BottomNav } from "@/components/BottomNav";
 import { NavTracker } from "@/components/NavHistory";
+import { AppMenuShell } from "@/components/AppMenu";
+import { loadMenuData } from "@/lib/menu-data";
 
 export const metadata: Metadata = {
   title: "Halısaha Performans",
@@ -15,13 +17,16 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const menu = await loadMenuData();
   return (
     <html lang="tr">
       <body className="antialiased">
-        <div className="mx-auto w-full max-w-lg px-4 pb-28">{children}</div>
-        <NavTracker />
-        <BottomNav />
+        <AppMenuShell data={menu}>
+          <div className="mx-auto w-full max-w-lg px-4 pb-28">{children}</div>
+          <NavTracker />
+          <BottomNav />
+        </AppMenuShell>
       </body>
     </html>
   );
