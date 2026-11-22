@@ -39,7 +39,7 @@ try {
     const gid = (await admin.from("groups").insert({ name: `Özel ${u.name}`, created_by: u.id }).select("id").single()).data.id;
     groupIds.push(gid);
     const pid = (await admin.from("group_players").select("id").eq("group_id", gid).eq("user_id", u.id).single()).data.id;
-    await admin.from("player_ratings").upsert({ player_id: pid, overall, raw: 0.5, confidence: 0.8, matches_played: 4 });
+    await admin.from("user_ratings").upsert({ user_id: u.id, overall, raw: 0.5, confidence: 0.8, matches_played: 4 });
   }
 
   browser = await chromium.launch();

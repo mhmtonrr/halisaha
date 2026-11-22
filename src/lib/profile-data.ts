@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchIn } from "@/lib/fetch-in";
 import { DEFAULT_OVERALL } from "@/lib/rating";
+import { loadUserCards } from "@/lib/user-cards";
 import { one, type Foot, type Position } from "@/lib/data";
 import { computeProfileStats, type ProfileMatch } from "@/lib/profile-stats";
 
@@ -75,14 +76,9 @@ export async function loadPerson(admin: SupabaseClient, userId: string): Promise
   if (!p) return null;
 
   const rowIds = (rows ?? []).map((r) => r.id);
-  const [ratings, skills] = rowIds.length
-    ? await Promise.all([
-        admin.from("player_ratings").select("overall, matches_played, confidence").in("player_id", rowIds),
-        admin.from("player_skills").select("skills").in("player_id", rowIds).limit(1),
-      ])
-    : [{ data: [] }, { data: [] }];
-  // Rating genel: her satırda aynı; en çok maçı olanı al
-  const rating = (ratings.data ?? []).sort((a, b) => b.matches_played - a.matches_played)[0];
+  // Kart verisi hesap başına tek satırda
+  const card = (await loadUserCards(admin, [userId])).get(userId);
+  const rating = card && !Number.isNaN(card.overall) ? card : undefined;
 
   return {
     profile: {
@@ -120,7 +116,7 @@ export async function loadPerson(admin: SupabaseClient, userId: string): Promise
     overall: rating?.overall ?? DEFAULT_OVERALL,
     matchesPlayed: rating?.matches_played ?? 0,
     confidence: rating?.confidence ?? 0,
-    skills: (skills.data?.[0]?.skills ?? {}) as Record<string, number | null>,
+    skills: card?.skills ?? {},
   };
 }
 

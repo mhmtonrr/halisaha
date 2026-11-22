@@ -40,8 +40,8 @@ try {
       groupIds.push(g);
       gpId = (await admin.from("group_players").select("id").eq("group_id", g).eq("user_id", u.id).single()).data.id;
     }
-    await admin.from("player_ratings").upsert({ player_id: gpId, overall: u.overall, raw: 0, confidence: 1, matches_played: u.matches });
-    if (u.skill) await admin.from("player_skills").upsert({ player_id: gpId, skills: { HIZ: u.skill }, voters: 3, ballots: 3 });
+    await admin.from("user_ratings").upsert({ user_id: u.id, overall: u.overall, raw: 0, confidence: 1, matches_played: u.matches });
+    if (u.skill) await admin.from("user_skills").upsert({ user_id: u.id, skills: { HIZ: u.skill }, voters: 3, ballots: 3 });
   }
   const [, , defans, orta] = users;
 

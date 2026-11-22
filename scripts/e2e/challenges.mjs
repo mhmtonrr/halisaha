@@ -237,11 +237,10 @@ try {
   await A1.goto(`${BASE}/g/${teamA}/m/${mA}`);
   check("sonuç ekranında rakip takımın oyuncu puanları", (await A1.locator("text=Rakip takım sonuçları · E2E Aslanlar").count()) > 0 && (await A1.locator("text=Berk Kaptan").count()) > 0);
   await shot(A1, "38-ortak-mac-sonuc");
-  const { data: ratedA } = await admin.from("player_ratings").select("player_id").in("player_id", [a1, a2, b1, b2]);
+  const { data: ratedA } = await admin.from("user_ratings").select("user_id").in("user_id", users.slice(0, 4).map((u) => u.id));
   check("4 oyuncunun da rating'i yazıldı", ratedA.length === 4);
-  const { data: mine } = await admin.from("group_players").select("group_id, player_ratings(overall, matches_played)").eq("user_id", users[1].id);
-  const rs = mine.map((m) => (Array.isArray(m.player_ratings) ? m.player_ratings[0] : m.player_ratings));
-  check("aynı oyuncunun iki grubundaki rating aynı (genel rating)", mine.length === 2 && rs.every(Boolean) && rs[0].overall === rs[1].overall && rs[0].matches_played === 1 && rs[1].matches_played === 1);
+  const { data: mine } = await admin.from("user_ratings").select("overall, matches_played").eq("user_id", users[1].id);
+  check("oyuncunun tek genel rating satırı var (grup başına kopya yok)", mine.length === 1 && mine[0].matches_played === 1);
 
   // 10) İstatistik: Kartallar 4-2 kazandı
   await X.goto(`${BASE}/g/${teamA}/istatistik`);

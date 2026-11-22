@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { DEFAULT_OVERALL } from "@/lib/rating";
 import { cardSkills } from "@/lib/skills";
+import { loadUserCards } from "@/lib/user-cards";
 import { computeAttributes, recentForm, totals, type Attribute, type MatchRecord, type PlayerTotals } from "@/lib/attributes";
 
 export type Position = "GK" | "DEF" | "MID" | "FWD";
@@ -91,10 +92,13 @@ export async function getGroupPlayers(
   if (!opts.includeLeft) query = query.is("left_at", null);
   const { data, error } = await query;
   if (error) throw error;
+  // Hesap sahiplerinin kartı user_ratings/user_skills'te (tek kaynak); misafirlerinki satıra bağlı tablolarda
+  const cards = await loadUserCards(supabase, (data ?? []).map((p) => p.user_id));
   return (data ?? []).map((p) => {
-    const r = one(p.player_ratings as RatingRow | RatingRow[] | null);
+    const card = p.user_id ? cards.get(p.user_id) : undefined;
+    const r = card && !Number.isNaN(card.overall) ? card : one(p.player_ratings as RatingRow | RatingRow[] | null);
     const prof = one(p.profiles as ProfileRow | ProfileRow[] | null);
-    const sk = one(p.player_skills as { skills: Record<string, number | null> } | { skills: Record<string, number | null> }[] | null);
+    const sk = card ? { skills: card.skills } : one(p.player_skills as { skills: Record<string, number | null> } | { skills: Record<string, number | null> }[] | null);
     return {
       id: p.id,
       display_name: p.display_name,

@@ -16,12 +16,16 @@ const admin = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_RO
 type R = { player_id: string; overall: number; matches_played: number };
 const snapshot = async () => {
   const rows: R[] = [];
-  for (let from = 0; ; from += 1000) {
-    const { data, error } = await admin.from("player_ratings").select("player_id, overall, matches_played").order("player_id").range(from, from + 999);
-    if (error) throw error;
-    rows.push(...(data as R[]));
-    if (!data || data.length < 1000) return rows;
+  // Hesap sahipleri user_ratings'te (anahtar user_id), misafirler player_ratings'te (anahtar group_players.id)
+  for (const [table, key] of [["user_ratings", "user_id"], ["player_ratings", "player_id"]] as const) {
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await admin.from(table).select(`${key}, overall, matches_played`).order(key).range(from, from + 999);
+      if (error) throw error;
+      rows.push(...(data ?? []).map((d: Record<string, number | string>) => ({ player_id: d[key] as string, overall: d.overall as number, matches_played: d.matches_played as number })));
+      if (!data || data.length < 1000) break;
+    }
   }
+  return rows;
 };
 
 const backup = process.argv[2] ?? "/tmp/ratings-before.json";

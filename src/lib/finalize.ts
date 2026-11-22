@@ -303,19 +303,22 @@ export async function recomputeRatings(admin: SupabaseClient, scope: Scope) {
   }
 
   const now = new Date().toISOString();
-  const ratingRows = [...affected].flatMap((k) => {
+  // Hesap sahibi: user_ratings'e TEK satır (anahtar user_id). Misafir: anahtar group_players.id → player_ratings.
+  const userRows: Record<string, unknown>[] = [];
+  const guestRows: Record<string, unknown>[] = [];
+  for (const k of affected) {
     const r = final.get(k);
-    if (!r) return [];
-    return (playersOfKey.get(k) ?? [k]).map((playerId) => ({
-      player_id: playerId,
-      overall: r.overall,
-      raw: r.raw,
-      confidence: r.confidence,
-      matches_played: r.matchesPlayed,
-      updated_at: now,
-    }));
-  });
-  for (const part of chunks(ratingRows, 500)) {
+    if (!r) continue;
+    const base = { overall: r.overall, raw: r.raw, confidence: r.confidence, matches_played: r.matchesPlayed, updated_at: now };
+    const ids = playersOfKey.get(k) ?? [k];
+    if (ids.length === 1 && ids[0] === k) guestRows.push({ player_id: k, ...base });
+    else userRows.push({ user_id: k, ...base });
+  }
+  for (const part of chunks(userRows, 500)) {
+    const { error } = await admin.from("user_ratings").upsert(part);
+    if (error) throw error;
+  }
+  for (const part of chunks(guestRows, 500)) {
     const { error } = await admin.from("player_ratings").upsert(part);
     if (error) throw error;
   }

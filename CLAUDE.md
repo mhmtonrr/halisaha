@@ -77,6 +77,7 @@ src/lib/push-client.ts   Tarayıcı tarafı abonelik yardımcıları; components
 public/sw.js             Service worker: push'u gösterir, tıklayınca aynı site içi adresi açar (önbellek yok)
 src/lib/skills.ts        Yetenek itibarı: 12 kategori (saha HIZ/ŞUT/PAS/DRİ/DEF/FİZ, kaleci REF/ATL/HAV/YER/DAĞ/İLT), 1-10 puanlardan 40-99 değer (saf, testli)
 src/lib/skills-data.ts   Değerlendirmelerden kişinin yeteneklerini hesaplayıp player_skills'e yazar (service role; recomputeSkills / recomputeSkillsForVoter)
+src/lib/user-cards.ts    Kart verisi (genel rating + yetenekler) hesap başına TEK satır: user_ratings / user_skills (anahtar user_id). Misafirler (user_id boş) eski player_ratings/player_skills'te. Okuma: loadUserCards()
 src/lib/skill-queue.ts   Değerlendirmeni bekleyen oyuncular (skill_queue RPC)
 src/lib/profile-stats.ts Kişinin TÜM grup/takım maçlarından istatistik özeti: toplamlar, form, seri, rakip/iç, grup bazında, mevki (saf, testli)
 src/lib/profile-data.ts  Kişi bazlı veri (service role): loadPerson, loadPersonMatches, canViewStats, loadProfileForViewer
@@ -99,7 +100,7 @@ src/lib/authErrors.ts    Supabase Auth hatalarının Türkçesi
 src/lib/supabase/        server.ts (requireUser + karşılama yönlendirmesi), client.ts, admin.ts
 src/middleware.ts        Oturum yenileme, girişsiz yönlendirme, x-pathname başlığı
 src/app/                 Sayfalar (aşağıda)
-supabase/migrations/     0001..0031 SQL (sırayla; hepsi canlıya uygulandı)
+supabase/migrations/     0001..0032 SQL (sırayla; hepsi canlıya uygulandı)
 scripts/db-checks/       PGlite ile RLS/yetki kontrolleri (npm run db:check)
 scripts/e2e/             Canlı veritabanına karşı Playwright akış testleri
 scripts/perf/ttfb.mjs   Sayfa yanıt süresi ölçümü (geçici kullanıcıyla canlı site, TTFB)
@@ -122,7 +123,7 @@ Sayfalar: `/login` (e-posta+şifre, Google, şifremi unuttum) · `/hosgeldin` (i
 | Gerçek hosting'e geçince / sonra yapılacaklar (e-posta onayı, SMTP, hatırlatıcı, SMS, dil, tema, maç süresi…) | `docs/yayin-sonrasi.md` |
 
 Kısa özet: **Grup** (`kind='community'`) özel topluluk, sadece kendi aramızda maç, rating etkisi yarım. **Takım** (`kind='team'`) herkese açık, sadece rakibe karşı maç, tam etki.
-Roller: captain/admin/member. Misafir = `user_id IS NULL`. Davet kodu sütunu okunamaz (RPC). Rating hesap bazında genel (`user_id`), tüm `group_players` satırlarına yazılır.
+Roller: captain/admin/member. Misafir = `user_id IS NULL`. Davet kodu sütunu okunamaz (RPC). Rating ve yetenekler hesap bazında genel: `user_ratings`/`user_skills` (tek satır, `user_id`); satır başına kopya YOK (misafir hariç).
 Yetki hep RLS/RPC'de; `groups` seçerken sütunları açıkça yaz (`invite_code` yok). Yeni konu/tuzak çıkarsa ilgili docs dosyasına ekle, buraya sadece tek satırlık işaret koy.
 
 ## Veritabanı değişikliği iş akışı

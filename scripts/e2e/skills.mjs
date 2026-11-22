@@ -100,7 +100,7 @@ try {
   // Sunucu yanıttan sonra hesaplar; en fazla ~15 sn bekle
   let skB = null;
   for (let i = 0; i < 15; i++) {
-    skB = (await admin.from("player_skills").select("skills, voters").eq("player_id", gps.b).maybeSingle()).data;
+    skB = (await admin.from("user_skills").select("skills, voters").eq("user_id", b.id).maybeSingle()).data;
     if (skB) break;
     await sleep(1000);
   }
@@ -114,7 +114,7 @@ try {
   await aP.waitForURL(/saved=1/, { timeout: 15000 });
   let skC = null;
   for (let i = 0; i < 15; i++) {
-    skC = (await admin.from("player_skills").select("skills, voters").eq("player_id", gps.c).maybeSingle()).data;
+    skC = (await admin.from("user_skills").select("skills, voters").eq("user_id", c.id).maybeSingle()).data;
     if (skC) break;
     await sleep(1000);
   }

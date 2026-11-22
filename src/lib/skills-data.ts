@@ -62,7 +62,9 @@ export async function recomputeSkills(admin: SupabaseClient, playerIds: string[]
     normOf.get(voter) ?? normOf.set(voter, voterNorm((givenBy.get(voter) ?? []).map((r) => r.scores))).get(voter)!;
 
   // 4) Kişi başına değerlendirmeleri kur, hesapla
-  const writes: { player_id: string; skills: Record<string, number | null>; voters: number; ballots: number }[] = [];
+  type W = { skills: Record<string, number | null>; voters: number; ballots: number };
+  const userWrites: (W & { user_id: string })[] = [];
+  const guestWrites: (W & { player_id: string })[] = [];
   const seen = new Set<string>();
   for (const [, person] of people) {
     const ratings: SkillRating[] = [];
@@ -81,13 +83,19 @@ export async function recomputeSkills(admin: SupabaseClient, playerIds: string[]
     }
     const skills: Record<string, number | null> = {};
     for (const keeper of [false, true]) for (const s of computeSkills(ratings, keeper)) skills[s.key] = s.value;
-    for (const id of person.rows) writes.push({ player_id: id, skills, voters: ratings.length, ballots: ratings.length });
+    const w = { skills, voters: ratings.length, ballots: ratings.length };
+    // Hesap sahibi: user_skills'e tek satır; misafir: kendi group_players satırı
+    if (person.userId) userWrites.push({ user_id: person.userId, ...w });
+    else for (const id of person.rows) guestWrites.push({ player_id: id, ...w });
   }
 
-  for (const part of chunks(writes, 200)) {
-    const { error } = await admin
-      .from("player_skills")
-      .upsert(part.map((w) => ({ ...w, updated_at: new Date().toISOString() })), { onConflict: "player_id" });
+  const now = new Date().toISOString();
+  for (const part of chunks(userWrites, 200)) {
+    const { error } = await admin.from("user_skills").upsert(part.map((w) => ({ ...w, updated_at: now })), { onConflict: "user_id" });
+    if (error) throw error;
+  }
+  for (const part of chunks(guestWrites, 200)) {
+    const { error } = await admin.from("player_skills").upsert(part.map((w) => ({ ...w, updated_at: now })), { onConflict: "player_id" });
     if (error) throw error;
   }
 }

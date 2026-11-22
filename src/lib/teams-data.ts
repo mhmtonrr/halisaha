@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { DEFAULT_OVERALL } from "@/lib/rating";
 import { one } from "@/lib/data";
+import { loadUserCards, type UserCard } from "@/lib/user-cards";
 
 export type GroupKind = "community" | "team";
 export type Role = "captain" | "admin" | "member";
@@ -37,7 +38,8 @@ export interface TeamSummary {
   rated: boolean;
 }
 
-type GPRow = { user_id: string | null; is_loan?: boolean; left_at?: string | null; player_ratings: { overall: number; matches_played: number } | { overall: number; matches_played: number }[] | null };
+type GPRow = { user_id: string | null; is_loan?: boolean; left_at?: string | null };
+type Cards = Map<string, UserCard>;
 
 function summarize(g: {
   id: string;
@@ -47,10 +49,10 @@ function summarize(g: {
   color: string | null;
   description: string | null;
   group_players: GPRow[];
-}): TeamSummary {
+}, cards: Cards): TeamSummary {
   // Asıl kadro: hesabı olan üyeler. Misafirler (user_id boş) takım puanına ve oyuncu sayısına girmez.
   const members = g.group_players.filter((p) => p.user_id && !p.is_loan && !p.left_at);
-  const ratings = members.map((p) => one(p.player_ratings));
+  const ratings = members.map((p) => cards.get(p.user_id as string)).map((c) => (c && !Number.isNaN(c.overall) ? c : undefined));
   return {
     id: g.id,
     name: g.name,
@@ -65,7 +67,7 @@ function summarize(g: {
 }
 
 const TEAM_SELECT =
-  "id, name, city, district, color, description, group_players(user_id, is_loan, left_at, player_ratings(overall, matches_played))";
+  "id, name, city, district, color, description, group_players(user_id, is_loan, left_at)";
 
 /** Bölgedeki takımlar, rating'e göre sıralı */
 export async function findTeams(
@@ -78,8 +80,9 @@ export async function findTeams(
   if (filter.q) query = query.ilike("name", `%${filter.q.trim().replace(/[%_]/g, "")}%`);
   const { data, error } = await query.limit(500);
   if (error) throw error;
+  const cards = await loadUserCards(supabase, (data ?? []).flatMap((g) => (g.group_players as GPRow[]).map((p) => p.user_id)));
   return (data ?? [])
-    .map(summarize)
+    .map((g) => summarize(g as Parameters<typeof summarize>[0], cards))
     .sort((a, b) => Number(b.rated) - Number(a.rated) || b.rating - a.rating || a.name.localeCompare(b.name, "tr"))
     .slice(0, filter.limit ?? 100);
 }
@@ -97,24 +100,27 @@ export async function getMemberships(supabase: SupabaseClient, userId: string): 
   const { data, error } = await supabase
     .from("group_players")
     .select(
-      `id, role, player_ratings(overall, matches_played), groups(kind, ${TEAM_SELECT})`,
+      `id, role, groups(kind, ${TEAM_SELECT})`,
     )
     .eq("user_id", userId)
     .eq("is_loan", false) // ödünç oyuncu takımın üyesi sayılmaz
     .is("left_at", null); // ayrılmış üye değil
   if (error) throw error;
   type G = Parameters<typeof summarize>[0] & { kind: GroupKind };
+  const groups = (data ?? []).map((m) => one(m.groups as G | G[] | null));
+  const cards = await loadUserCards(supabase, [userId, ...groups.flatMap((g) => (g?.group_players ?? []).map((p) => p.user_id))]);
+  const mine = cards.get(userId);
   return (data ?? [])
     .map((m) => {
       const g = one(m.groups as G | G[] | null);
-      const r = one(m.player_ratings as { overall: number; matches_played: number } | { overall: number; matches_played: number }[] | null);
+      const r = mine && !Number.isNaN(mine.overall) ? mine : undefined;
       if (!g) return null;
       return {
         playerId: m.id,
         role: m.role as Role,
         overall: r?.overall ?? DEFAULT_OVERALL,
         matchesPlayed: r?.matches_played ?? 0,
-        group: { ...summarize(g), kind: g.kind },
+        group: { ...summarize(g, cards), kind: g.kind },
       };
     })
     .filter((m): m is Membership => !!m);

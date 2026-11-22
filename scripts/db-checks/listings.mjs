@@ -54,7 +54,7 @@ await as(3);
 ok("minimum rating (70) altı (varsayılan 65) başvuramaz", await fails(`select apply_listing($1, 'DEF', null)`, [L]));
 await db.exec("reset role");
 const C = (await q(`insert into groups (name, created_by) values ('Topluluk C','${U(3)}') returning id`))[0].id;
-await db.query(`insert into player_ratings (player_id, overall, raw, confidence, matches_played) select id, 80, 1.2, 0.9, 5 from group_players where group_id=$1 and user_id=$2`, [C, U(3)]);
+await db.query(`insert into user_ratings (user_id, overall, raw, confidence, matches_played) values ($1, 80, 1.2, 0.9, 5)`, [U(3)]);
 await db.exec("reset role"); await as(3);
 await db.query(`select apply_listing($1, 'DEF', 'Müsaitim')`, [L]);
 ok("rating'i yeterli (80) oyuncu başvurdu (topluluktaki rating geçerli)", (await q(`select count(*)::int c from listing_applications where listing_id=$1`, [L]))[0].c === 1);
@@ -63,7 +63,7 @@ ok("tekrar başvuru aynı kaydı günceller", (await q(`select position from lis
 await as(4); // u4: rating'i 80 yap
 await db.exec("reset role");
 const C4 = (await q(`insert into groups (name, created_by) values ('Topluluk D','${U(4)}') returning id`))[0].id;
-await db.query(`insert into player_ratings (player_id, overall, raw, confidence, matches_played) select id, 75, 1, 0.8, 4 from group_players where group_id=$1 and user_id=$2`, [C4, U(4)]);
+await db.query(`insert into user_ratings (user_id, overall, raw, confidence, matches_played) values ($1, 75, 1, 0.8, 4)`, [U(4)]);
 await as(4);
 await db.query(`select apply_listing($1, 'GK', null)`, [L]);
 
@@ -131,7 +131,7 @@ ok("reddedilen başvuran tekrar başvuramaz", await fails(`select apply_listing(
 await db.exec("reset role"); await as(5);
 await db.exec("reset role");
 const C5 = (await q(`insert into groups (name, created_by) values ('Topluluk E','${U(5)}') returning id`))[0].id;
-await db.query(`insert into player_ratings (player_id, overall, raw, confidence, matches_played) select id, 90, 2, 0.9, 6 from group_players where group_id=$1 and user_id=$2`, [C5, U(5)]);
+await db.query(`insert into user_ratings (user_id, overall, raw, confidence, matches_played) values ($1, 90, 2, 0.9, 6)`, [U(5)]);
 await as(5);
 await db.query(`select apply_listing($1,'GK','Kaleciyim')`, [L]);
 await as(5);

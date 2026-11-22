@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchIn } from "@/lib/fetch-in";
+import { loadUserCards } from "@/lib/user-cards";
 import { DEFAULT_OVERALL } from "@/lib/rating";
 import { one, type Foot, type Position } from "@/lib/data";
 import type { PlayerCandidate, PublicTeamRef } from "@/lib/player-search";
@@ -13,15 +14,12 @@ import type { PlayerCandidate, PublicTeamRef } from "@/lib/player-search";
 /** Tek sorguda taranan en fazla profil (bölge/mevki süzgeçlerinden sonra) */
 const CANDIDATE_LIMIT = 1000;
 
-type RatingRow = { overall: number; matches_played: number };
 type G = { id: string; name: string; kind: "community" | "team"; color: string | null };
 type GP = {
   user_id: string;
   is_loan: boolean | null;
   left_at: string | null;
   groups: G | G[] | null;
-  player_ratings: RatingRow | RatingRow[] | null;
-  player_skills: { skills: Record<string, number | null> } | { skills: Record<string, number | null> }[] | null;
 };
 type ProfileRow = {
   id: string;
@@ -42,15 +40,16 @@ const PROFILE_COLS = "id, display_name, card_name, photo_url, city, district, pr
 async function buildCandidates(admin: SupabaseClient, profiles: ProfileRow[]): Promise<PlayerCandidate[]> {
   const ids = profiles.map((p) => p.id);
   if (!ids.length) return [];
-  const [rows, noShowRows] = await Promise.all([
+  const [rows, noShowRows, cards] = await Promise.all([
     fetchIn<GP>(ids, (part, from, to) =>
       admin
         .from("group_players")
-        .select("user_id, is_loan, left_at, groups(id, name, kind, color), player_ratings(overall, matches_played), player_skills(skills)")
+        .select("user_id, is_loan, left_at, groups(id, name, kind, color)")
         .in("user_id", part)
         .range(from, to),
     ),
     fetchIn<{ user_id: string }>(ids, (part, from, to) => admin.from("match_no_shows").select("user_id").in("user_id", part).range(from, to)),
+    loadUserCards(admin, ids),
   ]);
   const byUser = new Map<string, GP[]>();
   for (const r of rows) byUser.set(r.user_id, [...(byUser.get(r.user_id) ?? []), r]);
@@ -59,11 +58,10 @@ async function buildCandidates(admin: SupabaseClient, profiles: ProfileRow[]): P
 
   return profiles.map((p) => {
     const mine = byUser.get(p.id) ?? [];
-    // Rating ve yetenekler her satırda aynı (genel); en çok maçı olan satırı al
-    const rated = mine
-      .map((r) => ({ r, rating: one(r.player_ratings) }))
-      .sort((a, b) => (b.rating?.matches_played ?? 0) - (a.rating?.matches_played ?? 0))[0];
-    const skills = mine.map((r) => one(r.player_skills)?.skills).find((s) => s && Object.keys(s).length > 0) ?? {};
+    // Kart verisi hesap başına tek satırda (user_ratings / user_skills)
+    const card = cards.get(p.id);
+    const rating = card && !Number.isNaN(card.overall) ? card : undefined;
+    const skills = card?.skills ?? {};
     const teams: PublicTeamRef[] = [];
     for (const r of mine) {
       const g = one(r.groups);
@@ -80,8 +78,8 @@ async function buildCandidates(admin: SupabaseClient, profiles: ProfileRow[]): P
       secondary: (p.secondary_positions ?? []) as Position[],
       foot: (p.preferred_foot ?? null) as Foot | null,
       shirt: p.shirt_number,
-      overall: rated?.rating?.overall ?? DEFAULT_OVERALL,
-      matches: rated?.rating?.matches_played ?? 0,
+      overall: rating?.overall ?? DEFAULT_OVERALL,
+      matches: rating?.matches_played ?? 0,
       skills,
       noShows: noShows.get(p.id) ?? 0,
       teams,
