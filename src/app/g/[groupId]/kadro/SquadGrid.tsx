@@ -105,8 +105,6 @@ export function SquadGrid({ groupId, players }: { groupId: string; players: Squa
                 photoUrl={p.photoUrl}
                 overall={p.overall}
                 position={p.position}
-                shirtNumber={p.shirt}
-                provisional={p.provisional}
                 skills={p.skills}
                 city={p.city}
                 district={p.district}

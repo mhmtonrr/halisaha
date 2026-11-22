@@ -159,11 +159,11 @@ export function validAssignment(assign: Record<string, number | null>, formation
 
 /**
  * Sahada oyuncu kartının genişliği, saha genişliğinin yüzdesi olarak: en kalabalık hatta kartlar yan yana
- * sığacak şekilde (hat başına en fazla 5 oyuncu → ~%16, 2-3 oyuncu → %28-38). Üst sınır %38.
+ * sığacak şekilde (hat başına en fazla 5 oyuncu → ~%16). Kart uzun olduğundan (11:15,9) hatlar üst üste binmesin diye üst sınır %18,5 (saha 5:7).
  */
 export function cardWidthPct(formation: Formation): number {
   const perLine = new Map<number, number>();
   for (const s of formation.slots) perLine.set(s.y, (perLine.get(s.y) ?? 0) + 1);
   const widest = Math.max(...perLine.values());
-  return Math.min(38, Math.round((100 / (widest + 1.3)) * 10) / 10);
+  return Math.min(18.5, Math.round((100 / (widest + 1.3)) * 10) / 10);
 }

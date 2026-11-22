@@ -61,8 +61,8 @@ interface RosterEntry {
   overall: number;
   /** Profil kartı için: özellikler, forma numarası, geçici rating */
   attributes: { key: string; value: number | null }[];
-  shirtNumber: number | null;
-  provisional: boolean;
+  city: string | null;
+  district: string | null;
 }
 
 type GP = { display_name: string; user_id: string | null; position: Position | null };
@@ -96,8 +96,8 @@ async function fetchRoster(supabase: SupabaseClient, matchId: string, groupId: s
         saves: r.saves,
         overall: summary.get(r.player_id)?.overall ?? 65,
         attributes: summary.get(r.player_id)?.skills ?? [],
-        shirtNumber: summary.get(r.player_id)?.shirt_number ?? null,
-        provisional: (summary.get(r.player_id)?.matches_played ?? 0) > 0 && (summary.get(r.player_id)?.confidence ?? 0) < 0.6,
+        city: summary.get(r.player_id)?.city ?? null,
+        district: summary.get(r.player_id)?.district ?? null,
       };
     })
     .sort(
@@ -116,8 +116,8 @@ const toPitch = (r: RosterEntry): PitchPlayer => ({
   overall: r.overall,
   position: r.position,
   attributes: r.attributes,
-  shirtNumber: r.shirtNumber,
-  provisional: r.provisional,
+  city: r.city,
+  district: r.district,
 });
 
 interface TeamInfo {

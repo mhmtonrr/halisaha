@@ -169,11 +169,11 @@ describe("atama doğrulama", () => {
 });
 
 describe("kart genişliği", () => {
-  it("kalabalık hat kartı küçültür, seyrek hat büyütür (üst sınır %38)", () => {
-    expect(cardWidthPct(getFormation(5, "2-2")!)).toBe(30.3); // en kalabalık hat 2
-    expect(cardWidthPct(getFormation(7, "2-3-1")!)).toBe(23.3); // 3
-    expect(cardWidthPct(getFormation(11, "4-5-1")!)).toBeLessThan(cardWidthPct(getFormation(11, "4-4-2")!));
-    expect(cardWidthPct(getFormation(5, "1-2-1")!)).toBeLessThanOrEqual(38);
+  it("kalabalık hat kartı küçültür, seyrek hat büyütür (üst sınır %18,5)", () => {
+    expect(cardWidthPct(getFormation(5, "2-2")!)).toBe(18.5); // en kalabalık hat 2 (üst sınır)
+    expect(cardWidthPct(getFormation(7, "2-3-1")!)).toBe(18.5); // 3 (üst sınır)
+    expect(cardWidthPct(getFormation(11, "4-5-1")!)).toBeLessThan(cardWidthPct(getFormation(11, "4-4-2")!) + 0.01);
+    expect(cardWidthPct(getFormation(5, "1-2-1")!)).toBeLessThanOrEqual(18.5);
   });
   it("her dizilişte kartlar yan yana sığar (genişlik x en kalabalık hat < %100)", () => {
     for (const n of SIZES) {

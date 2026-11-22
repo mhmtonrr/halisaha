@@ -211,13 +211,11 @@ function GeneralPanel({
               photoUrl={p.photoUrl}
               overall={person.overall}
               position={p.position}
-              shirtNumber={p.shirt}
               skills={skills}
               city={p.city}
               district={p.district}
               team={team ? { name: team.name, color: team.color } : null}
               unrated={person.matchesPlayed === 0}
-              provisional={person.matchesPlayed > 0 && person.confidence < 0.6}
             />
           }
         />

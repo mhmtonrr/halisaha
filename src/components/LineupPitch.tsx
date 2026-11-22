@@ -16,9 +16,8 @@ export interface PitchPlayer {
   position: Position | null;
   /** Kartın 6 yeteneği (HIZ, ŞUT, PAS, DRİ, DEF, FİZ; kalecide REF…); oylanmadıysa tireler görünür */
   attributes?: { key: string; value: number | null }[];
-  shirtNumber?: number | null;
-  /** Rating henüz yeterince oya dayanmıyor */
-  provisional?: boolean;
+  city?: string | null;
+  district?: string | null;
 }
 
 /** Saha zemini: dikey, çizgili. İçine konumlanan öğeler için konumlandırma bağlamı sağlar. */
@@ -39,7 +38,7 @@ export function Pitch({
         className,
       )}
       // Kartlar bu kapsayıcının genişliğine göre ölçeklenir (cqw); --cw kart genişliği yüzdesi
-      style={{ aspectRatio: "4 / 5", containerType: "inline-size", ["--cw" as string]: cardPct }}
+      style={{ aspectRatio: "5 / 7", containerType: "inline-size", ["--cw" as string]: cardPct }}
     >
       {/* Çimen şeritleri */}
       <div
@@ -81,24 +80,22 @@ export function SlotBox({
 
 
 /**
- * Profildeki oyuncu kartının (PlayerCard) sahaya sığan hali: aynı kalkan biçimi, seviye rengi, rating, mevki,
- * baş harfler, isim ve 6 özellik (FRM, İST, GOL/KRT, AST, GAL, MVP). Her şey `em` ile çizilir; yazı boyutu
- * sahanın genişliğinden (cqw) türetildiği için kart hat başına oyuncu sayısına göre kendiliğinden ölçeklenir.
+ * Sahadaki oyuncu: profildeki kartın AYNISI (PlayerCard/CardFace). Yazı boyutu sahanın genişliğinden (cqw) türetilir;
  * `fontSize` verilirse sabit boyut (yedekler, sürükleme hayaleti).
  */
 export function PitchCard({ player, fontSize, className }: { player: PitchPlayer; fontSize?: string; className?: string }) {
   return (
     <CardFace
-      compact
       name={player.name}
       cardName={player.cardName}
       photoUrl={player.photoUrl}
       overall={player.overall}
       position={player.position}
       skills={player.attributes ?? []}
-      shirtNumber={player.shirtNumber}
+      city={player.city}
+      district={player.district}
       fontSize={fontSize ?? "calc(var(--cw, 20) / 11 * 1cqw)"}
-      className={cx("shadow-lg", className)}
+      className={className}
     />
   );
 }

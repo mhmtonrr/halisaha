@@ -77,8 +77,6 @@ export default async function PlayerPage({
         photoUrl={player.photo_url}
         overall={player.overall}
         position={player.position}
-        shirtNumber={player.shirt_number}
-        provisional={player.matches_played > 0 && player.confidence < 0.6}
         skills={player.skills}
         city={player.city}
         district={player.district}

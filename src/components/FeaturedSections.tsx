@@ -24,7 +24,6 @@ function MiniCard({ c, children }: { c: PlayerCandidate; children?: React.ReactN
         overall={c.overall}
         position={c.position}
         skills={cardSkills(c.skills, c.position === "GK")}
-        shirtNumber={c.shirt}
         city={c.city}
         district={c.district}
         team={c.teams[0] ?? null}
