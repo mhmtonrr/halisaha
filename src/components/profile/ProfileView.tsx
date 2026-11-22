@@ -48,7 +48,7 @@ function Heading({ children, action }: { children: ReactNode; action?: ReactNode
 function Tabs({ base, active, isMe }: { base: string; active: ProfileTab; isMe: boolean }) {
   const tabs: ProfileTab[] = isMe ? ["genel", "istatistik", "maclar", "ayarlar"] : ["genel", "istatistik", "maclar"];
   return (
-    <div className="sticky top-0 z-30 -mx-4 bg-surface/95 px-4 py-2 backdrop-blur-md">
+    <div className="py-2">
       <div className="flex items-center gap-1" role="tablist">
         {tabs.map((t) => (
           <Link
@@ -58,8 +58,8 @@ function Tabs({ base, active, isMe }: { base: string; active: ProfileTab; isMe: 
             role="tab"
             aria-selected={active === t}
             className={cx(
-              "t-body-md min-w-0 flex-1 truncate rounded-full px-2 py-2 text-center transition-colors",
-              active === t ? "t-headline-sm !text-[14px] bg-primary text-on-primary shadow-md" : "bg-surface-container text-on-surface-variant hover:text-on-surface",
+              "t-body-md min-w-0 flex-1 truncate rounded-full border border-transparent px-2 py-2 text-center transition-colors",
+              active === t ? "t-headline-sm !text-[14px] bg-primary text-on-primary" : "border-line text-on-surface-variant hover:border-primary/50 hover:text-on-surface",
             )}
           >
             {TAB_LABEL[t]}
