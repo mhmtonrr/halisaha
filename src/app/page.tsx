@@ -138,7 +138,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
       <Link href="/profil" className="mb-6 flex items-center gap-4">
         <div
           className={cx(
-            "flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-2xl bg-gradient-to-br font-black",
+            "flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-2xl font-black",
+            // fotoğraf varsa zemin yok (şeffaf kesim doğrudan sayfanın üstünde durur)
+            !profile?.photo_url && "bg-gradient-to-br",
             tierOf(best) === "gold"
               ? "from-gold-1 to-gold-2 text-[#3b2a05]"
               : tierOf(best) === "silver"
