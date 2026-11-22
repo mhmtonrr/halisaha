@@ -40,7 +40,7 @@ export default async function ProfilePage({
   return (
     <main>
       <ProfileTopBar name={data.person.profile.displayName} photoUrl={data.person.profile.photoUrl} />
-      {tab === "genel" && <ProfileSubBar title="Profilim" subtitle={`SEZON ${new Date().getFullYear()} • PRO KART`} />}
+      <ProfileSubBar title="Profilim" subtitle={`SEZON ${new Date().getFullYear()} • PRO KART`} />
       <ErrorNote message={error} />
       {saved && <p className="mb-4 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">Kaydedildi ✓</p>}
       <ProfileView

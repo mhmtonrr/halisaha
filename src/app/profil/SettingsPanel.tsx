@@ -45,12 +45,8 @@ export function SettingsPanel({ s, prefs }: { s: SettingsData; prefs: Prefs }) {
   const posCodes = [s.position, ...s.secondary].filter((x): x is Position => !!x).map((x) => POSITION_LABEL[x]).join(" / ");
 
   return (
-    <div className="flex flex-col gap-3.5 pt-3">
+    <div className="flex flex-col gap-3.5 pt-1">
       <div className="flex flex-col gap-3.5 pb-1">
-        <div>
-          <span className="t-label-caps uppercase tracking-wider text-primary">Tercihler &amp; Yönetim</span>
-          <h2 className="t-headline-md font-bold tracking-tight text-on-surface">Ayarlar</h2>
-        </div>
         <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-surface-high via-surface-container to-surface-low p-3.5 shadow-lg">
           <div className="pointer-events-none absolute -bottom-6 -right-6 h-32 w-32 rounded-full bg-primary/10 blur-2xl" />
           <div className="relative z-10 flex items-center gap-3.5">

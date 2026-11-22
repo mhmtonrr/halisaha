@@ -44,44 +44,24 @@ function Heading({ children, action }: { children: ReactNode; action?: ReactNode
 // Sekmeler
 // ---------------------------------------------------------------------------
 
+/** Dört sekmede de aynı çubuk: eşit genişlikli hap sekmeler, sayfa değişince yer değiştirmez */
 function Tabs({ base, active, isMe }: { base: string; active: ProfileTab; isMe: boolean }) {
-  const href = (t: ProfileTab) => (t === "genel" ? base : `${base}?sekme=${t}`);
-  if (active === "genel" || active === "ayarlar") {
-    const tabs: ProfileTab[] = isMe ? ["genel", "istatistik", "maclar", "ayarlar"] : ["genel", "istatistik", "maclar"];
-    return (
-      <div className="no-scrollbar -mx-4 flex items-center gap-1 overflow-x-auto px-4 py-1" role="tablist">
-        {tabs.map((t) =>
-          active === t ? (
-            <Link key={t} href={href(t)} replace role="tab" aria-selected className="t-headline-sm flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-primary px-5 py-2 text-on-primary shadow-md">
-              <Icon name={t === "genel" ? "badge" : "settings"} className="text-[18px]" />
-              <span>{TAB_LABEL[t]}</span>
-            </Link>
-          ) : (
-            <Link key={t} href={href(t)} replace role="tab" aria-selected={false} className="t-body-md shrink-0 whitespace-nowrap rounded-full bg-surface-container px-5 py-2 text-on-surface-variant hover:text-on-surface">
-              {TAB_LABEL[t]}
-            </Link>
-          ),
-        )}
-      </div>
-    );
-  }
-  const tabs: ProfileTab[] = ["genel", "istatistik", "maclar"];
+  const tabs: ProfileTab[] = isMe ? ["genel", "istatistik", "maclar", "ayarlar"] : ["genel", "istatistik", "maclar"];
   return (
     <div className="sticky top-16 z-30 -mx-4 bg-surface/95 px-4 py-2 backdrop-blur-md">
-      <div className="grid grid-cols-3 rounded-full bg-surface-low p-1.5 shadow-inner" role="tablist">
+      <div className="flex items-center gap-1" role="tablist">
         {tabs.map((t) => (
           <Link
             key={t}
-            href={href(t)}
+            href={t === "genel" ? base : `${base}?sekme=${t}`}
             replace
             role="tab"
             aria-selected={active === t}
             className={cx(
-              "t-label-caps flex items-center justify-center gap-1 rounded-full py-2 text-center uppercase tracking-wider",
-              active === t ? "bg-primary font-bold text-on-primary shadow-[0_0_16px_rgba(75,226,119,0.35)]" : "text-on-surface-variant hover:text-on-surface",
+              "t-body-md min-w-0 flex-1 truncate rounded-full px-2 py-2 text-center transition-colors",
+              active === t ? "t-headline-sm !text-[14px] bg-primary text-on-primary shadow-md" : "bg-surface-container text-on-surface-variant hover:text-on-surface",
             )}
           >
-            {active === t && t === "istatistik" && <Icon name="query_stats" className="text-[14px]" />}
             {TAB_LABEL[t]}
           </Link>
         ))}
@@ -702,7 +682,7 @@ export function ProfileView({
   const last5 = (matches ?? []).slice(0, 5).reverse();
   return (
     <>
-      {tab !== "ayarlar" && <Tabs base={base} active={tab} isMe={isMe} />}
+      <Tabs base={base} active={tab} isMe={isMe} />
       {tab === "genel" && <GeneralPanel person={person} isMe={isMe} stats={stats} last5={last5} upcoming={upcoming} />}
       {tab === "istatistik" &&
         (locked ? <LockedCard name={person.profile.displayName} /> : <StatsPanel person={person} stats={stats} noShows={noShows ?? 0} isMe={isMe} allMatches={matches ?? []} />)}

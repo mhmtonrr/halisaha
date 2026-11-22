@@ -51,9 +51,9 @@ try {
 
   console.log("Futbolcu profili");
   await page.goto(`${BASE}/profil/ayarlar/futbolcu`);
-  await page.locator('input[name="position"][value="FWD"]').check({ force: true });
-  await page.locator('input[name="secondary"][value="MID"]').check({ force: true });
-  await page.locator('input[name="foot"][value="R"]').check({ force: true });
+  await page.locator('label:has(input[name="position"][value="FWD"])').click();
+  await page.locator('label:has(input[name="secondary"][value="MID"])').click();
+  await page.locator('label:has(input[name="foot"][value="R"])').click();
   await page.fill('input[name="shirt"]', "39"); await page.fill('input[name="height"]', "182"); await page.fill('input[name="weight"]', "76");
   await page.click('button:has-text("Kaydet")'); await page.waitForURL(/saved=1/);
   const { data: p2 } = await admin.from("profiles").select("preferred_position, secondary_positions, preferred_foot, shirt_number, height_cm, weight_kg, display_name").eq("id", a.id).single();

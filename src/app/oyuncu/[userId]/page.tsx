@@ -28,7 +28,7 @@ export default async function PlayerProfilePage({
   return (
     <main>
       <ProfileTopBar name={data.person.profile.displayName} photoUrl={data.person.profile.photoUrl} showAvatar={false} />
-      {parseTab(sekme, false) === "genel" && <ProfileSubBar title={data.person.profile.displayName} subtitle="OYUNCU KARTI" />}
+      <ProfileSubBar title={data.person.profile.displayName} subtitle="OYUNCU KARTI" />
       <ProfileView
         base={`/oyuncu/${userId}`}
         tab={parseTab(sekme, false)}
