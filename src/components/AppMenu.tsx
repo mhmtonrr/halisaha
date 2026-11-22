@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { useUnreadCount } from "./NotificationBadge";
+import { useChatUnread, useUnreadCount } from "./NotificationBadge";
 import { TeamBadge } from "./TeamBadge";
 import { Avatar } from "./Avatar";
 import { loadMenu } from "@/lib/actions";
@@ -25,9 +25,20 @@ const Icon = ({ children }: { children: ReactNode }) => (
 export function MenuControls({ className }: { className?: string }) {
   const { available, open } = useContext(MenuContext);
   const unread = useUnreadCount();
+  const chatUnread = useChatUnread();
   if (!available) return null;
   return (
     <div className={cx("flex shrink-0 items-center gap-2", className)}>
+      <Link href="/sohbet" aria-label="Sohbetler" className="relative flex h-10 w-10 items-center justify-center rounded-full bg-pitch-900 text-on-surface shadow-sm transition active:scale-95 hover:text-accent">
+        <Icon>
+          <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z" />
+        </Icon>
+        {chatUnread > 0 && (
+          <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-black text-pitch-950">
+            {chatUnread > 9 ? "9+" : chatUnread}
+          </span>
+        )}
+      </Link>
       <Link href="/bildirimler" aria-label="Bildirimler" className="relative flex h-10 w-10 items-center justify-center rounded-full bg-pitch-900 text-on-surface shadow-sm transition active:scale-95 hover:text-accent">
         <Icon>
           <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
@@ -146,6 +157,7 @@ function GroupSection({
 
 function Drawer({ data, onClose }: { data: MenuData | null; onClose: () => void }) {
   const unread = useUnreadCount();
+  const chatUnread = useChatUnread();
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const teams = data?.groups.filter((g) => g.kind === "team") ?? [];
   const communities = data?.groups.filter((g) => g.kind !== "team") ?? [];
@@ -210,6 +222,12 @@ function Drawer({ data, onClose }: { data: MenuData | null; onClose: () => void 
                 <path d="m20 20-3.5-3.5" />
               </>
             }
+          />
+          <NavLink
+            href="/sohbet"
+            label="Sohbetler"
+            badge={chatUnread}
+            icon={<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z" />}
           />
           <NavLink
             href="/bildirimler"

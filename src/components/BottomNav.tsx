@@ -57,7 +57,7 @@ const items = [
 export function BottomNav() {
   const path = usePathname();
   // Sohbet ekranında yazma kutusu alt kısmı kullanır
-  if (HIDDEN.some((h) => path.startsWith(h)) || path.endsWith("/sohbet")) return null;
+  if (HIDDEN.some((h) => path.startsWith(h)) || (path.endsWith("/sohbet") && path !== "/sohbet") || /^\/sohbet\/[^/]+/.test(path)) return null;
   return (
     <nav className="fixed inset-x-0 bottom-0 z-20 bg-pitch-950/85 pb-[env(safe-area-inset-bottom)] shadow-[0_-2px_12px_rgba(0,0,0,0.35)] backdrop-blur-xl">
       <div className="mx-auto flex max-w-lg">

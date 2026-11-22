@@ -5,7 +5,7 @@ import { Card, Header, cx } from "@/components/ui";
 import type { NotificationType } from "@/lib/notify-rules";
 import { MarkRead } from "./MarkRead";
 
-const ICON: Record<NotificationType, string> = { vote: "🗳️", poll: "📣", match: "⚽", offer: "🤝", listing: "🔎", chat: "💬" };
+const ICON: Record<NotificationType, string> = { vote: "🗳️", poll: "📣", match: "⚽", offer: "🤝", listing: "🔎", chat: "💬", dm: "✉️", invite: "🛡️" };
 
 function timeAgo(iso: string) {
   const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);

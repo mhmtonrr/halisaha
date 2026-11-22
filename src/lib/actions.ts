@@ -1469,6 +1469,46 @@ export async function notifyChatMessage(groupId: string, messageId: number) {
   });
 }
 
+/** Bir kişiyle birebir sohbeti açar (yoksa istek olarak oluşturur) ve konuşmaya yönlendirir */
+export async function openDm(fd: FormData) {
+  const { supabase } = await requireUser();
+  const id = str(fd, "userId");
+  if (!UUID_RE.test(id)) fail("/sohbet", "Geçersiz istek");
+  const { data, error } = await supabase.rpc("start_dm", { p_user_id: id });
+  if (error || !data) fail(`/oyuncu/${id}`, rpcMessage(error ?? {}, "Konuşma açılamadı"));
+  redirect(`/sohbet/${data}`);
+}
+
+/** Birebir mesaj gönderildikten sonra karşı tarafa bildirim (RPC mesajı yazdı; burada sadece bildirim) */
+export async function notifyDm(threadId: string, messageId: number) {
+  const { supabase, user } = await requireUser();
+  if (!UUID_RE.test(threadId)) return;
+  const { data: msg } = await supabase
+    .from("dm_messages")
+    .select("id, author_id, kind, body, created_at, thread_id, dm_threads(user_a, user_b, status, requested_by)")
+    .eq("id", messageId)
+    .eq("thread_id", threadId)
+    .maybeSingle();
+  const thread = Array.isArray(msg?.dm_threads) ? msg?.dm_threads[0] : msg?.dm_threads;
+  if (!msg || msg.kind !== "text" || msg.author_id !== user.id || !thread) return;
+  if (Date.now() - new Date(msg.created_at).getTime() > 60_000) return;
+  const t = thread as { user_a: string; user_b: string; status: string; requested_by: string };
+  const other = t.user_a === user.id ? t.user_b : t.user_a;
+  later(async () => {
+    const admin = createAdminClient();
+    const { data: me } = await admin.from("profiles").select("display_name").eq("id", user.id).maybeSingle();
+    await notify([other], "dm", text.dm(me?.display_name ?? "Bir oyuncu", threadId, msg.body, t.status === "pending"), { excludeUserId: user.id });
+  });
+}
+
+/** Bekleyen mesaj isteğini kabul et / reddet */
+export async function respondDmRequest(threadId: string, accept: boolean) {
+  const { supabase } = await requireUser();
+  const { error } = await supabase.rpc("respond_dm_request", { p_thread_id: threadId, p_accept: accept });
+  revalidatePath("/sohbet");
+  return { ok: !error, error: error ? rpcMessage(error, "İşlem yapılamadı") : undefined };
+}
+
 /** Bildirim kutusunu okundu işaretle (boşsa hepsi) */
 export async function markNotificationsRead(ids?: string[]) {
   const { supabase } = await requireUser();

@@ -39,10 +39,17 @@ kaçırılanları çeker — bunu kaldırma, yoksa mesajlar ara sıra düşmüyo
 (çağrı açıldı, maç kuruldu, oylama açıldı); "sonuçlar açıklandı" kartı finalize başarılı olunca koddan yazılır.
 Spam: dakikada 20 mesaj, 1000 karakter. Silme `delete_message` RPC (yazar veya yetkili; içerik silinir).
 
-**Birebir sohbet + davet (migration 0029, sadece DB katmanı yapıldı; UI sıradaki parçalar)**: `dm_threads` (user_a<user_b, tek konuşma),
+**Birebir sohbet + davet (migration 0029; DB + `/sohbet` gelen kutusu + birebir sohbet yapıldı, davet arayüzü sıradaki parça)**: `dm_threads` (user_a<user_b, tek konuşma),
 `dm_messages` (text|invite), `dm_reads`, `group_invites`. Yazma sadece RPC: `start_dm` (herkes herkese; engel iki yönde keser), `send_dm`,
 `respond_dm_request`, `delete_dm_message`, `mark_dm_read`, `dm_unread_counts`, `invite_to_group` (sadece kaptan/yetkili; davet kartı konuşmaya düşer,
 konuşma yoksa istek açılır), `respond_group_invite` (kabul = `join_group` ile aynı katılma), `cancel_group_invite`.
 **İstek kuralı**: tanımadığına ilk mesaj `pending`; gönderen kabul edilene kadar en fazla 1 metin atar (davet kartı sayılmaz); alıcı yazarsa kabul sayılır,
 reddedilen konuşmada gönderen yazamaz. Davet 20/gün, aynı kişiye aynı gruptan tek bekleyen davet. `group_invites` grup adı/türünü saklar
 (özel grubu davetli göremez). Bildirim türleri `dm`, `invite` eklendi (kod henüz bildirim göndermiyor). Kontrol: `scripts/db-checks/direct-chat.mjs`.
+
+**Genel sohbet ekranı (WhatsApp mantığı, tam ekran; popup yok — telefonda baloncuk klavye/geri tuşuyla çakışır)**: `/sohbet` takım+grup+kişi sohbetlerini tek listede
+son mesaja göre sıralar (okunmamış rozeti, "Mesaj istekleri" bölümü üstte); `/sohbet/[threadId]` birebir konuşma (`DmRoom.tsx`, kendi Realtime aboneliği, `ChatRoom`
+ile aynı yakalama/okundu mantığı). Giriş noktaları: başlıkta 💬 düğmesi (`MenuControls`, rozet `useChatUnread` = grup + birebir okunmamış), ☰ menüde "Sohbetler",
+`/oyuncu/[id]` sayfasında "Mesaj gönder" (`openDm` form eylemi: `start_dm` + yönlendirme; GET ile konuşma açılmaz, Link ön yüklemesi yan etki yaratmasın).
+Birebir bildirim: `notifyDm` (tür `dm`, tercih "chat", etiket `dm:<konuşma>`, 10 dk birleştirme); istekse başlık "… sana mesaj isteği gönderdi". `BottomNav` konuşma ekranlarında gizlenir (gelen kutusunda görünür).
+Test: `scripts/e2e/dm.mjs` (istek → kabul → canlı yazışma, bildirim, ekran görüntüleri).

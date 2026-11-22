@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadProfileForViewer } from "@/lib/profile-data";
 import { ProfileSubBar } from "@/components/profile/ProfileBars";
-import { blockUser } from "@/lib/actions";
+import { blockUser, openDm } from "@/lib/actions";
 import { ProfileView, parseTab } from "@/components/profile/ProfileView";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -38,6 +38,10 @@ export default async function PlayerProfilePage({
         noShows={data.noShows}
         viewerGroups={data.viewerGroups}
       />
+      <form action={openDm} className="mt-4">
+        <input type="hidden" name="userId" value={userId} />
+        <button className="w-full rounded-xl bg-accent py-3 font-bold text-pitch-950">✉️ Mesaj gönder</button>
+      </form>
       <form action={blockUser} className="mt-8 text-center">
         <input type="hidden" name="userId" value={userId} />
         <button className="text-xs text-on-surface-variant underline">Bu oyuncuyu engelle</button>

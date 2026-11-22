@@ -1,6 +1,6 @@
 // Bildirim kuralları ve metinleri. Saf fonksiyonlar (veritabanı/ağ yok) — notify-rules.test.ts ile test edilir.
 
-export type NotificationType = "vote" | "poll" | "match" | "offer" | "listing" | "chat";
+export type NotificationType = "vote" | "poll" | "match" | "offer" | "listing" | "chat" | "dm" | "invite";
 export type PrefKey = "votes" | "matches" | "offers" | "chat";
 export type Prefs = Record<PrefKey, boolean>;
 
@@ -12,13 +12,15 @@ export const PREF_OF: Record<NotificationType, PrefKey> = {
   offer: "offers",
   listing: "offers",
   chat: "chat",
+  dm: "chat",
+  invite: "chat",
 };
 
 export const PREF_LABEL: Record<PrefKey, { title: string; hint: string }> = {
   votes: { title: "Oylama", hint: "Maç bitip oylama açılınca ve oylama kapanmadan hatırlatma" },
   matches: { title: "Maç çağrısı ve maç", hint: "Yeni çağrı, maç kuruldu, çağrı iptal oldu" },
   offers: { title: "Teklif ve oyuncu ilanı", hint: "Maç teklifleri, ilana başvuru ve başvuru sonucu" },
-  chat: { title: "Sohbet", hint: "Yeni mesajlar (bir grupta 10 dakikada en fazla 1 bildirim)" },
+  chat: { title: "Sohbet", hint: "Grup/takım ve birebir mesajlar, takıma/gruba davetler (bir sohbette 10 dakikada en fazla 1 bildirim)" },
 };
 
 /** Satır yoksa tüm kategoriler açık */
@@ -49,7 +51,7 @@ export function planRecipients(input: {
   for (const id of new Set(input.userIds)) {
     if (!id || id === input.excludeUserId) continue;
     if (!allowed(input.type, input.prefsByUser.get(id))) continue;
-    if (input.type === "chat") {
+    if (input.type === "chat" || input.type === "dm") {
       const last = input.recentByUser?.get(id);
       if (last && now - new Date(last).getTime() < CHAT_MERGE_MINUTES * 60_000) continue;
     }
@@ -163,6 +165,19 @@ export const text = {
     body: truncate(`${author}: ${oneLine(message)}`, 100),
     url: `/g/${groupId}/sohbet`,
     tag: `chat:${groupId}`,
+  }),
+  /** Birebir mesaj: konuşma başına birleşir (etiket dm:<konuşma>) */
+  dm: (author: string, threadId: string, message: string, isRequest: boolean): Content => ({
+    title: truncate(isRequest ? `${author} sana mesaj isteği gönderdi` : author, 120),
+    body: truncate(oneLine(message), 100),
+    url: `/sohbet/${threadId}`,
+    tag: `dm:${threadId}`,
+  }),
+  groupInvite: (inviter: string, groupName: string, kind: "team" | "community", threadId: string, inviteId: string): Content => ({
+    title: kind === "team" ? "🛡️ Takım daveti" : "👥 Grup daveti",
+    body: truncate(`${inviter} seni “${oneLine(groupName)}” ${kind === "team" ? "takımına" : "grubuna"} davet etti`, 300),
+    url: `/sohbet/${threadId}`,
+    tag: `invite:${inviteId}`,
   }),
 };
 

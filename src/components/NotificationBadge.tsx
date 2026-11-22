@@ -51,3 +51,43 @@ export function NotificationBadge() {
     </span>
   );
 }
+
+/** Okunmamış sohbet mesajı sayısı (grup/takım + birebir): sayfa değişince ve yeni mesaj gelince güncellenir */
+export function useChatUnread() {
+  const path = usePathname();
+  const [count, setCount] = useState(0);
+  const loadRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    const supabase = createClient();
+    const load = async () => {
+      const [g, d] = await Promise.all([supabase.rpc("unread_counts"), supabase.rpc("dm_unread_counts")]);
+      const sum = (rows: { unread: number }[] | null) => (rows ?? []).reduce((a, r) => a + r.unread, 0);
+      setCount(sum(g.data) + sum(d.data));
+    };
+    loadRef.current = load;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (cancelled || !data.session) return;
+      supabase.realtime.setAuth(data.session.access_token);
+      // RLS sayesinde sadece erişebildiğimiz sohbetlerin mesajları gelir
+      channel = supabase
+        .channel(`chat-badge:${Math.random().toString(36).slice(2)}`)
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "group_messages" }, () => void load())
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "dm_messages" }, () => void load())
+        .subscribe();
+    })();
+    return () => {
+      cancelled = true;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, []);
+
+  useEffect(() => {
+    loadRef.current();
+  }, [path]);
+
+  return count;
+}

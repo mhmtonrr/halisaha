@@ -72,7 +72,7 @@ export async function notify(
     const prefsByUser = new Map<string, Partial<Prefs>>((prefRows ?? []).map((p) => [p.user_id as string, p as Partial<Prefs>]));
 
     let recentByUser: Map<string, string> | undefined;
-    if (type === "chat" && content.tag) {
+    if ((type === "chat" || type === "dm") && content.tag) {
       const since = new Date(Date.now() - CHAT_MERGE_MINUTES * 60_000).toISOString();
       const { data: recent } = await admin
         .from("notifications")
