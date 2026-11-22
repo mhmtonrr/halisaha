@@ -33,23 +33,14 @@ Büyük tasarım kararlarını kodlamadan önce kullanıcıyla netleştir; küç
 Vercel ortam değişkenleri: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
 `SUPABASE_SERVICE_ROLE_KEY` (+ isteğe bağlı `NEXT_PUBLIC_CONTACT_EMAIL`). Kullanıcı Vercel panelinden girdi.
 
-## Yeni oturumda kurulum (Claude Code bulut ortamı)
+## Yerel geliştirme ortamı (Windows, terminalde Claude Code)
 
-- Ortam: `halisaha` (izinli hostlar: `hbdhbquczlvjnsmrgqxj.supabase.co`, `halisaha-tawny.vercel.app`;
-  `api.supabase.com` için Supabase erişim anahtarı ortamda kayıtlı, proxy ekler — değeri hiç görmezsin).
-- Node'un `fetch`'i proxy'yi kendiliğinden kullanmaz: Supabase'e giden her Node komutunda `NODE_USE_ENV_PROXY=1`.
-- `.env.local` gitignore'da; yeni konteynerde yoktur. Anahtarları **ekrana basmadan** oluştur:
-
-```bash
-npm install
-curl -s "https://api.supabase.com/v1/projects/hbdhbquczlvjnsmrgqxj/api-keys?reveal=true" | python3 -c "
-import json,sys; k={x['name']:x['api_key'] for x in json.load(sys.stdin) if x.get('name') in ('anon','service_role')}
-open('.env.local','w').write('NEXT_PUBLIC_SUPABASE_URL=https://hbdhbquczlvjnsmrgqxj.supabase.co\nNEXT_PUBLIC_SUPABASE_ANON_KEY=%s\nSUPABASE_SERVICE_ROLE_KEY=%s\n'%(k['anon'],k['service_role']))"
-sed 's/=.*/=<set>/' .env.local
-```
-
-Erişim reddedilirse (403/401) kullanıcıdan Supabase erişim anahtarını `request_credential` ile
-(`api.supabase.com`) iste; chat'e yapıştırtma.
+- Klasör: `C:\Users\PC1\Desktop\halisaha`. Windows + Git Bash/PowerShell, Node 24. **Python yok**; betikleri Node ile yaz.
+- `.env.local` kullanıcının bilgisayarında hazır (gitignore'da). Değerleri **asla ekrana basma**; yalnızca dolu/boş kontrolü yap.
+  Eksikse kullanıcı Supabase panelinden (Project Settings > API) kendisi doldurur; chat'e yapıştırtma.
+- `npm run dev` → http://localhost:3000. Yerel uygulama **canlı veritabanına** bağlıdır: test verisi bırakma.
+- Google girişi yerelde çalışsın diye Supabase Auth > URL Configuration > Redirect URLs'te `http://localhost:3000/**` olmalı.
+- Bulut ortamındaki `NODE_USE_ENV_PROXY=1` yerelde gerekmez (betik yorumlarında geçiyorsa yok say).
 
 ## Teknoloji
 
@@ -132,10 +123,9 @@ Yetki hep RLS/RPC'de; `groups` seçerken sütunları açıkça yaz (`invite_code
 2. `scripts/db-checks/` altına yetki kontrolü ekle (`setupDb()` Supabase'e benzer ortam kurar), `npm run db:check`.
 3. **Yayındaki eski kodla uyumu düşün.** Eski sürümü bozan değişiklik (ör. sütun yetkisi kaldırma, rol değişimi)
    canlıya kodla birlikte, push'tan hemen önce uygulanır.
-4. Canlıya uygula (tek istek tek transaction):
+4. Canlıya uygula (tek istek tek transaction; `.env.local`'da `SUPABASE_ACCESS_TOKEN` gerekir):
 ```bash
-python3 -c "import json;print(json.dumps({'query':open('supabase/migrations/00NN_x.sql').read()}))" > /tmp/m.json
-curl -s -X POST https://api.supabase.com/v1/projects/hbdhbquczlvjnsmrgqxj/database/query -H 'Content-Type: application/json' --data @/tmp/m.json
+node --env-file=.env.local scripts/apply-migration.mjs supabase/migrations/00NN_x.sql
 ```
 5. Supabase Auth ayarı gibi **güvenliği gevşeten** değişiklikleri kendin yapma; kullanıcıya panelden nasıl
    yapacağını anlat.
