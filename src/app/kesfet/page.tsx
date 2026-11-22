@@ -29,10 +29,15 @@ export default async function DiscoverPage({
   const district = canonicalDistrict(city, sp.ilce) ?? undefined;
   if (players) return <PlayersTab sp={sp} userId={user.id} city={city} district={district} />;
 
-  const [teams, listings] = await Promise.all([
+  const [allTeams, allListings, { data: teamBlocks }] = await Promise.all([
     findTeams(supabase, { city: city || undefined, district, q: sp.q, limit: 100 }),
     getOpenListings(supabase, { city: city || undefined, district, limit: 20 }),
+    supabase.from("user_blocks").select("blocked_group_id").not("blocked_group_id", "is", null),
   ]);
+  // Engellediğim takımlar listede ve ilanlarda görünmez
+  const blockedTeams = new Set((teamBlocks ?? []).map((b) => b.blocked_group_id as string));
+  const teams = allTeams.filter((t) => !blockedTeams.has(t.id));
+  const listings = allListings.filter((l) => !blockedTeams.has(l.team.id));
 
   return (
     <main>

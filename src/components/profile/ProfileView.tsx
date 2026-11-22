@@ -702,7 +702,7 @@ export function ProfileView({
   const last5 = (matches ?? []).slice(0, 5).reverse();
   return (
     <>
-      <Tabs base={base} active={tab} isMe={isMe} />
+      {tab !== "ayarlar" && <Tabs base={base} active={tab} isMe={isMe} />}
       {tab === "genel" && <GeneralPanel person={person} isMe={isMe} stats={stats} last5={last5} upcoming={upcoming} />}
       {tab === "istatistik" &&
         (locked ? <LockedCard name={person.profile.displayName} /> : <StatsPanel person={person} stats={stats} noShows={noShows ?? 0} isMe={isMe} allMatches={matches ?? []} />)}

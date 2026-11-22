@@ -2,6 +2,7 @@ import { LiveRefresh } from "@/components/LiveRefresh";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
+import { blockTeam } from "@/lib/actions";
 import { finalizeExpired } from "@/lib/finalize";
 import { formatDate, getGroupSummaries, isSquadMember } from "@/lib/data";
 import { formatRegion } from "@/lib/regions";
@@ -34,7 +35,7 @@ const OUTCOME_WORD: Record<Outcome, string> = { W: "galibiyet", D: "beraberlik",
 
 export default async function TeamStatsPage({ params }: { params: Promise<{ groupId: string }> }) {
   const { groupId } = await params;
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
 
   const { data: group } = await supabase
     .from("groups")
@@ -307,6 +308,12 @@ export default async function TeamStatsPage({ params }: { params: Promise<{ grou
       <LinkButton href={`/g/${groupId}`} variant="secondary" className="mt-6 w-full">
         Takım sayfasına dön
       </LinkButton>
+      {!players.some((p) => p.user_id === user.id) && (
+        <form action={blockTeam} className="mt-3 text-center">
+          <input type="hidden" name="groupId" value={groupId} />
+          <button className="text-xs text-muted underline">Bu takımı engelle</button>
+        </form>
+      )}
     </main>
   );
 }

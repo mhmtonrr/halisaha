@@ -96,8 +96,8 @@ try {
 
   await aP.goto(`${BASE}/profil?sekme=ayarlar`);
   t = await text(aP);
-  check("ayarlar: profil formu, görünürlük ve bildirimler", has(t, "Ad soyad") && has(t, "İstatistiklerini kim görsün?") && has(t, "Bildirimler"));
-  check("ayarlar: varsayılan 'Sadece takım arkadaşlarım' seçili", await aP.locator('input[name="visibility"][value="teammates"]').isChecked());
+  check("ayarlar: tasarımdaki bölümler", ["Kişisel Bilgiler", "Futbolcu Profili", "İletişim & Doğrulama", "Bildirimler & Maç Çağrıları", "Müsaitlik Takvimi", "İstatistiklerimi Paylaş", "Engellenen Oyuncular", "Yardım Merkezi", "Hesabımı Geçici Dondur", "Çıkış Yap"].every((x) => has(t, x)));
+  check("ayarlar: istatistik paylaşımı varsayılan kapalı", (await aP.locator('button[role="switch"][aria-label="İstatistiklerimi Paylaş"]').getAttribute("aria-checked")) === "false");
   await aP.screenshot({ path: `${SHOTS}/98-profil-ayarlar.png`, fullPage: true });
 
   // 2) Takım arkadaşı (Barış) Ali'nin profilini görür; yabancı (Cem) göremez
@@ -123,9 +123,9 @@ try {
   check("yabancı için maç geçmişi kilitli", has(await text(cP), "sadece takım arkadaşlarına açık"));
 
   // 3) Ali herkese açık yapar → yabancı görür, özel grubun adı hâlâ gizli
-  await aP.locator('input[name="visibility"][value="public"]').check();
-  await aP.click('button:has-text("Görünürlüğü kaydet")');
-  await aP.waitForURL(/saved=1/);
+  await aP.goto(`${BASE}/profil?sekme=ayarlar`);
+  await aP.locator('button[role="switch"][aria-label="İstatistiklerimi Paylaş"]').click();
+  await aP.waitForTimeout(1500);
   const { data: prof } = await admin.from("profiles").select("stats_visibility").eq("id", a.id).single();
   check("ayar kaydedildi (public)", prof?.stats_visibility === "public");
   await cP.goto(`${BASE}/oyuncu/${a.id}?sekme=istatistik`);

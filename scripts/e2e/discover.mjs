@@ -84,7 +84,7 @@ try {
   check("sonuç satırı oyuncu profiline gider", (await body(p)).includes("zeki forvet"));
 
   console.log("Ayar: aramada görün");
-  await p.goto(`${BASE}/profil?sekme=ayarlar`);
+  await p.goto(`${BASE}/profil/ayarlar/gorunurluk`);
   const box = p.locator('input[name="discoverable"]');
   check("ayar işaretli geliyor (varsayılan açık)", await box.isChecked());
   await box.uncheck();

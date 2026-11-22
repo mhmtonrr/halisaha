@@ -38,7 +38,7 @@ try {
     return c.toDataURL(type, 0.9).split(",")[1];
   }, type);
 
-  await page.goto(`${BASE}/profil?sekme=ayarlar`);
+  await page.goto(`${BASE}/profil/ayarlar/futbolcu`);
   const file = page.locator('input[type="file"]');
   await file.setInputFiles({ name: "kesim.png", mimeType: "image/png", buffer: Buffer.from(await makeImage("image/png"), "base64") });
   const ready = page.getByRole("button", { name: "Başka fotoğraf" });
@@ -63,7 +63,7 @@ try {
   await page.screenshot({ path: `${SHOTS}/card-photo-opaque.png` });
 
   // Sil (onay penceresi kabul edilir)
-  await page.goto(`${BASE}/profil?sekme=ayarlar`);
+  await page.goto(`${BASE}/profil/ayarlar/futbolcu`);
   page.once("dialog", (d) => d.accept());
   await page.getByRole("button", { name: "Fotoğrafı sil" }).click();
   await page.getByRole("button", { name: /Fotoğraf seç/ }).waitFor({ timeout: 20000 });

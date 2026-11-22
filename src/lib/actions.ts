@@ -134,10 +134,186 @@ export async function updateStatsVisibility(fd: FormData) {
 export async function updateDiscoverable(fd: FormData) {
   const { supabase, user } = await requireUser();
   const { error } = await supabase.from("profiles").update({ discoverable: str(fd, "discoverable") === "1" }).eq("id", user.id);
-  if (error) fail("/profil?sekme=ayarlar", "Ayar kaydedilemedi");
+  if (error) fail("/profil/ayarlar/gorunurluk", "Ayar kaydedilemedi");
   revalidateTag(FEATURED_TAG); // gizlenen kişi öne çıkanlarda hemen kalksın
   revalidatePath("/profil");
-  redirect("/profil?sekme=ayarlar&saved=1");
+  redirect("/profil/ayarlar/gorunurluk?saved=1");
+}
+
+// ---------------------------------------------------------------------------
+// Ayarlar alt ekranları (Kişisel bilgiler, Futbolcu profili, müsaitlik, dondurma)
+// ---------------------------------------------------------------------------
+
+/** update_my_profile her çağrıda tüm alanları ister; alt ekranlar sadece kendi alanlarını değiştirir, gerisi mevcut değerden gelir */
+async function currentProfileArgs(supabase: Awaited<ReturnType<typeof requireUser>>["supabase"], userId: string, back: string) {
+  const { data: p } = await supabase
+    .from("profiles")
+    .select("display_name, city, district, birth_year, preferred_position, secondary_positions, preferred_foot, shirt_number, bio")
+    .eq("id", userId)
+    .single();
+  if (!p) fail(back, "Profil bulunamadı");
+  return {
+    p_display_name: p.display_name as string,
+    p_position: (p.preferred_position ?? null) as string | null,
+    p_secondary: (p.secondary_positions ?? []) as string[],
+    p_foot: (p.preferred_foot ?? null) as string | null,
+    p_shirt: (p.shirt_number ?? null) as number | null,
+    p_bio: ((p.bio ?? "") as string).slice(0, 160),
+    p_city: (p.city ?? "") as string,
+    p_district: (p.district ?? "") as string,
+    p_birth_year: (p.birth_year ?? null) as number | null,
+  };
+}
+
+const PERSONAL = "/profil/ayarlar/kisisel";
+const FOOTBALLER = "/profil/ayarlar/futbolcu";
+
+/** Kişisel bilgiler: ad soyad, kartta görünen ad, il/ilçe, doğum tarihi (özel) */
+export async function updatePersonal(fd: FormData) {
+  const { supabase, user } = await requireUser();
+  const card = validateCardName(str(fd, "cardName"));
+  if (!card.ok) fail(PERSONAL, card.error);
+  const name = str(fd, "name");
+  if (name.length < 2) fail(PERSONAL, "Ad soyad en az 2 karakter olmalı");
+  const city = str(fd, "city");
+  if (!isProvince(city)) fail(PERSONAL, "İlini seç");
+  const birth = str(fd, "birthDate");
+  if (birth) {
+    const d = new Date(`${birth}T00:00:00Z`);
+    const y = d.getUTCFullYear();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(birth) || Number.isNaN(d.getTime()) || y < 1940 || y > new Date().getFullYear() - 8) fail(PERSONAL, "Geçerli bir doğum tarihi gir");
+  }
+  const base = await currentProfileArgs(supabase, user.id, PERSONAL);
+  const { error } = await supabase.rpc("update_my_profile", {
+    ...base,
+    p_display_name: name,
+    p_city: city,
+    p_district: canonicalDistrict(city, str(fd, "district")) ?? "",
+  });
+  if (error) fail(PERSONAL, error.message);
+  await saveCardName(supabase, user.id, card.ok ? card.value : null, PERSONAL);
+  // Doğum tarihi ayrı özel tabloda (sadece kendisi okur); boşsa silinir
+  const { error: birthErr } = await supabase.from("profile_private").upsert({ user_id: user.id, birth_date: birth || null }, { onConflict: "user_id" });
+  if (birthErr) fail(PERSONAL, "Doğum tarihi kaydedilemedi");
+  revalidatePath("/", "layout");
+  redirect(`${PERSONAL}?saved=1`);
+}
+
+/** Futbolcu profili: mevkiler, ayak, forma no, boy, kilo, hakkımda */
+export async function updateFootballer(fd: FormData) {
+  const { supabase, user } = await requireUser();
+  const position = asPosition(str(fd, "position"));
+  if (!position) fail(FOOTBALLER, "Ana mevkini seç");
+  const secondary = fd.getAll("secondary").map(String).filter((p) => asPosition(p) && p !== position);
+  const foot = ["L", "R", "B"].includes(str(fd, "foot")) ? str(fd, "foot") : null;
+  const num = (key: string, lo: number, hi: number) => {
+    const raw = str(fd, key);
+    if (!raw) return null;
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n < lo || n > hi) fail(FOOTBALLER, `${key === "shirt" ? "Forma no 1-99" : key === "height" ? "Boy 120-230 cm" : "Kilo 30-200 kg"} aralığında olmalı`);
+    return n;
+  };
+  const shirt = num("shirt", 1, 99);
+  const height = num("height", 120, 230);
+  const weight = num("weight", 30, 200);
+  const base = await currentProfileArgs(supabase, user.id, FOOTBALLER);
+  const { error } = await supabase.rpc("update_my_profile", {
+    ...base,
+    p_position: position,
+    p_secondary: secondary,
+    p_foot: foot,
+    p_shirt: shirt,
+    p_bio: str(fd, "bio").slice(0, 160),
+  });
+  if (error) fail(FOOTBALLER, error.message);
+  const { error: bodyErr } = await supabase.from("profiles").update({ height_cm: height, weight_kg: weight }).eq("id", user.id);
+  if (bodyErr) fail(FOOTBALLER, "Boy/kilo kaydedilemedi");
+  revalidatePath("/", "layout");
+  redirect(`${FOOTBALLER}?saved=1`);
+}
+
+/** Haftalık müsait günler (0=Pzt … 6=Paz) */
+export async function saveAvailability(days: number[]): Promise<{ error?: string }> {
+  const { supabase, user } = await requireUser();
+  const clean = [...new Set(days.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))].sort();
+  const { error } = await supabase.from("profiles").update({ available_days: clean }).eq("id", user.id);
+  if (error) return { error: "Kaydedilemedi" };
+  revalidatePath("/profil");
+  return {};
+}
+
+/** "İstatistiklerimi paylaş": açık = herkes görür, kapalı = sadece takım arkadaşları */
+export async function setStatsShare(on: boolean): Promise<{ error?: string }> {
+  const { supabase, user } = await requireUser();
+  const { error } = await supabase.from("profiles").update({ stats_visibility: on ? "public" : "teammates" }).eq("id", user.id);
+  if (error) return { error: "Kaydedilemedi" };
+  revalidatePath("/profil");
+  return {};
+}
+
+/** Hesabı geçici dondurma: aramada/öne çıkanlarda görünmez, bildirim almaz; istediğin an yeniden açılır */
+export async function setAccountFrozen(fd: FormData) {
+  const { supabase, user } = await requireUser();
+  const freeze = str(fd, "freeze") === "1";
+  const { error } = await supabase.from("profiles").update({ frozen_at: freeze ? new Date().toISOString() : null }).eq("id", user.id);
+  if (error) fail("/profil?sekme=ayarlar", "İşlem yapılamadı");
+  revalidateTag(FEATURED_TAG);
+  revalidatePath("/", "layout");
+  redirect(`/profil?sekme=ayarlar&saved=1`);
+}
+
+// ---------------------------------------------------------------------------
+// Engelleme (oyuncu veya herkese açık takım; sadece engelleyen görür)
+// ---------------------------------------------------------------------------
+
+const BLOCKS = "/profil/ayarlar/engellenenler";
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export async function blockUser(fd: FormData) {
+  const { supabase, user } = await requireUser();
+  const id = str(fd, "userId");
+  if (!UUID_RE.test(id) || id === user.id) fail(BLOCKS, "Geçersiz istek");
+  const { error } = await supabase.from("user_blocks").insert({ blocked_user_id: id });
+  // 23505: zaten engelli
+  if (error && error.code !== "23505") fail(BLOCKS, "Engellenemedi");
+  revalidatePath("/kesfet");
+  redirect(BLOCKS);
+}
+
+export async function blockTeam(fd: FormData) {
+  const { supabase } = await requireUser();
+  const id = str(fd, "groupId");
+  if (!UUID_RE.test(id)) fail(BLOCKS, "Geçersiz istek");
+  const { error } = await supabase.from("user_blocks").insert({ blocked_group_id: id });
+  if (error && error.code !== "23505") fail(BLOCKS, "Engellenemedi");
+  revalidatePath("/kesfet");
+  redirect(BLOCKS);
+}
+
+export async function unblock(fd: FormData) {
+  const { supabase } = await requireUser();
+  const id = str(fd, "id");
+  if (!UUID_RE.test(id)) fail(BLOCKS, "Geçersiz istek");
+  const { error } = await supabase.from("user_blocks").delete().eq("id", id);
+  if (error) fail(BLOCKS, "Engel kaldırılamadı");
+  revalidatePath("/kesfet");
+  redirect(BLOCKS);
+}
+
+/** Geri bildirim: günde en fazla 5 mesaj */
+export async function sendFeedback(fd: FormData) {
+  const { supabase, user } = await requireUser();
+  const back = "/geri-bildirim";
+  const message = str(fd, "message");
+  const category = ["genel", "hata", "oneri"].includes(str(fd, "category")) ? str(fd, "category") : "genel";
+  if (message.length < 5) fail(back, "Mesaj en az 5 karakter olmalı");
+  if (message.length > 1000) fail(back, "Mesaj en fazla 1000 karakter olabilir");
+  const since = new Date(Date.now() - 24 * 3600_000).toISOString();
+  const { count } = await supabase.from("feedback").select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("created_at", since);
+  if ((count ?? 0) >= 5) fail(back, "Bugün çok fazla geri bildirim gönderdin; yarın tekrar dene");
+  const { error } = await supabase.from("feedback").insert({ category, message });
+  if (error) fail(back, "Gönderilemedi, tekrar dene");
+  redirect(`${back}?saved=1`);
 }
 
 /** İlk girişteki karşılama formu */

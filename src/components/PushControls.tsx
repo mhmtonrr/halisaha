@@ -10,7 +10,7 @@ const DISMISS_KEY = "hs-push-dismissed";
 const DISMISS_DAYS = 14;
 
 /** Bu cihazda bildirimleri açma/kapama mantığı (kart ve profil ayarı ortak kullanır) */
-function usePush() {
+export function usePush() {
   const [status, setStatus] = useState<PushStatus>("loading");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
