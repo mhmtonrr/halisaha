@@ -11,6 +11,7 @@ import {
   togglePollApproval,
 } from "@/lib/actions";
 import { formatDate, getGroupPlayers, type Position } from "@/lib/data";
+import { SendInviteLink } from "@/components/SendInviteLink";
 import { Badge, Button, Card, ErrorNote, Header, LinkButton, SectionTitle, cx } from "@/components/ui";
 import { OvrBadge, PositionChip } from "@/components/PlayerCard";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -116,6 +117,7 @@ export default async function PollPage({
         }
       />
       <ErrorNote message={error} />
+      {isAdmin && open && <SendInviteLink tur="poll" refId={pollId} className="mb-4" />}
 
       <Card className="mb-4">
         <div className="text-2xl font-black">{formatDate(poll.starts_at)}</div>

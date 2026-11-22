@@ -8,13 +8,18 @@ import { cancelGroupInvite, notifyDm, respondDmRequest, respondGroupInvite } fro
 import { Avatar } from "@/components/Avatar";
 import { BackLink } from "@/components/NavHistory";
 import { cx } from "@/components/ui";
+import { MatchCardView, type MatchCard } from "./MatchCardView";
 
 export interface DmMessage {
   id: number;
   author_id: string;
-  kind: "text" | "invite";
+  kind: "text" | "invite" | "match";
   body: string;
   invite_id: string | null;
+  card?: MatchCard | null;
+  listing_id?: string | null;
+  poll_id?: string | null;
+  match_id?: string | null;
   deleted_at: string | null;
   created_at: string;
   pending?: boolean;
@@ -32,7 +37,7 @@ export interface InviteInfo {
 
 const MAX = 1000;
 const TZ = "Europe/Istanbul";
-const COLS = "id, author_id, kind, body, invite_id, deleted_at, created_at";
+const COLS = "id, author_id, kind, body, invite_id, card, listing_id, poll_id, match_id, deleted_at, created_at";
 const dayKey = (iso: string) => new Date(iso).toLocaleDateString("tr-TR", { timeZone: TZ });
 const time = (iso: string) => new Date(iso).toLocaleTimeString("tr-TR", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
 
@@ -76,6 +81,8 @@ export function DmRoom({
   initial,
   hasMore: initialHasMore,
   invites,
+  refStatus,
+  memberGroupIds,
 }: {
   threadId: string;
   meId: string;
@@ -85,6 +92,8 @@ export function DmRoom({
   initial: DmMessage[];
   hasMore: boolean;
   invites: InviteInfo[];
+  refStatus: Record<string, string>;
+  memberGroupIds: string[];
 }) {
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
@@ -135,7 +144,7 @@ export function DmRoom({
     if (data?.length) {
       scheduleRead();
       // Yeni davet kartı geldiyse durumunu sunucudan al
-      if ((data as DmMessage[]).some((m) => m.kind === "invite")) router.refresh();
+      if ((data as DmMessage[]).some((m) => m.kind === "invite" || m.kind === "match")) router.refresh();
     }
   }, [supabase, threadId, upsert, scheduleRead, router]);
 
@@ -152,7 +161,7 @@ export function DmRoom({
           const msg = payload.new as DmMessage;
           upsert(msg);
           if (msg.author_id !== meId) scheduleRead();
-          if (msg.kind === "invite") router.refresh();
+          if (msg.kind === "invite" || msg.kind === "match") router.refresh();
         })
         .on("postgres_changes", { event: "UPDATE", schema: "public", table: "dm_messages", filter: `thread_id=eq.${threadId}` }, (payload) =>
           upsert(payload.new as DmMessage),
@@ -321,7 +330,16 @@ export function DmRoom({
                   <span className="rounded-full bg-pitch-800 px-3 py-1 text-[11px] text-muted">{dayLabel(m.created_at)}</span>
                 </div>
               )}
-              {m.kind === "invite" ? (
+              {m.kind === "match" && m.card ? (
+                <MatchCardView
+                  card={m.card}
+                  refId={(m.listing_id ?? m.poll_id ?? m.match_id) as string}
+                  status={refStatus[`${m.card.type}:${m.listing_id ?? m.poll_id ?? m.match_id}`]}
+                  isMember={memberGroupIds.includes(m.card.group_id)}
+                  mine={mine}
+                  time={time(m.created_at)}
+                />
+              ) : m.kind === "invite" ? (
                 <div className={cx("my-2 flex", mine ? "justify-end" : "justify-start")}>
                   <div className="max-w-[85%] rounded-2xl border border-accent/40 bg-accent/10 px-3 py-2.5 text-sm">
                     <div className="font-bold">{invite ? `${invite.group_kind === "team" ? "🛡️ Takım" : "👥 Grup"} daveti` : "Davet"}</div>

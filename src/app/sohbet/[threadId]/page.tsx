@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { LiveRefresh } from "@/components/LiveRefresh";
+import { getMemberships } from "@/lib/teams-data";
 import { DmRoom, type DmMessage, type InviteInfo } from "./DmRoom";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -26,7 +27,7 @@ export default async function DmPage({ params }: { params: Promise<{ threadId: s
     supabase.from("profiles").select("id, display_name, photo_url").eq("id", otherId).maybeSingle(),
     supabase
       .from("dm_messages")
-      .select("id, author_id, kind, body, invite_id, deleted_at, created_at")
+      .select("id, author_id, kind, body, invite_id, card, listing_id, poll_id, match_id, deleted_at, created_at")
       .eq("thread_id", threadId)
       .order("id", { ascending: false })
       .limit(PAGE_SIZE),
@@ -36,6 +37,20 @@ export default async function DmPage({ params }: { params: Promise<{ threadId: s
   const { data: invites } = inviteIds.length
     ? await supabase.from("group_invites").select("id, group_id, group_name, group_kind, status, inviter_id").in("id", inviteIds)
     : { data: [] as InviteInfo[] };
+
+  // Kartlar: güncel durum (açık/kapalı) ve görüntüleyenin üye olduğu gruplar
+  const msgs = (messages ?? []) as DmMessage[];
+  const ids = (k: "listing_id" | "poll_id" | "match_id") => [...new Set(msgs.map((m) => m[k]).filter(Boolean))] as string[];
+  const [lst, pol, mat, memberships] = await Promise.all([
+    ids("listing_id").length ? supabase.from("player_listings").select("id, status").in("id", ids("listing_id")) : { data: [] },
+    ids("poll_id").length ? supabase.from("match_polls").select("id, status").in("id", ids("poll_id")) : { data: [] },
+    ids("match_id").length ? supabase.from("matches").select("id, status").in("id", ids("match_id")) : { data: [] },
+    msgs.some((m) => m.kind === "match") ? getMemberships(supabase, user.id) : Promise.resolve([]),
+  ]);
+  const refStatus: Record<string, string> = {};
+  for (const r of (lst.data ?? []) as { id: string; status: string }[]) refStatus[`listing:${r.id}`] = r.status;
+  for (const r of (pol.data ?? []) as { id: string; status: string }[]) refStatus[`poll:${r.id}`] = r.status;
+  for (const r of (mat.data ?? []) as { id: string; status: string }[]) refStatus[`match:${r.id}`] = r.status;
 
   await supabase.rpc("mark_dm_read", { p_thread_id: threadId });
 
@@ -51,6 +66,8 @@ export default async function DmPage({ params }: { params: Promise<{ threadId: s
         initial={((messages ?? []) as DmMessage[]).reverse()}
         hasMore={(messages?.length ?? 0) === PAGE_SIZE}
         invites={(invites ?? []) as InviteInfo[]}
+        refStatus={refStatus}
+        memberGroupIds={memberships.map((m) => m.group.id)}
       />
     </>
   );

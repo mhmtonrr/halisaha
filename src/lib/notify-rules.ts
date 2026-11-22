@@ -197,6 +197,13 @@ export const text = {
     url: accepted ? `/g/${groupId}` : "/sosyal",
     tag: `invite-reply:${groupId}:${who}`,
   }),
+  /** Sohbette paylaşılan maç/çağrı/ilan kartı */
+  matchCard: (inviter: string, groupName: string, label: string, whenText: string, threadId: string, refId: string): Content => ({
+    title: "⚽ Maç daveti",
+    body: truncate(`${inviter}: ${label} · ${oneLine(groupName)} · ${whenText}`, 300),
+    url: `/sohbet/${threadId}`,
+    tag: `match-card:${refId}`,
+  }),
   groupInvite: (inviter: string, groupName: string, kind: "team" | "community", threadId: string, inviteId: string): Content => ({
     title: kind === "team" ? "🛡️ Takım daveti" : "👥 Grup daveti",
     body: truncate(`${inviter} seni “${oneLine(groupName)}” ${kind === "team" ? "takımına" : "grubuna"} davet etti`, 300),

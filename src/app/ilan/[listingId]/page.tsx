@@ -8,6 +8,7 @@ import { teamRating } from "@/lib/teams-data";
 import { APPLICATION_STATUS, LISTING_STATUS, getListing, getMyApplication } from "@/lib/listings-data";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { ShareLink } from "@/components/ShareLink";
+import { SendInviteLink } from "@/components/SendInviteLink";
 import { SubmitButton } from "@/components/SubmitButton";
 import { PushPrompt } from "@/components/PushControls";
 import { TeamBadge } from "@/components/TeamBadge";
@@ -100,6 +101,7 @@ export default async function ListingPage({
         )}
         {listing.note && <p className="rounded-lg bg-pitch-950 p-3 text-sm">“{listing.note}”</p>}
         <ShareLink path={`/ilan/${listing.id}`} title={`${listing.team.name}: oyuncu arıyoruz`} />
+        {isAdmin && listing.status === "open" && matchOpen && <SendInviteLink tur="listing" refId={listing.id} />}
       </Card>
 
       {myApp?.status === "pending" && <PushPrompt reason="Başvurun yanıtlanınca haber verelim mi?" />}

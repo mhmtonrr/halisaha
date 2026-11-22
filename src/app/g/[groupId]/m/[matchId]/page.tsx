@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SendInviteLink } from "@/components/SendInviteLink";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -301,6 +302,7 @@ export default async function MatchPage({
         {match.venue ? ` · ${match.venue}` : ""}
       </p>
       <ErrorNote message={error} />
+      {canManage && match.status === "planned" && <SendInviteLink tur="match" refId={matchId} className="mb-4" />}
       {listing && listing.status === "open" && (
         <Link href={`/ilan/${listing.id}`} className="mb-4 block">
           <Card className="flex items-center gap-3 border-amber-400/40 bg-amber-400/10 transition hover:border-amber-400">

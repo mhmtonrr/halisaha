@@ -1585,6 +1585,34 @@ export async function friendAction(fd: FormData) {
   redirect(back);
 }
 
+/** Maç/çağrı/ilan kartını bir kişiye sohbetten gönder (sadece kaptan/yetkili; RPC denetler). Seçici sayfada kalır. */
+export async function shareMatchCard(fd: FormData) {
+  const { supabase, user } = await requireUser();
+  const type = str(fd, "tur");
+  const ref = str(fd, "ref");
+  const userId = str(fd, "userId");
+  const q = str(fd, "q");
+  const page = `/davet/gonder?tur=${encodeURIComponent(type)}&ref=${encodeURIComponent(ref)}${q ? `&q=${encodeURIComponent(q)}` : ""}`;
+  if (!["listing", "poll", "match"].includes(type) || !UUID_RE.test(ref) || !UUID_RE.test(userId)) fail("/", "Geçersiz istek");
+  const { data: messageId, error } = await supabase.rpc("share_match_card", { p_user_id: userId, p_type: type, p_ref: ref });
+  if (error || messageId == null) fail(page, rpcMessage(error ?? {}, "Davet gönderilemedi"));
+  later(async () => {
+    const admin = createAdminClient();
+    const [{ data: msg }, { data: me }] = await Promise.all([
+      admin.from("dm_messages").select("thread_id, card").eq("id", messageId as number).maybeSingle(),
+      admin.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
+    ]);
+    const card = msg?.card as { group_name?: string; starts_at?: string } | null;
+    if (!msg || !card?.group_name) return;
+    const label = type === "listing" ? "Oyuncu ilanı" : type === "poll" ? "Maç çağrısı" : "Maç";
+    const whenText = card.starts_at
+      ? new Date(card.starts_at).toLocaleString("tr-TR", { timeZone: "Europe/Istanbul", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
+      : "";
+    await notify([userId], "invite", text.matchCard(me?.display_name ?? "Bir oyuncu", card.group_name, label, whenText, msg.thread_id as string, ref), { excludeUserId: user.id });
+  });
+  redirect(`${page}&ok=${userId}`);
+}
+
 /** Bekleyen mesaj isteğini kabul et / reddet */
 export async function respondDmRequest(threadId: string, accept: boolean) {
   const { supabase } = await requireUser();
