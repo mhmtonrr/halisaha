@@ -38,3 +38,11 @@ sadece oyunculara). İstemci abone olmadan önce `realtime.setAuth(token)` çağ
 kaçırılanları çeker — bunu kaldırma, yoksa mesajlar ara sıra düşmüyor. Etkinlik kartları DB tetikleyicileriyle
 (çağrı açıldı, maç kuruldu, oylama açıldı); "sonuçlar açıklandı" kartı finalize başarılı olunca koddan yazılır.
 Spam: dakikada 20 mesaj, 1000 karakter. Silme `delete_message` RPC (yazar veya yetkili; içerik silinir).
+
+**Birebir sohbet + davet (migration 0029, sadece DB katmanı yapıldı; UI sıradaki parçalar)**: `dm_threads` (user_a<user_b, tek konuşma),
+`dm_messages` (text|invite), `dm_reads`, `group_invites`. Yazma sadece RPC: `start_dm` (herkes herkese; engel iki yönde keser), `send_dm`,
+`respond_dm_request`, `delete_dm_message`, `mark_dm_read`, `dm_unread_counts`, `invite_to_group` (sadece kaptan/yetkili; davet kartı konuşmaya düşer,
+konuşma yoksa istek açılır), `respond_group_invite` (kabul = `join_group` ile aynı katılma), `cancel_group_invite`.
+**İstek kuralı**: tanımadığına ilk mesaj `pending`; gönderen kabul edilene kadar en fazla 1 metin atar (davet kartı sayılmaz); alıcı yazarsa kabul sayılır,
+reddedilen konuşmada gönderen yazamaz. Davet 20/gün, aynı kişiye aynı gruptan tek bekleyen davet. `group_invites` grup adı/türünü saklar
+(özel grubu davetli göremez). Bildirim türleri `dm`, `invite` eklendi (kod henüz bildirim göndermiyor). Kontrol: `scripts/db-checks/direct-chat.mjs`.
