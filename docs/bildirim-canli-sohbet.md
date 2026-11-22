@@ -74,3 +74,7 @@ Geçiş efekti: `app/template.tsx` (160 ms solma, **transform yok** — sabit ko
 **Sohbet listesi ve kısayollar**: `/sohbet` listesi istemci bileşeni `InboxList` (anında arama — Türkçe harf/aksan farkı yok — ve süzgeçler Tümü/Okunmamış/Kişiler/Gruplar; sunucu satırları düz veri olarak verir).
 "Mesaj" kısayolu (`openDm` formu) var: grup/takım üye listesi (`/g/[id]/players`, hesabı olan üyelerde 💬), Keşfet oyuncu sonuçları (satır artık Link + yanında form; iç içe etkileşimli öğe yok), Sosyal arkadaş satırı.
 Sosyal arkadaş satırında kaptan/yetkili isen 🛡️ kısayolu `/oyuncu/[id]#davet` (davet kutusuna) götürür. Test: `scripts/e2e/inbox.mjs`.
+
+**Maça davet kartı (migration 0031, DB katmanı yapıldı; arayüz sıradaki parça)**: `dm_messages.kind='match'`, `card` (paylaşım anındaki özet: tür, grup adı/türü, tarih, saha, ihtiyaç/kapasite — özel grubun içi alıcıya açılmasın diye)
++ `listing_id | poll_id | match_id`. Tek RPC `share_match_card(p_user_id, p_type: listing|poll|match, p_ref)`: sadece o takımın/grubun kaptanı/yetkilisi, açık ilan / açık çağrı / planlı maç; günde 20 kart, aynı kart aynı kişiye günde 1;
+engel iki yönde keser; konuşma `start_dm` ile (arkadaşa açık, tanımayana istek). Alıcı ilan kartından mevcut başvuru akışını kullanır; çağrı/maç kartında üyeyse yanıt verir, değilse sadece özet. Kontrol: `scripts/db-checks/match-cards.mjs`.
