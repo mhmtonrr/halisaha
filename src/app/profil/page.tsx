@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { loadProfileForViewer } from "@/lib/profile-data";
 import { DEFAULT_PREFS } from "@/lib/notify-rules";
 import { ErrorNote } from "@/components/ui";
-import { ProfileSubBar, ProfileTopBar } from "@/components/profile/ProfileBars";
+import { ProfileSubBar } from "@/components/profile/ProfileBars";
 import { ProfileView, parseTab } from "@/components/profile/ProfileView";
 import { SettingsPanel } from "./SettingsPanel";
 import type { Position } from "@/lib/data";
@@ -39,7 +39,6 @@ export default async function ProfilePage({
 
   return (
     <main>
-      <ProfileTopBar name={data.person.profile.displayName} photoUrl={data.person.profile.photoUrl} />
       <ProfileSubBar title="Profilim" subtitle={`SEZON ${new Date().getFullYear()} • PRO KART`} />
       <ErrorNote message={error} />
       {saved && <p className="mb-4 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">Kaydedildi ✓</p>}

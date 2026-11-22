@@ -48,7 +48,7 @@ function Heading({ children, action }: { children: ReactNode; action?: ReactNode
 function Tabs({ base, active, isMe }: { base: string; active: ProfileTab; isMe: boolean }) {
   const tabs: ProfileTab[] = isMe ? ["genel", "istatistik", "maclar", "ayarlar"] : ["genel", "istatistik", "maclar"];
   return (
-    <div className="sticky top-16 z-30 -mx-4 bg-surface/95 px-4 py-2 backdrop-blur-md">
+    <div className="sticky top-0 z-30 -mx-4 bg-surface/95 px-4 py-2 backdrop-blur-md">
       <div className="flex items-center gap-1" role="tablist">
         {tabs.map((t) => (
           <Link

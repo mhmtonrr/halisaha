@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadProfileForViewer } from "@/lib/profile-data";
-import { ProfileSubBar, ProfileTopBar } from "@/components/profile/ProfileBars";
+import { ProfileSubBar } from "@/components/profile/ProfileBars";
 import { blockUser } from "@/lib/actions";
 import { ProfileView, parseTab } from "@/components/profile/ProfileView";
 
@@ -27,7 +27,6 @@ export default async function PlayerProfilePage({
 
   return (
     <main>
-      <ProfileTopBar name={data.person.profile.displayName} photoUrl={data.person.profile.photoUrl} showAvatar={false} />
       <ProfileSubBar title={data.person.profile.displayName} subtitle="OYUNCU KARTI" />
       <ProfileView
         base={`/oyuncu/${userId}`}
