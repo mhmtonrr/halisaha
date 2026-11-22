@@ -119,6 +119,7 @@ Sayfalar: `/login` (e-posta+şifre, Google, şifremi unuttum) · `/hosgeldin` (i
 | Grup/takım farkı, roller, misafir, asıl kadro, davet kodu, ayrılma, oyuncu ilanı/ödünç | `docs/takim-grup-uyelik.md` |
 | Bildirim/push, canlı güncelleme (Realtime), sohbet | `docs/bildirim-canli-sohbet.md` |
 | Oyuncu kartı/yetenek, profil/istatistik, Keşfet/öne çıkanlar, menü, hız, karşılama, bölge | `docs/profil-kart-kesfet-menu.md` |
+| Gerçek hosting'e geçince / sonra yapılacaklar (e-posta onayı, SMTP, hatırlatıcı, SMS, dil, tema, maç süresi…) | `docs/yayin-sonrasi.md` |
 
 Kısa özet: **Grup** (`kind='community'`) özel topluluk, sadece kendi aramızda maç, rating etkisi yarım. **Takım** (`kind='team'`) herkese açık, sadece rakibe karşı maç, tam etki.
 Roller: captain/admin/member. Misafir = `user_id IS NULL`. Davet kodu sütunu okunamaz (RPC). Rating hesap bazında genel (`user_id`), tüm `group_players` satırlarına yazılır.
@@ -168,6 +169,8 @@ Port doluysa: `fuser -k 3000/tcp`. Arayüzden kayıt (signUp) test etme: onay ma
 - Service role anahtarı sadece `src/lib/supabase/admin.ts` (server-only) içinde.
 
 ## Kullanıcıda bekleyen işler
+
+Ertelenenlerin ve sıradaki işlerin tam listesi: `docs/yayin-sonrasi.md`.
 
 - **E-posta onayı kapatıldı** (kullanıcı yaptı): şifreyle kayıt artık mail limitine takılmaz. Risk: başkasının
   e-postasıyla kayıt olunabilir; Resend/SMTP kurulunca "Confirm email" tekrar açılmalı.
