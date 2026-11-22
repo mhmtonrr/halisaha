@@ -46,7 +46,7 @@ Vercel ortam değişkenleri: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_A
 ## Teknoloji
 
 Next.js 15 (App Router, Server Actions) · React 19 · Supabase (Postgres, Auth, RLS, Realtime) ·
-Tailwind v4 · Vitest · Playwright (konteynerde hazır) · PGlite (gömülü Postgres, RLS kontrolleri için).
+Tailwind v4 · Vitest · Playwright (devDependency; yerelde bir kez `npx playwright install chromium`) · PGlite (gömülü Postgres, RLS kontrolleri için).
 Supabase tipleri üretilmedi; sorgular elle tiplenir. 1-1 ilişkiler bazen dizi döner → `one()` (src/lib/data.ts).
 
 ## Dizin yapısı ve sayfalar

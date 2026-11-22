@@ -47,6 +47,14 @@ try {
   await P.goto(`${BASE}/oyuncu/${users[1].id}`); await P.click('button:has-text("Mesaj gönder")');
   await P.waitForURL(/\/sohbet\/[0-9a-f-]{36}/); await P.waitForSelector('a[aria-label="Geri"]'); await back();
   log("konuşmadan geri → oyuncu profili:", path(P) === `/oyuncu/${users[1].id}` ? "✓" : "HATA " + path(P));
+
+  // 5) Ana sayfa → profil (uygulama içi link) → sekme değiştir → geri = ana sayfa; tarayıcı ileri profili açar (gerçek geçmiş)
+  await P.goto(BASE + "/"); await P.click('a[href="/profil"]'); await P.waitForURL(BASE + "/profil");
+  await P.click('a[href="/profil?sekme=istatistik"]'); await P.waitForURL(/sekme=istatistik/);
+  await back();
+  log("profilden geri → ana sayfa:", path(P) === "/" ? "✓" : "HATA " + path(P));
+  await P.goForward(); await P.waitForTimeout(800);
+  log("tarayıcı ileri → profil (ayna bozulmadı):", path(P).startsWith("/profil") ? "✓" : "HATA " + path(P));
 } finally {
   await browser?.close();
   if (gid) await admin.from("groups").delete().eq("id", gid);
