@@ -8,18 +8,19 @@ Büyük tasarım kararlarını kodlamadan önce kullanıcıyla netleştir; küç
 
 ## Çalışma kuralları (token tasarrufu — her oturumda geçerli, kullanıcı tekrar anlatmak zorunda değil)
 
-1. **Her görevin ilk yanıtının başında tek satır öneri ver**: `Öneri: model <haiku|sonnet|opus>, efor <low|medium|high>; parçalama: <gerekmez|şu parçalara böl>; /clear: <şimdi gerekmez|bitince>`.
-   Ölçüt: tek dosya/metin/stil/küçük hata → haiku veya sonnet + low; birkaç dosya, UI+veri → sonnet + medium; migration/RLS, puanlama, çok dosyalı özellik → sonnet/opus + high (önce plan).
-   Kullanıcı `/model` ve `/effort` ile ayarlar; mevcut ayar uygunsa "değiştirmene gerek yok" de.
-   **Öneri satırından sonra DUR**: kullanıcı ayarı yapıp "devam" diyene kadar hiçbir araç çağırma, işe başlama (ayar zaten uygunsa "değiştirmene gerek yok" dedikten sonra da onay bekle).
-2. **Parçalama**: iş 5+ dosyaya, veya migration + UI + test birlikte dokunuyorsa kullanıcıya parçaları öner (örn. 1 veri/DB, 2 UI, 3 test), her parça sonunda commit+push; hepsini tek seferde yapma.
-3. **/clear uyarısı**: konu değişince, bir parça commit+push edilince, veya bağlam şiştiğinde (çok dosya okundu / uzun build-test çıktısı gördün) "şimdi /clear at" diye açıkça söyle. Gereksiz yere clear önerme.
-4. **Kapsam**: sadece istenen değişikliği yap; istenmemiş refactor/özellik/doküman ekleme. Ek iş gerekiyorsa önce söyle.
-5. **Keşif**: dosya belirtilmişse sadece onu oku (gerekirse ilgili satır aralığını); belirtilmemişse tek `Grep`/`Glob` ile bul. Tüm dizini gezme, `Agent` başlatma. Büyük dosyaları baştan sona okuma. İlgili `docs/` dosyası dışındakini okuma.
-6. **Doğrulama (kullanıcı özellikle istemedikçe)**: küçük değişiklikte sadece `npx tsc --noEmit` + etkilenen tek test dosyası. `npm run build`, tüm e2e, `npm run db:check` sadece migration/RLS/akış değiştiyse ve ilgili tek senaryoyu çalıştır. Çıktıyı her zaman kısalt (`| tail -15`, `grep`). Aynı komutu "emin olmak için" tekrarlama.
-7. **Commit/push** yalnızca iş bitince ve tek seferde; düzeltme için ek commit yerine mümkünse bitirmeden düzelt.
-8. **Yanıtlar kısa**: ne yapıldı + tek paragraf; kod/dosya listesini tekrar etme. Seçenek yığma, öneri ver.
-9. Bu kurallar değişecekse (kullanıcı isterse) burayı güncelle; yeni oturumda tekrar sorma.
+1. **Model/efor önerisi sadece ayar işe uymuyorsa**: o zaman tek satır yaz (`Öneri: model <haiku|sonnet|opus>, efor <low|medium|high> — sebep`) ve kullanıcı ayarlayana kadar bekle. Ayar uygunsa öneri yazma, direkt başla.
+   Ölçüt: tek dosya/metin/stil/küçük hata → haiku veya sonnet + low; birkaç dosya, UI+veri → sonnet + medium; migration/RLS, puanlama, çok dosyalı özellik → sonnet/opus + high.
+   **Büyük işlerde** (migration/RLS, puanlama, çok dosyalı özellik) önce kısa plan yaz (etki listesi dahil, bkz. kural 2), onay al, sonra kodla.
+2. **Etki analizi — tutarsızlık bırakma**: bir şeyi değiştirmeden önce nerelere dokunduğunu bul: değişen fonksiyon/bileşen/tip/sütun/metin/rota için `Grep` ile tüm kullanımları, ilgili sorgular, RLS/RPC, testler, `docs/` ve arayüzdeki aynı kavramın diğer yerleri (ör. bir etiketi değiştirince her sayfadaki aynı etiket).
+   Hepsini aynı işte tutarlı güncelle. Kapsam dışına taşan etki varsa (başka özellik, veri göçü) yapmadan önce söyle. Bitince yanıtta tek satır: "Etkilenen: …".
+3. **Parçalama**: iş 5+ dosyaya, veya migration + UI + test birlikte dokunuyorsa kullanıcıya parçaları öner (örn. 1 veri/DB, 2 UI, 3 test), her parça sonunda commit+push; hepsini tek seferde yapma.
+4. **/clear uyarısı**: konu değişince, bir parça commit+push edilince, veya bağlam şiştiğinde (çok dosya okundu / uzun build-test çıktısı gördün) "şimdi /clear at" diye açıkça söyle. Gereksiz yere clear önerme.
+5. **Kapsam**: sadece istenen değişikliği yap (etkilediği yerler dahil, bkz. kural 2); istenmemiş refactor/özellik/doküman ekleme. Ek iş gerekiyorsa önce söyle.
+6. **Keşif**: ilgili dosyaları hedefli oku (`Grep`/`Glob` ile bul, büyük dosyada sadece ilgili satır aralığı); doğru yazmak için gereken tip/fonksiyon/çağıran dosyaya bakmaktan kaçınma. Tüm dizini gezme, `Agent` başlatma, ilgisiz `docs/` dosyası okuma.
+7. **Doğrulama (kullanıcı özellikle istemedikçe)**: küçük değişiklikte sadece `npx tsc --noEmit` + etkilenen tek test dosyası. `npm run build`, tüm e2e, `npm run db:check` sadece migration/RLS/akış değiştiyse ve ilgili tek senaryoyu çalıştır. Çıktıyı her zaman kısalt (`| tail -15`, `grep`). Aynı komutu "emin olmak için" tekrarlama.
+8. **Commit/push** yalnızca iş bitince ve tek seferde; düzeltme için ek commit yerine mümkünse bitirmeden düzelt.
+9. **Yanıtlar kısa**: ne yapıldı + tek paragraf; kod/dosya listesini tekrar etme. Seçenek yığma, öneri ver.
+10. Bu kurallar değişecekse (kullanıcı isterse) burayı güncelle; yeni oturumda tekrar sorma.
 
 ## Canlı ortam
 
@@ -48,60 +49,10 @@ Next.js 15 (App Router, Server Actions) · React 19 · Supabase (Postgres, Auth,
 Tailwind v4 · Vitest · Playwright (konteynerde hazır) · PGlite (gömülü Postgres, RLS kontrolleri için).
 Supabase tipleri üretilmedi; sorgular elle tiplenir. 1-1 ilişkiler bazen dizi döner → `one()` (src/lib/data.ts).
 
-## Dizin yapısı
+## Dizin yapısı ve sayfalar
 
-```
-src/lib/rating.ts        Puanlama motoru (saf, testli) — en kritik dosya
-src/lib/teams.ts         Dengeli takım kurma (saf, testli)
-src/lib/attributes.ts    Kart özellikleri FRM/İST/GOL|KRT/AST/GAL/MVP (saf, testli)
-src/lib/teams-data.ts    Takım rating'i (en iyi 7), rol etiketleri, takım/üyelik sorguları
-src/lib/formations.ts    Sabit dizilişler (5-11 kişilik, slot koordinatları), otomatik yerleştirme (saf, testli)
-src/lib/poll-rules.ts    Üye çağrısı kuralları: dolunca kur / süre bitince %70 / yedek sırası (saf, testli)
-src/lib/polls.ts         Çağrıyı değerlendirip maça dönüştürür veya iptal eder (service role, atomik talep)
-src/lib/listings-data.ts Oyuncu ilanı sorguları (açık ilanlar, başvuranlar, başvurularım)
-src/lib/reliability.ts   Güvenilirlik: oynadığı / (oynadığı + gelmediği) (saf, testli)
-src/lib/notify-rules.ts  Bildirim kuralları: kategori/tercih, alıcı planı, sohbet birleştirme, metinler, push sonucu (saf, testli)
-src/lib/notify.ts        notify(): kutuya yaz + web push gönder (service role; asla fırlatmaz); later(): yanıttan sonra çalıştır
-src/lib/recipients.ts    Alıcı bulma: grup üyeleri/yetkilileri, maç kadrosu, bağlı maçlar
-src/lib/reminders.ts     Oylama hatırlatması (cron): kapanmasına <24 saat kalan maçlarda oy vermeyenlere, kişi başı 1
-src/lib/push-client.ts   Tarayıcı tarafı abonelik yardımcıları; components/PushControls.tsx (izin kartı + profil ayarı)
-public/sw.js             Service worker: push'u gösterir, tıklayınca aynı site içi adresi açar (önbellek yok)
-src/lib/skills.ts        Yetenek itibarı: 12 kategori (saha HIZ/ŞUT/PAS/DRİ/DEF/FİZ, kaleci REF/ATL/HAV/YER/DAĞ/İLT), 1-10 puanlardan 40-99 değer (saf, testli)
-src/lib/skills-data.ts   Değerlendirmelerden kişinin yeteneklerini hesaplayıp player_skills'e yazar (service role; recomputeSkills / recomputeSkillsForVoter)
-src/lib/user-cards.ts    Kart verisi (genel rating + yetenekler) hesap başına TEK satır: user_ratings / user_skills (anahtar user_id). Misafirler (user_id boş) eski player_ratings/player_skills'te. Okuma: loadUserCards()
-src/lib/skill-queue.ts   Değerlendirmeni bekleyen oyuncular (skill_queue RPC)
-src/lib/profile-stats.ts Kişinin TÜM grup/takım maçlarından istatistik özeti: toplamlar, form, seri, rakip/iç, grup bazında, mevki (saf, testli)
-src/lib/profile-data.ts  Kişi bazlı veri (service role): loadPerson, loadPersonMatches, canViewStats, loadProfileForViewer
-src/lib/invite.ts        Davet kodu: linkten/yazıdan kodu çıkarma, XXXXX-XXXXX biçimi, tür eşleşmesi (saf, testli)
-src/lib/fetch-in.ts      Büyük `in (...)` sorgularını parçalayıp sayfalayan yardımcı
-src/components/profile/ProfileView.tsx  Sekmeli profil (Genel/İstatistik/Maçlar/Ayarlar); /profil ve /oyuncu/[id] aynı bileşeni kullanır
-src/lib/team-stats.ts    Takım karnesi, form, seri, rakip bazlı geçmiş, oyuncu liderleri (saf, testli)
-src/lib/player-search.ts  Oyuncu arama süzgeçleri/sıralama/URL ayrıştırma (saf, testli); veri: src/lib/players-data.ts (service role, sadece `discoverable` kişiler)
-src/lib/featured-data.ts  Ana sayfa "öne çıkanlar" (bölge başına 5 dk `unstable_cache`, etiket `featured`); src/components/FeaturedSections.tsx (Suspense ile akar)
-src/lib/challenges-data.ts  Maç teklifleri sorguları (gelen/giden, bekleyen sayısı)
-src/lib/data.ts          Ortak sorgular, mevki/ayak sabitleri, tarih yardımcıları (TR saati)
-src/lib/regions.ts       81 il + src/data/districts.json (973 ilçe, iki kaynakla doğrulandı)
-src/lib/actions.ts       Tüm Server Action'lar (yetkiyi RLS yapar; burada sadece çağrı + yönlendirme)
-src/lib/finalize.ts      Oylama kapanışı, hesap bazlı genel rating hesabı ve yazımı (service role)
-src/components/LiveRefresh.tsx  Canlı güncelleme: Realtime dinler, router.refresh() yapar (filtre yardımcısı src/lib/live.ts)
-src/components/SubmitButton.tsx  Form gönderilirken anında "…" durumu (useFormStatus)
-src/components/NavHistory.tsx  Uygulama içi gezinti geçmişi (yol+sorgu); BackLink geldiği sayfaya döner, form sayfaları geri hedefi olmaz. Yeni geri oku her zaman BackLink/Header ile yap (sabit Link koyma)
-src/components/AppMenu.tsx  ☰ çekmecesi (AppMenuShell layout'ta) ve başlık düğmeleri (MenuControls: bildirim çanı + ☰); veri src/lib/menu-data.ts
-src/lib/authErrors.ts    Supabase Auth hatalarının Türkçesi
-src/lib/supabase/        server.ts (requireUser + karşılama yönlendirmesi), client.ts, admin.ts
-src/middleware.ts        Oturum yenileme, girişsiz yönlendirme, x-pathname başlığı
-src/app/                 Sayfalar (aşağıda)
-supabase/migrations/     0001..0032 SQL (sırayla; hepsi canlıya uygulandı)
-scripts/db-checks/       PGlite ile RLS/yetki kontrolleri (npm run db:check)
-scripts/e2e/             Canlı veritabanına karşı Playwright akış testleri
-scripts/perf/ttfb.mjs   Sayfa yanıt süresi ölçümü (geçici kullanıcıyla canlı site, TTFB)
-scripts/recompute-all.ts Tüm ratingleri baştan hesaplar (vite-node ile, aşağıda)
-```
-
-Sayfalar: `/login` (e-posta+şifre, Google, şifremi unuttum) · `/hosgeldin` (ilk giriş: ad, il/ilçe, mevki…)
-· `/` ana sayfa · `/kesfet` takım sıralaması · `/profil` · `/takim-kur` · `/grup-kur` · `/sifre-yenile`
-· `/profil/ayarlar/{kisisel,futbolcu,iletisim,guvenlik,gorunurluk,engellenenler}` · `/sohbet` (genel sohbet: takım/grup/kişi; `/sohbet/[threadId]` birebir) · `/yardim` · `/geri-bildirim` · `/yetenek` (yetenek değerlendirmesi) · `/oyuncu/[userId]` (başkasının profili) · `/katil` (davet koduyla takıma/gruba katıl; `?tur=takim|grup`) · `/join/[code]` · `/g/[id]` grup/takım · `/g/[id]/{players,kadro,sohbet,matches/new,cagri/yeni,cagri/[pollId],m/[matchId],p/[playerId]}`
-· takımlara özel: `/g/[id]/teklif` (bu takıma maç teklif et) · `/g/[id]/teklifler` (gelen/giden/kabul edilen) · `/g/[id]/istatistik` (herkese açık)
+Dosya başına tek satırlık açıklamalar ve tüm sayfa rotaları: `docs/dizin-yapisi.md` (bir dosyayı/sayfayı bulmak için önce oraya bak; yeni dosya/sayfa ekleyince oraya tek satır ekle).
+En kritik: `src/lib/rating.ts` (puanlama), `src/lib/actions.ts` (Server Action'lar), `src/lib/finalize.ts` (oylama kapanışı), `src/lib/user-cards.ts` (kart verisi).
 
 ## Alan modeli ve kurallar (ayrıntı docs/ altında — sadece ilgili konuda oku)
 
@@ -112,6 +63,8 @@ Sayfalar: `/login` (e-posta+şifre, Google, şifremi unuttum) · `/hosgeldin` (i
 | Bildirim/push, canlı güncelleme (Realtime), sohbet | `docs/bildirim-canli-sohbet.md` |
 | Oyuncu kartı/yetenek, profil/istatistik, Keşfet/öne çıkanlar, menü, hız, karşılama, bölge | `docs/profil-kart-kesfet-menu.md` |
 | Gerçek hosting'e geçince / sonra yapılacaklar (e-posta onayı, SMTP, hatırlatıcı, SMS, dil, tema, maç süresi…) | `docs/yayin-sonrasi.md` |
+| Dosya/sayfa haritası | `docs/dizin-yapisi.md` |
+| E2E çalıştırma, senaryolar, bozuk testler | `docs/test.md` |
 
 Kısa özet: **Grup** (`kind='community'`) özel topluluk, sadece kendi aramızda maç, rating etkisi yarım. **Takım** (`kind='team'`) herkese açık, sadece rakibe karşı maç, tam etki.
 Roller: captain/admin/member. Misafir = `user_id IS NULL`. Davet kodu sütunu okunamaz (RPC). Rating ve yetenekler hesap bazında genel: `user_ratings`/`user_skills` (tek satır, `user_id`); satır başına kopya YOK (misafir hariç).
@@ -138,16 +91,7 @@ npm run db:check       # PGlite'ta tüm migration'lar + RLS/RPC kontrolleri
 npx tsc --noEmit && npm run lint && npm run build
 ```
 
-Uçtan uca (canlı Supabase'e karşı; test kullanıcıları/grupları oluşturur ve **sonunda siler**):
-```bash
-(NODE_USE_ENV_PROXY=1 npx next start -p 3000 > /tmp/server.log 2>&1 &)
-NODE_USE_ENV_PROXY=1 NO_PROXY=localhost,127.0.0.1 node scripts/e2e/chat.mjs /tmp/shots
-```
-**Bilinen bozuk/kırılgan senaryolar (benim değişikliklerimle ilgisiz)**: `teams-polls` ("grup üyesi maç/çağrı açamıyor" ve "Doğrudan maç" eski varsayımlar, üye çağrısından/0013'ten önce yazıldı), `auth-onboarding` (ilçe artık `input[name=district]` değil seçim listesi),
-`member-poll` (akşam saatlerinde formun varsayılan 21:00 maçı "en az 3 saat sonra" kuralına takılır → günün saatine bağlı). Menü/davet testlerinde çekmece içeriği `waitFor` ile beklenir.
-Senaryolar: `profile-links`, `invite`, `withdrawal`, `leave`, `menu`, `profile`, `skills`, `positions-external`, `auth-onboarding`, `teams-polls`, `regions-community`, `chat`, `challenges`, `guest-match`, `realtime`, `member-poll`, `listings`, `notifications`.
-Ekran görüntülerine bak (390px genişlik, telefon) — görsel sorunlar çoğu zaman sadece orada yakalanıyor.
-Port doluysa: `fuser -k 3000/tcp`. Arayüzden kayıt (signUp) test etme: onay maili gönderir, limit saatte 2.
+Uçtan uca (e2e) çalıştırma, senaryo listesi ve bilinen bozuk senaryolar: `docs/test.md`. E2E canlı veritabanına karşı çalışır, test verisini sonunda siler.
 
 ## Bilinen tuzaklar
 
@@ -183,4 +127,4 @@ Ertelenenlerin ve sıradaki işlerin tam listesi: `docs/yayin-sonrasi.md`.
 
 ## Git
 
-`main`'e doğrudan commit + push (kullanıcının akışı bu). Commit mesajları Türkçe, ne ve neden.
+`main`'e doğrudan commit + push (kullanıcının akışı bu). Riskli işlerde (migration, akış/yetki değişikliği) ayrı dala push edip Vercel önizleme adresinde denemeyi öner, sonra `main`'e al. Commit mesajları Türkçe, ne ve neden.
