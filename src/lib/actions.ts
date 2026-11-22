@@ -1523,13 +1523,20 @@ export async function inviteToGroup(fd: FormData) {
   redirect(`${back}?davet=1`);
 }
 
-/** Daveti kabul et (üye olur) / reddet */
+/** Daveti kabul et (üye olur) / reddet; daveti gönderene bildirim gider */
 export async function respondGroupInvite(inviteId: string, accept: boolean) {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
   if (!UUID_RE.test(inviteId)) return { ok: false, error: "Geçersiz istek" };
+  const { data: inv } = await supabase.from("group_invites").select("inviter_id, group_name, group_kind").eq("id", inviteId).maybeSingle();
   const { data, error } = await supabase.rpc("respond_group_invite", { p_invite_id: inviteId, p_accept: accept });
   revalidatePath("/sohbet");
   revalidatePath("/");
+  if (!error && inv && data) {
+    later(async () => {
+      const { data: me } = await createAdminClient().from("profiles").select("display_name").eq("id", user.id).maybeSingle();
+      await notify([inv.inviter_id], "invite", text.inviteReply(me?.display_name ?? "Bir oyuncu", inv.group_name, inv.group_kind as "team" | "community", accept, data as string), { excludeUserId: user.id });
+    });
+  }
   return { ok: !error, groupId: (data as string | null) ?? undefined, error: error ? rpcMessage(error, "İşlem yapılamadı") : undefined };
 }
 
@@ -1539,6 +1546,43 @@ export async function cancelGroupInvite(inviteId: string) {
   if (!UUID_RE.test(inviteId)) return { ok: false, error: "Geçersiz istek" };
   const { error } = await supabase.rpc("cancel_group_invite", { p_invite_id: inviteId });
   return { ok: !error, error: error ? rpcMessage(error, "İşlem yapılamadı") : undefined };
+}
+
+/** Arkadaşlık işlemleri (form): op = add | accept | decline | remove. İşlemden sonra `back` sayfasına döner. */
+export async function friendAction(fd: FormData) {
+  const { supabase, user } = await requireUser();
+  const op = str(fd, "op");
+  const id = str(fd, "userId");
+  const rawBack = str(fd, "back");
+  const back = /^\/[^/\\]/.test(rawBack) ? rawBack : `/oyuncu/${id}`;
+  if (!UUID_RE.test(id) || id === user.id) fail("/sosyal", "Geçersiz istek");
+
+  let result: string | null = null;
+  let error: { message?: string; code?: string } | null = null;
+  if (op === "add") {
+    const r = await supabase.rpc("send_friend_request", { p_user_id: id });
+    error = r.error;
+    result = (r.data as string | null) ?? null;
+  } else if (op === "accept" || op === "decline") {
+    error = (await supabase.rpc("respond_friend_request", { p_user_id: id, p_accept: op === "accept" })).error;
+    if (!error && op === "accept") result = "accepted";
+  } else if (op === "remove") {
+    error = (await supabase.rpc("remove_friendship", { p_user_id: id })).error;
+  } else {
+    fail(back, "Geçersiz istek");
+  }
+  if (error) fail(back, rpcMessage(error, "İşlem yapılamadı"));
+
+  // Bildirim: istek gitti → karşı tarafa; kabul edildi (veya karşılıklı istek) → isteği atana
+  if ((op === "add" && result === "pending") || result === "accepted") {
+    later(async () => {
+      const { data: me } = await createAdminClient().from("profiles").select("display_name").eq("id", user.id).maybeSingle();
+      const name = me?.display_name ?? "Bir oyuncu";
+      await notify([id], "friend", result === "pending" ? text.friendRequest(name) : text.friendAccepted(name, user.id), { excludeUserId: user.id });
+    });
+  }
+  revalidatePath("/sosyal");
+  redirect(back);
 }
 
 /** Bekleyen mesaj isteğini kabul et / reddet */

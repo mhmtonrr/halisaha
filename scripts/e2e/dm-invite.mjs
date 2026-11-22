@@ -55,6 +55,9 @@ try {
   log("kabul edince gruba üye oldu:", gp?.length === 1 ? "✓" : "HATA");
   const { data: notifs } = await admin.from("notifications").select("type, title").eq("user_id", users[1].id);
   log("davet bildirimi:", JSON.stringify(notifs));
+  await new Promise((r) => setTimeout(r, 1500));
+  const { data: back } = await admin.from("notifications").select("title").eq("user_id", users[0].id).eq("type", "invite");
+  log("kaptana kabul bildirimi:", back?.some((n) => n.title.includes("kabul")) ? "✓" : "HATA " + JSON.stringify(back));
 
   // Takım sayfasından kaptana yazma
   const { data: team } = await admin.from("groups").insert({ name: "E2E Takım", kind: "team", created_by: users[0].id, city: "İstanbul" }).select("id").single();

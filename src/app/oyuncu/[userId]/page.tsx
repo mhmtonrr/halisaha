@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadProfileForViewer } from "@/lib/profile-data";
 import { ProfileSubBar } from "@/components/profile/ProfileBars";
-import { blockUser, inviteToGroup, openDm } from "@/lib/actions";
+import { blockUser, friendAction, inviteToGroup, openDm } from "@/lib/actions";
 import { getMemberships } from "@/lib/teams-data";
 import { ProfileView, parseTab } from "@/components/profile/ProfileView";
 
@@ -40,6 +40,14 @@ export default async function PlayerProfilePage({
     invitable = mine.filter((m) => !skip.has(m.group.id)).map((m) => ({ id: m.group.id, name: m.group.name, kind: m.group.kind }));
   }
 
+  // Arkadaşlık durumu (RLS: sadece tarafları görür)
+  const { data: fr } = await supabase
+    .from("friendships")
+    .select("status, requested_by")
+    .eq("user_a", user.id < userId ? user.id : userId)
+    .eq("user_b", user.id < userId ? userId : user.id)
+    .maybeSingle();
+
   return (
     <main>
       <ProfileSubBar title={data.person.profile.displayName} subtitle="OYUNCU KARTI" />
@@ -55,7 +63,48 @@ export default async function PlayerProfilePage({
       />
       {davet && <p className="mt-4 rounded-xl border border-accent/40 bg-accent/10 p-3 text-center text-sm">✅ Davet gönderildi. Yanıtı sohbette görürsün.</p>}
       {error && <p className="mt-4 rounded-xl border border-red-400/40 bg-red-950/40 p-3 text-center text-sm text-red-200">{error}</p>}
-      <form action={openDm} className="mt-4">
+      <div className="mt-4 rounded-xl border border-line bg-pitch-900 p-3">
+        {!fr && (
+          <form action={friendAction}>
+            <input type="hidden" name="op" value="add" />
+            <input type="hidden" name="userId" value={userId} />
+            <button className="w-full rounded-lg bg-pitch-800 py-2.5 font-bold hover:bg-pitch-700">👋 Arkadaş ekle</button>
+          </form>
+        )}
+        {fr?.status === "pending" && fr.requested_by === user.id && (
+          <form action={friendAction} className="flex items-center justify-between gap-3">
+            <input type="hidden" name="op" value="remove" />
+            <input type="hidden" name="userId" value={userId} />
+            <span className="text-sm text-muted">⏳ Arkadaşlık isteği gönderildi</span>
+            <button className="rounded-lg bg-pitch-800 px-3 py-1.5 text-xs">Geri çek</button>
+          </form>
+        )}
+        {fr?.status === "pending" && fr.requested_by !== user.id && (
+          <div className="space-y-2">
+            <p className="text-sm">Bu oyuncu seni arkadaş olarak eklemek istiyor.</p>
+            <div className="flex gap-2">
+              {(["accept", "decline"] as const).map((op) => (
+                <form key={op} action={friendAction} className="flex-1">
+                  <input type="hidden" name="op" value={op} />
+                  <input type="hidden" name="userId" value={userId} />
+                  <button className={op === "accept" ? "w-full rounded-lg bg-accent py-2 font-bold text-pitch-950" : "w-full rounded-lg bg-pitch-800 py-2"}>
+                    {op === "accept" ? "Kabul et" : "Reddet"}
+                  </button>
+                </form>
+              ))}
+            </div>
+          </div>
+        )}
+        {fr?.status === "accepted" && (
+          <form action={friendAction} className="flex items-center justify-between gap-3">
+            <input type="hidden" name="op" value="remove" />
+            <input type="hidden" name="userId" value={userId} />
+            <span className="text-sm text-accent">✓ Arkadaşsınız</span>
+            <button className="rounded-lg bg-pitch-800 px-3 py-1.5 text-xs text-muted">Arkadaşlıktan çıkar</button>
+          </form>
+        )}
+      </div>
+      <form action={openDm} className="mt-3">
         <input type="hidden" name="userId" value={userId} />
         <button className="w-full rounded-xl bg-accent py-3 font-bold text-pitch-950">✉️ Mesaj gönder</button>
       </form>

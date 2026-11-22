@@ -1,6 +1,6 @@
 // Bildirim kuralları ve metinleri. Saf fonksiyonlar (veritabanı/ağ yok) — notify-rules.test.ts ile test edilir.
 
-export type NotificationType = "vote" | "poll" | "match" | "offer" | "listing" | "chat" | "dm" | "invite";
+export type NotificationType = "vote" | "poll" | "match" | "offer" | "listing" | "chat" | "dm" | "invite" | "friend";
 export type PrefKey = "votes" | "matches" | "offers" | "chat";
 export type Prefs = Record<PrefKey, boolean>;
 
@@ -14,6 +14,7 @@ export const PREF_OF: Record<NotificationType, PrefKey> = {
   chat: "chat",
   dm: "chat",
   invite: "chat",
+  friend: "chat",
 };
 
 export const PREF_LABEL: Record<PrefKey, { title: string; hint: string }> = {
@@ -172,6 +173,29 @@ export const text = {
     body: truncate(oneLine(message), 100),
     url: `/sohbet/${threadId}`,
     tag: `dm:${threadId}`,
+  }),
+  friendRequest: (who: string): Content => ({
+    title: "👋 Arkadaşlık isteği",
+    body: truncate(`${who} seni arkadaş olarak eklemek istiyor`, 300),
+    url: "/sosyal",
+    tag: `friend-request:${who}`,
+  }),
+  friendAccepted: (who: string, userId: string): Content => ({
+    title: "🤝 Arkadaşlık kabul edildi",
+    body: truncate(`${who} ile artık arkadaşsınız`, 300),
+    url: `/oyuncu/${userId}`,
+    tag: `friend-accepted:${userId}`,
+  }),
+  inviteReply: (who: string, groupName: string, kind: "team" | "community", accepted: boolean, groupId: string): Content => ({
+    title: accepted ? "✅ Davet kabul edildi" : "❌ Davet reddedildi",
+    body: truncate(
+      accepted
+        ? `${who}, “${oneLine(groupName)}” ${kind === "team" ? "takımına" : "grubuna"} katıldı`
+        : `${who}, “${oneLine(groupName)}” davetini reddetti`,
+      300,
+    ),
+    url: accepted ? `/g/${groupId}` : "/sosyal",
+    tag: `invite-reply:${groupId}:${who}`,
   }),
   groupInvite: (inviter: string, groupName: string, kind: "team" | "community", threadId: string, inviteId: string): Content => ({
     title: kind === "team" ? "🛡️ Takım daveti" : "👥 Grup daveti",

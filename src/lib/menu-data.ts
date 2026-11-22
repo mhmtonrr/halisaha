@@ -19,6 +19,8 @@ export interface MenuData {
   groups: MenuGroup[];
   /** Değerlendirmeni bekleyen oyuncu sayısı (20+ için 20) */
   skillCount: number;
+  /** Yanıtını bekleyen arkadaşlık isteği sayısı */
+  friendRequests: number;
 }
 
 /** ☰ çekmecesinin verisi; giriş yapmamış veya karşılamayı bitirmemiş kullanıcıda null (menü görünmez) */
@@ -28,7 +30,11 @@ export async function loadMenuData(): Promise<MenuData | null> {
     if (!user) return null;
     const { data: profile } = await supabase.from("profiles").select("display_name, photo_url, city, onboarded_at").eq("id", user.id).maybeSingle();
     if (!profile?.onboarded_at) return null;
-    const [memberships, queue] = await Promise.all([getMemberships(supabase, user.id), getSkillQueue(supabase, 20)]);
+    const [memberships, queue, { count: friendRequests }] = await Promise.all([
+      getMemberships(supabase, user.id),
+      getSkillQueue(supabase, 20),
+      supabase.from("friendships").select("id", { count: "exact", head: true }).eq("status", "pending").neq("requested_by", user.id),
+    ]);
     const best = memberships.reduce((m, x) => Math.max(m, x.overall), 0);
     return {
       name: profile.display_name,
@@ -39,6 +45,7 @@ export async function loadMenuData(): Promise<MenuData | null> {
         .map((m) => ({ id: m.group.id, name: m.group.name, kind: m.group.kind, color: m.group.color, role: m.role }))
         .sort((a, b) => Number(b.kind === "team") - Number(a.kind === "team") || a.name.localeCompare(b.name, "tr")),
       skillCount: queue.length,
+      friendRequests: friendRequests ?? 0,
     };
   } catch {
     // Menü açılamazsa sayfa yine de çalışmalı
