@@ -73,3 +73,10 @@ Formlarda `RegionSelect` (il seçilince ilçeler) kullan.
 - **Doğrulama (kesin kurallar)**: 2-20 karakter; **sadece harf (Türkçe harfler dahil), boşluk ve nokta**; kısa çizgi, rakam ve diğer her sembol yasak. Boşluk serbest (2-3 kelimeli adlar); baş/son boşluk silinir, ardışık boşluklar tek boşluğa iner. Nokta sadece bir harfin hemen arkasından gelir ("M.", "Mehmet O."), ardışık iki nokta ve noktayla başlama yasak. **Küfür/hakaret kontrolü zorunlu**: Türkçe kelime listesi + normalizasyon (büyük/küçük, Türkçe harf eşlemesi, tekrar eden harf, boşluk/nokta ile bölme ve s1k/ş0t gibi harf-rakam değişimleri yakalanır). Hem sunucuda (`actions.ts`, saf doğrulama fonksiyonu + birim testleri) hem veritabanında (check kısıtı: karakter kümesi ve uzunluk) uygulanır; küfür listesi sadece TS tarafında.
 - Parçalama: 1) saf doğrulama + test (`card-name.ts` genişlet), 2) migration + db-check + action + Ayarlar/hoş geldin arayüzü + kartlara bağlama.
 - Önerilen model/efor: sonnet + medium. `/clear` sonrası "Parça 2'ye geç, kart adı" yeter.
+
+## Profil tasarımı giydirme (Stitch "Obsidian Pitch": Profil/İstatistik/Maçlar/Ayarlar ekranları)
+
+Kullanıcı kararları: rozetler eldeki verilerden hesaplanan kurallarla (hat-trick, yenilmezlik serisi, MVP, maç sayısı; "Pas Ustası" yok); telefon doğrulama yok, sadece e-posta doğrulaması; dil satırı "Türkçe" sabit; tema seçici durur, ikinci tema ("Klasik Gece") "yakında".
+- **Parça 1 (yapıldı)**: Genel (hızlı sayı kartları, son maç formu, Profili paylaş, oyuncu bilgisi ızgarası), İstatistik (radar grafik `profile/RadarChart.tsx`, güvenilirlik kartları), Maçlar (`profile/MatchesList.tsx` filtre çipleri + sonuç renkli kartlar), Ayarlar (üst kart, çıkış düğmesi).
+- **Parça 2 (sırada, migration)**: rozetler, haftalık müsaitlik günleri, "istatistiklerimi paylaş", engellenenler, hesabı geçici dondurma, boy/kilo, doğum tarihi, kartın arka yüzü (çevirme), planlanmış maçlar/yaklaşan maç.
+- **Parça 3**: Yardım/SSS, Geri bildirim, KVKK sayfaları, tema/dil satırları, Ayarlar'ın tasarımdaki gruplu liste düzeni.

@@ -84,7 +84,7 @@ try {
   await aP.click('a[role="tab"]:has-text("Maçlar")');
   await aP.waitForURL(/sekme=maclar/);
   t = await text(aP);
-  check("maçlar: üç maç, rakip adı ve skorlar", has(t, "vs Rakip FK") && has(t, "4-1") && has(t, "3-2") && has(t, "1-2"));
+  check("maçlar: üç maç, rakip adı ve skorlar", has(t, "Rakip FK") && has(t, "4-1") && has(t, "3-2") && has(t, "1-2"));
   check("maçlar: oylamadaki maç 'oylamada' etiketli", has(t, "oylamada"));
   await aP.screenshot({ path: `${SHOTS}/97-profil-maclar.png`, fullPage: true });
 

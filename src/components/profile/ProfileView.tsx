@@ -3,6 +3,9 @@ import type { ReactNode } from "react";
 import { Badge, Card, SectionTitle, cx } from "@/components/ui";
 import { PlayerCard, PositionChip } from "@/components/PlayerCard";
 import { SkillBars } from "@/components/SkillBars";
+import { RadarChart } from "./RadarChart";
+import { ShareButton } from "./ShareButton";
+import { MatchesList } from "./MatchesList";
 import { TeamBadge } from "@/components/TeamBadge";
 import { FOOT_NAME, POSITION_NAME, formatDate, type Position } from "@/lib/data";
 import { formatRegion } from "@/lib/regions";
@@ -24,7 +27,7 @@ export function parseTab(raw: string | undefined, isMe: boolean): ProfileTab {
 function Tabs({ base, active, isMe }: { base: string; active: ProfileTab; isMe: boolean }) {
   const tabs: ProfileTab[] = isMe ? ["genel", "istatistik", "maclar", "ayarlar"] : ["genel", "istatistik", "maclar"];
   return (
-    <div className="mb-4 flex gap-1 rounded-xl border border-line bg-pitch-900/80 p-1" role="tablist">
+    <div className="mb-4 flex gap-1 rounded-full border border-line bg-surface-container p-1" role="tablist">
       {tabs.map((t) => (
         <Link
           key={t}
@@ -33,8 +36,8 @@ function Tabs({ base, active, isMe }: { base: string; active: ProfileTab; isMe: 
           role="tab"
           aria-selected={active === t}
           className={cx(
-            "min-w-0 flex-1 truncate rounded-lg px-2 py-2 text-center text-sm font-semibold transition",
-            active === t ? "bg-accent text-pitch-950" : "text-muted hover:bg-pitch-800",
+            "min-w-0 flex-1 truncate rounded-full px-2 py-2 text-center font-display text-xs font-bold uppercase tracking-wide transition",
+            active === t ? "bg-accent text-on-primary shadow-[0_0_16px_rgba(75,226,119,0.35)]" : "text-on-surface-variant hover:bg-surface-high",
           )}
         >
           {TAB_LABEL[t]}
@@ -46,14 +49,14 @@ function Tabs({ base, active, isMe }: { base: string; active: ProfileTab; isMe: 
 
 const outcomeStyle: Record<Outcome, string> = {
   win: "bg-accent/20 text-accent",
-  draw: "bg-pitch-700 text-muted",
-  loss: "bg-red-400/20 text-red-300",
+  draw: "bg-tertiary/20 text-tertiary",
+  loss: "bg-error-container/60 text-error",
 };
 const outcomeLetter: Record<Outcome, string> = { win: "G", draw: "B", loss: "M" };
 
 function ResultChip({ outcome, className }: { outcome: Outcome; className?: string }) {
   return (
-    <span className={cx("flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-bold", outcomeStyle[outcome], className)}>
+    <span className={cx("flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold", outcomeStyle[outcome], className)}>
       {outcomeLetter[outcome]}
     </span>
   );
@@ -120,6 +123,33 @@ function GeneralPanel({
       )}
       {p.bio && <p className="mt-3 text-center text-sm italic text-muted">“{p.bio}”</p>}
 
+      {stats && stats.totals.played > 0 && (
+        <div className="mt-4 grid grid-cols-4 gap-2 text-center">
+          {[
+            { label: "Maç", value: stats.totals.played },
+            { label: "Gol", value: stats.totals.goals },
+            { label: "Asist", value: stats.totals.assists },
+            { label: "Galibiyet", value: pct(stats.totals.wins, stats.totals.played) },
+          ].map((x) => (
+            <div key={x.label} className="rounded-2xl border border-line bg-surface-container px-1 py-3">
+              <div className="font-display text-xl font-bold tabular-nums">{x.value}</div>
+              <div className="text-[10px] uppercase tracking-wide text-muted">{x.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {stats && stats.form.length > 0 && (
+        <div className="mt-3 flex items-center justify-center gap-2">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">Son {stats.form.length} maç</span>
+          {stats.form.map((o, i) => (
+            <ResultChip key={i} outcome={o} className="h-8 w-8 text-sm" />
+          ))}
+        </div>
+      )}
+      <div className="mt-4">
+        <ShareButton path={`/oyuncu/${p.id}`} title={`${p.displayName} · Halısaha kartı`} />
+      </div>
+
       <SectionTitle
         action={
           isMe ? (
@@ -141,16 +171,14 @@ function GeneralPanel({
       {facts.length > 0 && (
         <>
           <SectionTitle>Oyuncu bilgisi</SectionTitle>
-          <Card className="p-0">
-            <dl className="divide-y divide-line text-sm">
-              {facts.map((f) => (
-                <div key={f.label} className="flex justify-between gap-4 px-4 py-2.5">
-                  <dt className="text-muted">{f.label}</dt>
-                  <dd className="text-right font-medium">{f.value}</dd>
-                </div>
-              ))}
-            </dl>
-          </Card>
+          <div className="grid grid-cols-2 gap-3">
+            {facts.map((f) => (
+              <div key={f.label} className="rounded-2xl border border-line bg-surface-container p-3">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">{f.label}</div>
+                <div className="mt-1 text-sm font-bold leading-snug">{f.value}</div>
+              </div>
+            ))}
+          </div>
         </>
       )}
 
@@ -216,10 +244,20 @@ function StatsPanel({ person, stats, noShows, isMe }: { person: Person; stats: R
 
   return (
     <>
-      <div className="grid grid-cols-3 gap-2">
+      <SectionTitle>Performans dağılımı</SectionTitle>
+      <Card>
+        <RadarChart skills={cardSkills(person.skills, keeper)} keeper={keeper} />
+        {t.mvps > 0 && (
+          <p className="mt-2 text-center text-xs text-muted">
+            Maçın adamı: <b className="text-accent">{t.mvps} kez MVP</b>
+          </p>
+        )}
+      </Card>
+
+      <div className="mt-4 grid grid-cols-3 gap-2">
         {tiles.map((x) => (
           <Card key={x.label} className="p-3 text-center">
-            <div className="text-2xl font-black tabular-nums">{x.value}</div>
+            <div className="font-display text-2xl font-bold tabular-nums">{x.value}</div>
             <div className="text-xs text-muted">{x.label}</div>
           </Card>
         ))}
@@ -230,12 +268,12 @@ function StatsPanel({ person, stats, noShows, isMe }: { person: Person; stats: R
         <span><b className="text-red-300">{t.losses}</b> <span className="text-muted">M</span></span>
       </Card>
 
-      <SectionTitle>Form</SectionTitle>
+      <SectionTitle>Form ve performans</SectionTitle>
       <Card>
         <div className="flex items-center justify-between">
           <div className="flex gap-1.5">
             {stats.form.map((o, i) => (
-              <ResultChip key={i} outcome={o} className="h-8 w-8 text-sm" />
+              <ResultChip key={i} outcome={o} className="h-9 w-9 text-sm" />
             ))}
           </div>
           <div className="text-right">
@@ -324,13 +362,21 @@ function StatsPanel({ person, stats, noShows, isMe }: { person: Person; stats: R
       )}
 
       <SectionTitle>Güvenilirlik</SectionTitle>
-      <Card className="flex items-center justify-between text-sm">
-        <span className="text-muted">Oynadığı / gelmediği maç</span>
-        <span className="font-medium tabular-nums">
-          {rel.played} / {rel.noShows}
-          {rel.pct !== null && rel.tone !== "new" && <span className="ml-2 text-accent">%{rel.pct}</span>}
-        </span>
-      </Card>
+      <div className="grid grid-cols-2 gap-3">
+        <Card className="p-3">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">Oynadığı maç</div>
+          <div className="mt-1 font-display text-3xl font-bold tabular-nums text-accent">{rel.played}</div>
+        </Card>
+        <Card className="p-3">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">Gelmediği maç</div>
+          <div className="mt-1 font-display text-3xl font-bold tabular-nums text-error">{rel.noShows}</div>
+        </Card>
+      </div>
+      {rel.pct !== null && rel.tone !== "new" && (
+        <p className="mt-2 text-center text-xs">
+          <span className="rounded-full bg-accent/15 px-3 py-1 font-semibold text-accent">%{rel.pct} güven skoru</span>
+        </p>
+      )}
       <p className="mt-3 text-center text-[11px] text-muted">
         Sonucu girilmiş (oylamada veya kapanmış) tüm grup ve takım maçları sayılır. Gruplardaki maçlar rating&apos;e yarım etki eder.
       </p>
@@ -346,52 +392,7 @@ function MatchesPanel({ matches, isMe, viewerGroups }: { matches: ProfileMatch[]
   if (matches.length === 0) {
     return <Card className="text-center text-sm text-muted">Henüz sonucu girilmiş maç yok.</Card>;
   }
-  return (
-    <Card className="p-0">
-      <ul className="divide-y divide-line">
-        {matches.slice(0, 50).map((h) => {
-          // Özel topluluğun adı sadece üyelerine (ve geçmişi kendisine) açık; maç ekranı sadece aktif üyelere; takımlar herkese açık
-          const nameOpen = isMe || h.groupKind === "team" || viewerGroups.has(h.groupId);
-          const open = h.groupKind === "team" || viewerGroups.has(h.groupId);
-          const body = (
-            <div className="flex items-center gap-3 px-4 py-3">
-              <ResultChip outcome={h.outcome} />
-              <div className="min-w-0 flex-1 text-sm">
-                <div className="flex items-center gap-1.5">
-                  <span className="truncate">{h.kind === "external" ? `vs ${h.opponentName ?? "Rakip"}` : "Kendi aramızda"}</span>
-                  <PositionChip position={h.position as Position | null} />
-                  {h.mvp && "⭐"}
-                </div>
-                <div className="truncate text-xs text-muted">
-                  {nameOpen ? h.groupName : "Özel grup"} · {formatDate(h.playedAt)}
-                  {h.goals > 0 && ` · ${h.goals} gol`}
-                  {h.assists > 0 && ` · ${h.assists} asist`}
-                  {h.saves > 0 && ` · ${h.saves} kurtarış`}
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="font-black tabular-nums">{h.scoreUs}-{h.scoreThem}</div>
-                <div className="text-[10px] text-muted tabular-nums">
-                  {h.status === "voting" ? "oylamada" : h.matchScore !== null && h.weight > 0 ? h.matchScore.toFixed(1) : "–"}
-                </div>
-              </div>
-            </div>
-          );
-          return (
-            <li key={`${h.matchId}`}>
-              {open ? (
-                <Link href={`/g/${h.groupId}/m/${h.matchId}`} className="block transition hover:bg-pitch-800">
-                  {body}
-                </Link>
-              ) : (
-                body
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </Card>
-  );
+  return <MatchesList matches={matches} isMe={isMe} viewerGroups={[...viewerGroups]} />;
 }
 
 // ---------------------------------------------------------------------------

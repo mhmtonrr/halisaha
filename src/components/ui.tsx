@@ -79,8 +79,11 @@ export function Label({ children, hint }: { children: ReactNode; hint?: string }
 
 export function SectionTitle({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
-    <div className="mb-3 mt-8 flex items-center justify-between">
-      <h2 className="text-sm font-semibold uppercase tracking-wider text-muted">{children}</h2>
+    <div className="mb-3 mt-8 flex items-center justify-between gap-3">
+      <h2 className="flex min-w-0 items-center gap-2 font-display text-sm font-bold uppercase tracking-wider text-on-surface">
+        <span className="h-4 w-1 shrink-0 rounded-full bg-accent" aria-hidden />
+        <span className="min-w-0">{children}</span>
+      </h2>
       {action}
     </div>
   );
