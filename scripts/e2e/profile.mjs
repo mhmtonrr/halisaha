@@ -61,6 +61,15 @@ try {
   // Başlıklar CSS ile BÜYÜK harfe çevrildiğinden karşılaştırma Türkçe küçük harfe göre yapılır
   const has = (t, x) => t.toLocaleLowerCase("tr").includes(x.toLocaleLowerCase("tr"));
 
+  const overflow = async (pg, label) => {
+    const r = await pg.evaluate(() => {
+      const de = document.documentElement, vw = de.clientWidth;
+      const wide = [...document.querySelectorAll("body *")].filter((e) => { const b = e.getBoundingClientRect(); return b.width > 0 && (b.right > vw + 1 || b.left < -1); }).slice(0, 6).map((e) => `${e.tagName}.${String(e.className).slice(0, 50)} [${Math.round(e.getBoundingClientRect().left)}..${Math.round(e.getBoundingClientRect().right)}]`);
+      return { sw: de.scrollWidth, vw, bodySw: document.body.scrollWidth, wide };
+    });
+    check(`${label}: sayfa yatayda taşmıyor (scrollWidth ${r.sw} / ${r.vw})`, r.sw <= r.vw);
+    if (r.wide.length) console.log("    taşanlar:", r.wide.join(" | "));
+  };
   // 1) Kendi profilim
   const aP = await open(a);
   await aP.goto(`${BASE}/profil`);
@@ -69,6 +78,7 @@ try {
   check("dört sekme (Genel, İstatistik, Maçlar, Ayarlar)", ["Genel", "İstatistik", "Maçlar", "Ayarlar"].every((x) => has(t, x)));
   check("kartta plaka kodu ve yetenek kısaltmaları", has(t, "34") && ["HIZ", "ŞUT", "PAS", "DRİ", "DEF", "FİZ"].every((x) => has(t, x)));
   check("genel: oyuncu bilgileri, yetenekler ve paylaş", has(t, "Oyuncu bilgileri") && has(t, "Yetenekler") && has(t, "Profili paylaş"));
+  await overflow(aP, "genel");
   await aP.screenshot({ path: `${SHOTS}/95-profil-genel.png`, fullPage: true });
   await aP.locator('[role="button"][aria-label="Kartı çevir"]').click();
   await aP.waitForTimeout(800);
@@ -85,6 +95,7 @@ try {
   check("istatistik: performans dağılımı ve form", has(t, "Performans dağılımı") && has(t, "Form ve performans"));
   check("istatistik: galibiyet ve rozetler", has(t, "Galibiyet") && has(t, "Kazanılan rozetler"));
   check("istatistik: güvenilirlik", has(t, "Güvenilirlik"));
+  await overflow(aP, "istatistik");
   await aP.screenshot({ path: `${SHOTS}/96-profil-istatistik.png`, fullPage: true });
 
   await aP.click('a[role="tab"]:has-text("Maçlar")');
@@ -92,12 +103,14 @@ try {
   t = await text(aP);
   check("maçlar: üç maç, rakip adı ve skorlar", has(t, "Rakip FK") && has(t, "4 - 1") && has(t, "3 - 2") && has(t, "1 - 2"));
   check("maçlar: oylamadaki maç 'oylamada' etiketli", has(t, "oylamada"));
+  await overflow(aP, "maçlar");
   await aP.screenshot({ path: `${SHOTS}/97-profil-maclar.png`, fullPage: true });
 
   await aP.goto(`${BASE}/profil?sekme=ayarlar`);
   t = await text(aP);
   check("ayarlar: tasarımdaki bölümler", ["Kişisel Bilgiler", "Futbolcu Profili", "İletişim & Doğrulama", "Bildirimler & Maç Çağrıları", "Müsaitlik Takvimi", "İstatistiklerimi Paylaş", "Engellenen Oyuncular", "Yardım Merkezi", "Hesabımı Geçici Dondur", "Çıkış Yap"].every((x) => has(t, x)));
   check("ayarlar: istatistik paylaşımı varsayılan kapalı", (await aP.locator('button[role="switch"][aria-label="İstatistiklerimi Paylaş"]').getAttribute("aria-checked")) === "false");
+  await overflow(aP, "ayarlar");
   await aP.screenshot({ path: `${SHOTS}/98-profil-ayarlar.png`, fullPage: true });
 
   // 2) Takım arkadaşı (Barış) Ali'nin profilini görür; yabancı (Cem) göremez
