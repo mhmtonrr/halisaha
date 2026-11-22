@@ -19,7 +19,7 @@ export function Switch({ checked, onChange, label, disabled }: { checked: boolea
       onClick={onChange}
       className={cx("h-6 w-12 shrink-0 rounded-full p-0.5 transition-colors focus:outline-none disabled:opacity-50", checked ? "bg-primary-container" : "bg-surface-high")}
     >
-      <div className={cx("h-5 w-5 rounded-full shadow transition-transform", checked ? "translate-x-6 bg-surface-lowest" : "translate-x-0 bg-on-surface-variant")} />
+      <div className={cx("h-5 w-5 rounded-full shadow transition-transform", checked ? "translate-x-6 bg-white" : "translate-x-0 bg-on-surface-variant")} />
     </button>
   );
 }
