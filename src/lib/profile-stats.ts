@@ -12,6 +12,8 @@ export interface ProfileMatch extends MatchRecord {
   groupKind: "community" | "team";
   scoreUs: number;
   scoreThem: number;
+  /** Maçın oynandığı saha/tesis (girilmediyse null) */
+  venue?: string | null;
   /** voting: sonuç girildi, oylama sürüyor; closed: puanlar açıklandı */
   status: "voting" | "closed";
 }

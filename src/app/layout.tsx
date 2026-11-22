@@ -23,6 +23,11 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="tr" className={`${jakarta.variable} ${grotesk.variable}`}>
+      <head>
+        {/* Tasarımdaki ikon seti (Material Symbols Outlined) */}
+        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,400,0..1,0&display=block" />
+      </head>
       <body className="antialiased">
         <AppMenuShell>
           <div className="mx-auto w-full max-w-lg px-4 pb-28">{children}</div>

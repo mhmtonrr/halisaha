@@ -2,7 +2,8 @@ import { requireUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadProfileForViewer } from "@/lib/profile-data";
 import { DEFAULT_PREFS } from "@/lib/notify-rules";
-import { ErrorNote, Header } from "@/components/ui";
+import { ErrorNote } from "@/components/ui";
+import { ProfileSubBar, ProfileTopBar } from "@/components/profile/ProfileBars";
 import type { ProfileValues } from "@/components/ProfileFields";
 import { ProfileView, parseTab } from "@/components/profile/ProfileView";
 import { SettingsPanel } from "./SettingsPanel";
@@ -35,7 +36,8 @@ export default async function ProfilePage({
 
   return (
     <main>
-      <Header title="Profilim" back="/" />
+      <ProfileTopBar name={data.person.profile.displayName} photoUrl={data.person.profile.photoUrl} />
+      {(tab === "genel" || tab === "ayarlar") && <ProfileSubBar title="Profilim" subtitle={`SEZON ${new Date().getFullYear()} • PRO KART`} />}
       <ErrorNote message={error} />
       {saved && <p className="mb-4 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">Kaydedildi ✓</p>}
       <ProfileView

@@ -161,6 +161,7 @@ type M = {
   score_b: number | null;
   kind: "internal" | "external" | null;
   opponent_name: string | null;
+  venue: string | null;
 };
 
 /** Oylamaya veya kapanışa ulaşmış maçlar (sonuç girilmiş), yeniden eskiye */
@@ -180,7 +181,7 @@ export async function loadPersonMatches(admin: SupabaseClient, person: Person): 
     }>(person.rowIds, (part, from, to) =>
       admin
         .from("match_players")
-        .select("match_id, player_id, team, goals, assists, saves, position, matches!inner(group_id, status, played_at, score_a, score_b, kind, opponent_name)")
+        .select("match_id, player_id, team, goals, assists, saves, position, matches!inner(group_id, status, played_at, score_a, score_b, kind, opponent_name, venue)")
         .in("player_id", part)
         .in("matches.status", ["voting", "closed"])
         .range(from, to),
@@ -219,6 +220,7 @@ export async function loadPersonMatches(admin: SupabaseClient, person: Person): 
       groupKind: g?.kind ?? "community",
       scoreUs: us,
       scoreThem: them,
+      venue: m.venue ?? null,
       status: m.status,
     });
   }
@@ -234,6 +236,8 @@ export interface UpcomingMatch {
   venue: string | null;
   kind: "internal" | "external";
   opponentName: string | null;
+  /** Kadrodaki mevkisi (belirtilmediyse null) */
+  position: Position | null;
 }
 
 /** Kişinin kadrosunda olduğu, henüz oynanmamış (planned) en yakın maçlar. Sadece kendi profili için çağrılır. */
@@ -242,12 +246,13 @@ export async function loadUpcomingMatches(admin: SupabaseClient, person: Person,
   const groupMeta = new Map(person.groups.map((g) => [g.groupId, g]));
   const rows = await fetchIn<{
     match_id: string;
+    position: string | null;
     matches: { group_id: string; played_at: string; venue: string | null; kind: "internal" | "external" | null; opponent_name: string | null }
       | { group_id: string; played_at: string; venue: string | null; kind: "internal" | "external" | null; opponent_name: string | null }[];
   }>(person.rowIds, (part, from, to) =>
     admin
       .from("match_players")
-      .select("match_id, matches!inner(group_id, played_at, venue, kind, opponent_name)")
+      .select("match_id, position, matches!inner(group_id, played_at, venue, kind, opponent_name)")
       .in("player_id", part)
       .eq("matches.status", "planned")
       .gte("matches.played_at", new Date().toISOString())
@@ -269,6 +274,7 @@ export async function loadUpcomingMatches(admin: SupabaseClient, person: Person,
       venue: m.venue,
       kind: m.kind ?? "internal",
       opponentName: m.opponent_name,
+      position: (r.position ?? null) as Position | null,
     });
   }
   return out.sort((a, b) => a.playedAt.localeCompare(b.playedAt)).slice(0, limit);

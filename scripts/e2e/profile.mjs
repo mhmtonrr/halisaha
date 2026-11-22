@@ -68,28 +68,33 @@ try {
   check("'Gruplarımdaki kartlarım' bölümü yok", !has(t, "Gruplarımdaki kartlarım"));
   check("dört sekme (Genel, İstatistik, Maçlar, Ayarlar)", ["Genel", "İstatistik", "Maçlar", "Ayarlar"].every((x) => has(t, x)));
   check("kartta plaka kodu ve yetenek kısaltmaları", has(t, "34") && ["HIZ", "ŞUT", "PAS", "DRİ", "DEF", "FİZ"].every((x) => has(t, x)));
-  check("takımlarım ve gruplarım listesi", has(t, "E2E Özel Grup") && has(t, "E2E Takım"));
+  check("genel: oyuncu bilgileri, yetenekler ve paylaş", has(t, "Oyuncu bilgileri") && has(t, "Yetenekler") && has(t, "Profili paylaş"));
   await aP.screenshot({ path: `${SHOTS}/95-profil-genel.png`, fullPage: true });
+  await aP.locator('[role="button"][aria-label="Kartı çevir"]').click();
+  await aP.waitForTimeout(800);
+  check("kart çevrilince arka yüz (kazanma oranı, son 5 maç formu)", has(await text(aP), "Kazanma Oranı") && has(await text(aP), "Son 5 Maç Formu"));
+  await aP.locator('[role="button"][aria-label="Kartı ön yüze çevir"]').scrollIntoViewIfNeeded();
+  await aP.screenshot({ path: `${SHOTS}/94-kart-arka.png` });
+  await aP.locator('[role="button"][aria-label="Kartı ön yüze çevir"]').click();
 
   await aP.click('a[role="tab"]:has-text("İstatistik")');
   await aP.waitForURL(/sekme=istatistik/);
   t = await text(aP);
-  check("istatistik: 3 maç (özel grup 2 + takım 1, oylamadaki dahil)", /3\s*\n?\s*Maç/.test(t));
-  check("istatistik: 6 gol toplamı (2+1+3)", /6\s*\n?\s*Gol/.test(t));
-  check("istatistik: takım ve gruplara göre döküm", has(t, "Takım ve gruplara göre") && has(t, "E2E Özel Grup") && has(t, "E2E Takım"));
-  check("istatistik: rakibe karşı / kendi aramızda", has(t, "Rakip takıma karşı") && has(t, "Kendi aramızda"));
+  check("istatistik: 3 maç (özel grup 2 + takım 1, oylamadaki dahil)", has(t, "Oynanan Maç") && /3\s*\n?\s*maç/.test(t));
+  check("istatistik: 6 gol toplamı (2+1+3)", has(t, "Toplam Gol") && /6\s*\n?\s*gol/.test(t));
+  check("istatistik: performans dağılımı ve form", has(t, "Performans dağılımı") && has(t, "Form ve performans"));
+  check("istatistik: galibiyet ve rozetler", has(t, "Galibiyet") && has(t, "Kazanılan rozetler"));
   check("istatistik: güvenilirlik", has(t, "Güvenilirlik"));
   await aP.screenshot({ path: `${SHOTS}/96-profil-istatistik.png`, fullPage: true });
 
   await aP.click('a[role="tab"]:has-text("Maçlar")');
   await aP.waitForURL(/sekme=maclar/);
   t = await text(aP);
-  check("maçlar: üç maç, rakip adı ve skorlar", has(t, "Rakip FK") && has(t, "4-1") && has(t, "3-2") && has(t, "1-2"));
+  check("maçlar: üç maç, rakip adı ve skorlar", has(t, "Rakip FK") && has(t, "4 - 1") && has(t, "3 - 2") && has(t, "1 - 2"));
   check("maçlar: oylamadaki maç 'oylamada' etiketli", has(t, "oylamada"));
   await aP.screenshot({ path: `${SHOTS}/97-profil-maclar.png`, fullPage: true });
 
-  await aP.click('a[role="tab"]:has-text("Ayarlar")');
-  await aP.waitForURL(/sekme=ayarlar/);
+  await aP.goto(`${BASE}/profil?sekme=ayarlar`);
   t = await text(aP);
   check("ayarlar: profil formu, görünürlük ve bildirimler", has(t, "Ad soyad") && has(t, "İstatistiklerini kim görsün?") && has(t, "Bildirimler"));
   check("ayarlar: varsayılan 'Sadece takım arkadaşlarım' seçili", await aP.locator('input[name="visibility"][value="teammates"]').isChecked());
@@ -99,7 +104,7 @@ try {
   const bP = await open(b);
   await bP.goto(`${BASE}/oyuncu/${a.id}?sekme=istatistik`);
   t = await text(bP);
-  check("takım arkadaşı istatistikleri görür", has(t, "Takım ve gruplara göre") && !has(t, "🔒"));
+  check("takım arkadaşı istatistikleri görür", has(t, "Form ve performans") && !has(t, "sadece takım arkadaşlarına açık"));
   await bP.goto(`${BASE}/oyuncu/${a.id}?sekme=maclar`);
   t = await text(bP);
   check("üye olduğu özel grubun adı görünür", has(t, "E2E Özel Grup"));
@@ -108,14 +113,14 @@ try {
   const cP = await open(c);
   await cP.goto(`${BASE}/oyuncu/${a.id}`);
   t = await text(cP);
-  check("yabancı kartı ve yetenekleri görür", has(t, "ALİ ATAK") && has(t, "HIZ") && has(t, "Takımları") && has(t, "E2E Takım"));
+  check("yabancı kartı ve yetenekleri görür", has(t, "ALİ ATAK") && has(t, "HIZ") && has(t, "Yetenekler"));
   check("yabancı özel grubu listede görmez", !has(t, "E2E Özel Grup"));
   await cP.goto(`${BASE}/oyuncu/${a.id}?sekme=istatistik`);
   t = await text(cP);
-  check("yabancı için istatistik kilitli", has(t, "🔒") && !has(t, "Takım ve gruplara göre"));
+  check("yabancı için istatistik kilitli", has(t, "sadece takım arkadaşlarına açık") && !has(t, "Form ve performans"));
   await cP.screenshot({ path: `${SHOTS}/99-profil-kilitli.png`, fullPage: true });
   await cP.goto(`${BASE}/oyuncu/${a.id}?sekme=maclar`);
-  check("yabancı için maç geçmişi kilitli", has(await text(cP), "🔒"));
+  check("yabancı için maç geçmişi kilitli", has(await text(cP), "sadece takım arkadaşlarına açık"));
 
   // 3) Ali herkese açık yapar → yabancı görür, özel grubun adı hâlâ gizli
   await aP.locator('input[name="visibility"][value="public"]').check();
@@ -124,7 +129,7 @@ try {
   const { data: prof } = await admin.from("profiles").select("stats_visibility").eq("id", a.id).single();
   check("ayar kaydedildi (public)", prof?.stats_visibility === "public");
   await cP.goto(`${BASE}/oyuncu/${a.id}?sekme=istatistik`);
-  check("herkese açıkken yabancı istatistikleri görür", has(await text(cP), "Takım ve gruplara göre"));
+  check("herkese açıkken yabancı istatistikleri görür", has(await text(cP), "Form ve performans"));
   await cP.goto(`${BASE}/oyuncu/${a.id}?sekme=maclar`);
   t = await text(cP);
   check("maç geçmişinde özel grup adı 'Özel grup' olarak gizli", has(t, "Özel grup") && !has(t, "E2E Özel Grup") && has(t, "E2E Takım"));

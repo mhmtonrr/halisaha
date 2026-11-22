@@ -11,7 +11,7 @@ export interface Badge {
   /** Sağ üstte gösterilen değer ("x3 kez", "5 maç") */
   value: string;
   icon: string;
-  tone: "green" | "blue" | "teal" | "gold";
+  tone: "primary" | "secondary" | "tertiary";
 }
 
 /** Eskiden yeniye sıralı kayıtlarda en uzun ardışık dizi */
@@ -38,26 +38,26 @@ export function computeBadges(records: MatchRecord[], noShows: number): Badge[] 
 
   const out: Badge[] = [];
   if (hatTricks >= 1)
-    out.push({ id: "hattrick", title: "Hat-trick Kahramanı", description: "Bir maçta 3 ve üzeri gol atanlar kulübü.", value: `x${hatTricks} kez`, icon: "⚽", tone: "green" });
+    out.push({ id: "hattrick", title: "Hat-trick Kahramanı", description: "Bir maçta 3 ve üzeri gol atanlar kulübü.", value: `x${hatTricks} kez`, icon: "sports_and_outdoors", tone: "primary" });
   if (unbeaten >= 5)
-    out.push({ id: "unbeaten", title: "Yenilmezlik Serisi", description: "Üst üste 5 ve üzeri maçta mağlubiyet almadı.", value: `${unbeaten} maç`, icon: "🛡️", tone: "teal" });
+    out.push({ id: "unbeaten", title: "Yenilmezlik Serisi", description: "Üst üste 5 ve üzeri maçta mağlubiyet almadı.", value: `${unbeaten} maç`, icon: "shield_with_heart", tone: "secondary" });
   if (wins >= 3)
-    out.push({ id: "winstreak", title: "Galibiyet Serisi", description: "Üst üste 3 ve üzeri maç kazandı.", value: `${wins} maç`, icon: "🔥", tone: "gold" });
+    out.push({ id: "winstreak", title: "Galibiyet Serisi", description: "Üst üste 3 ve üzeri maç kazandı.", value: `${wins} maç`, icon: "local_fire_department", tone: "primary" });
   if (mvps >= 10)
-    out.push({ id: "mvp10", title: "Maçın Efendisi", description: "10 ve üzeri maçta maçın adamı seçildi.", value: `${mvps} kez`, icon: "👑", tone: "gold" });
+    out.push({ id: "mvp10", title: "Maçın Efendisi", description: "10 ve üzeri maçta maçın adamı seçildi.", value: `${mvps} kez`, icon: "workspace_premium", tone: "primary" });
   else if (mvps >= 3)
-    out.push({ id: "mvp3", title: "MVP Avcısı", description: "3 ve üzeri maçta maçın adamı seçildi.", value: `${mvps} kez`, icon: "⭐", tone: "gold" });
+    out.push({ id: "mvp3", title: "MVP Avcısı", description: "3 ve üzeri maçta maçın adamı seçildi.", value: `${mvps} kez`, icon: "military_tech", tone: "primary" });
   if (goals >= 25)
-    out.push({ id: "goals25", title: "Gol Makinesi", description: "Toplam 25 ve üzeri gol attı.", value: `${goals} gol`, icon: "🎯", tone: "green" });
+    out.push({ id: "goals25", title: "Gol Makinesi", description: "Toplam 25 ve üzeri gol attı.", value: `${goals} gol`, icon: "sports_soccer", tone: "primary" });
   if (assists >= 10)
-    out.push({ id: "assists10", title: "Asist Kralı", description: "Toplam 10 ve üzeri asist yaptı.", value: `${assists} asist`, icon: "🅰️", tone: "blue" });
+    out.push({ id: "assists10", title: "Asist Kralı", description: "Toplam 10 ve üzeri asist yaptı.", value: `${assists} asist`, icon: "conversion_path", tone: "tertiary" });
   if (saves >= 20)
-    out.push({ id: "saves20", title: "Kale Bekçisi", description: "Toplam 20 ve üzeri kurtarış yaptı.", value: `${saves} kurtarış`, icon: "🧤", tone: "blue" });
+    out.push({ id: "saves20", title: "Kale Bekçisi", description: "Toplam 20 ve üzeri kurtarış yaptı.", value: `${saves} kurtarış`, icon: "sports_handball", tone: "tertiary" });
   if (played >= 25)
-    out.push({ id: "played25", title: "Sahanın Müdavimi", description: "25 ve üzeri maç oynadı.", value: `${played} maç`, icon: "🏟️", tone: "teal" });
+    out.push({ id: "played25", title: "Sahanın Müdavimi", description: "25 ve üzeri maç oynadı.", value: `${played} maç`, icon: "stadium", tone: "secondary" });
   else if (played >= 10)
-    out.push({ id: "played10", title: "Düzenli Oyuncu", description: "10 ve üzeri maç oynadı.", value: `${played} maç`, icon: "🏟️", tone: "teal" });
+    out.push({ id: "played10", title: "Düzenli Oyuncu", description: "10 ve üzeri maç oynadı.", value: `${played} maç`, icon: "stadium", tone: "secondary" });
   if (played >= 10 && noShows === 0)
-    out.push({ id: "reliable", title: "Tam Güvenilir", description: "10 ve üzeri maç oynadı, hiç gelmemezlik yapmadı.", value: "%100", icon: "✅", tone: "green" });
+    out.push({ id: "reliable", title: "Tam Güvenilir", description: "10 ve üzeri maç oynadı, hiç gelmemezlik yapmadı.", value: "%100", icon: "verified", tone: "primary" });
   return out;
 }
