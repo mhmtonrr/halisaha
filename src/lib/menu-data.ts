@@ -13,6 +13,7 @@ export interface MenuGroup {
 
 export interface MenuData {
   name: string;
+  photoUrl: string | null;
   overall: number;
   city: string | null;
   groups: MenuGroup[];
@@ -25,12 +26,13 @@ export async function loadMenuData(): Promise<MenuData | null> {
   try {
     const [supabase, user] = await Promise.all([createClient(), getAuthUser()]);
     if (!user) return null;
-    const { data: profile } = await supabase.from("profiles").select("display_name, city, onboarded_at").eq("id", user.id).maybeSingle();
+    const { data: profile } = await supabase.from("profiles").select("display_name, photo_url, city, onboarded_at").eq("id", user.id).maybeSingle();
     if (!profile?.onboarded_at) return null;
     const [memberships, queue] = await Promise.all([getMemberships(supabase, user.id), getSkillQueue(supabase, 20)]);
     const best = memberships.reduce((m, x) => Math.max(m, x.overall), 0);
     return {
       name: profile.display_name,
+      photoUrl: profile.photo_url ?? null,
       overall: best || 65,
       city: profile.city,
       groups: memberships

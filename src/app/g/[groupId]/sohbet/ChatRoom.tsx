@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { notifyChatMessage } from "@/lib/actions";
-import { initials } from "@/components/PlayerCard";
+import { Avatar } from "@/components/Avatar";
 import { TeamBadge } from "@/components/TeamBadge";
 import { cx } from "@/components/ui";
 
@@ -25,6 +25,7 @@ export interface ChatMessage {
 export interface ChatMember {
   id: string;
   name: string;
+  photoUrl?: string | null;
   role: string;
   guest: boolean;
 }
@@ -158,8 +159,8 @@ export function ChatRoom({
             if (msg.author_id !== meId) scheduleRead();
             // Sonradan katılan biri yazdıysa adını getir
             if (msg.author_id && !members.has(msg.author_id)) {
-              const { data } = await supabase.from("group_players").select("id, display_name, role, user_id").eq("id", msg.author_id).maybeSingle();
-              if (data) setMembers((m) => new Map(m).set(data.id, { id: data.id, name: data.display_name, role: data.role, guest: !data.user_id }));
+              const { data } = await supabase.from("group_players").select("id, display_name, photo_url, role, user_id").eq("id", msg.author_id).maybeSingle();
+              if (data) setMembers((m) => new Map(m).set(data.id, { id: data.id, name: data.display_name, photoUrl: data.photo_url, role: data.role, guest: !data.user_id }));
             }
           },
         )
@@ -327,14 +328,11 @@ export function ChatRoom({
               ) : (
                 <div className={cx("flex items-end gap-2", mine ? "justify-end" : "justify-start", !continued && "mt-2")}>
                   {!mine && (
-                    <span
-                      className={cx(
-                        "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-pitch-700 text-[10px] font-bold",
-                        continued && "invisible",
-                      )}
-                    >
-                      {initials(author?.name ?? "?")}
-                    </span>
+                    <Avatar
+                      name={author?.name ?? "?"}
+                      photoUrl={author?.photoUrl}
+                      className={cx("h-7 w-7 bg-pitch-700 text-[10px]", continued && "invisible")}
+                    />
                   )}
                   <div className={cx("max-w-[78%]", mine && "items-end")}>
                     {!mine && !continued && (

@@ -847,6 +847,7 @@ async function VotingView({
             ].map((r) => ({
                 id: r.id,
                 name: r.name,
+                photoUrl: r.photoUrl,
                 team: r.team,
                 goals: r.goals,
                 assists: r.assists,

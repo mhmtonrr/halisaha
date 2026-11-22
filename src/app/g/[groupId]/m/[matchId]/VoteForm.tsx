@@ -3,12 +3,14 @@
 import { useState } from "react";
 import { submitVotes } from "@/lib/actions";
 import { Button, Card, cx } from "@/components/ui";
-import { initials, PositionChip } from "@/components/PlayerCard";
+import { PositionChip } from "@/components/PlayerCard";
+import { Avatar } from "@/components/Avatar";
 import type { Position } from "@/lib/data";
 
 interface Target {
   id: string;
   name: string;
+  photoUrl?: string | null;
   team: "A" | "B";
   goals: number;
   assists: number;
@@ -62,14 +64,11 @@ export function VoteForm({
                 {g.list.map((t) => (
                   <div key={t.id}>
                     <div className="flex items-center gap-3">
-                      <span
-                        className={cx(
-                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-pitch-950",
-                          t.team === "A" ? "bg-team-a" : "bg-team-b",
-                        )}
-                      >
-                        {initials(t.name)}
-                      </span>
+                      <Avatar
+                        name={t.name}
+                        photoUrl={t.photoUrl}
+                        className={cx("h-9 w-9 text-xs text-pitch-950", t.team === "A" ? "bg-team-a" : "bg-team-b")}
+                      />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
                           <span className="truncate font-medium">{t.name}</span>

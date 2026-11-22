@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { useUnreadCount } from "./NotificationBadge";
 import { TeamBadge } from "./TeamBadge";
-import { initials } from "./PlayerCard";
+import { Avatar } from "./Avatar";
 import { loadMenu } from "@/lib/actions";
 import type { MenuData } from "@/lib/menu-data";
 
@@ -176,9 +176,11 @@ function Drawer({ data, onClose }: { data: MenuData | null; onClose: () => void 
 
         <div className="flex-1 space-y-1 overflow-y-auto px-3 pb-4">
           <Link href="/profil" className="mb-2 flex items-center gap-3 rounded-2xl border border-line bg-pitch-900/80 p-3 hover:border-accent/50">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gold-1 to-gold-2 text-sm font-black text-[#3b2a05]">
-              {data ? initials(data.name) : "…"}
-            </span>
+            {data ? (
+              <Avatar name={data.name} photoUrl={data.photoUrl} className="h-12 w-12 bg-gradient-to-br from-gold-1 to-gold-2 text-sm font-black text-[#3b2a05]" />
+            ) : (
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gold-1 to-gold-2 text-sm font-black text-[#3b2a05]">…</span>
+            )}
             <span className="min-w-0 flex-1">
               {data ? (
                 <>

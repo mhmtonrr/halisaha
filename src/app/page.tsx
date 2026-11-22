@@ -22,7 +22,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
   const { supabase, user } = await requireUser();
 
   const [{ data: profile }, memberships] = await Promise.all([
-    supabase.from("profiles").select("display_name, city, district").eq("id", user.id).single(),
+    supabase.from("profiles").select("display_name, photo_url, city, district").eq("id", user.id).single(),
     getMemberships(supabase, user.id),
   ]);
 
@@ -146,8 +146,18 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
                 : "from-bronze-1 to-bronze-2 text-[#3a1d0a]",
           )}
         >
-          <span className="text-2xl leading-none">{best}</span>
-          <span className="text-[9px] uppercase opacity-70">{initials(profile?.display_name ?? "")}</span>
+          {profile?.photo_url ? (
+            <div className="relative h-full w-full overflow-hidden rounded-2xl">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={profile.photo_url} alt={profile.display_name ?? ""} className="h-full w-full object-cover object-top" draggable={false} />
+              <span className="absolute bottom-0.5 left-0.5 rounded-md bg-black/55 px-1.5 py-0.5 text-xs leading-none text-white">{best}</span>
+            </div>
+          ) : (
+            <>
+              <span className="text-2xl leading-none">{best}</span>
+              <span className="text-[9px] uppercase opacity-70">{initials(profile?.display_name ?? "")}</span>
+            </>
+          )}
         </div>
         <div className="min-w-0">
           <div className="text-sm text-muted">Merhaba</div>

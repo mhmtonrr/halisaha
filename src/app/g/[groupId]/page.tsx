@@ -9,7 +9,8 @@ import { ROLE_LABEL, teamRating, type GroupKind, type Role } from "@/lib/teams-d
 import { TeamBadge } from "@/components/TeamBadge";
 import { RosterTabs } from "@/components/RosterTabs";
 import { Badge, Card, Header, LinkButton, SectionTitle } from "@/components/ui";
-import { OvrBadge, initials } from "@/components/PlayerCard";
+import { OvrBadge } from "@/components/PlayerCard";
+import { Avatar } from "@/components/Avatar";
 import { InviteLink } from "./InviteLink";
 import { regenerateInvite } from "@/lib/actions";
 import { countIncoming } from "@/lib/challenges-data";
@@ -159,13 +160,13 @@ export default async function GroupPage({
               .filter((p) => p.user_id)
               .slice(0, 8)
               .map((p) => (
-                <span
+                <Avatar
                   key={p.id}
+                  name={p.display_name}
+                  photoUrl={p.photo_url}
                   title={p.display_name}
-                  className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-pitch-950 bg-pitch-700 text-[11px] font-bold"
-                >
-                  {initials(p.display_name)}
-                </span>
+                  className="h-9 w-9 border-2 border-pitch-950 bg-pitch-700 text-[11px]"
+                />
               ))}
           </div>
           <span className="text-sm text-muted">
