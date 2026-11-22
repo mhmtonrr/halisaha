@@ -329,6 +329,9 @@ export default async function MatchPage({
       )}
 
       {linked && opp && <VersusCard mine={{ id: groupId, name: myTeamName, color: myTeamColor, roster }} opp={opp} />}
+      {external && !opp && match.status !== "planned" && roster.length > 0 && (
+        <VersusCard mine={{ id: groupId, name: myTeamName, color: myTeamColor, roster }} opp={null} />
+      )}
 
       {match.status !== "planned" && (
         <Card className="mb-4 flex items-center justify-around py-5">
@@ -986,15 +989,17 @@ function VersusCard({
   opp,
 }: {
   mine: { id: string; name: string; color: string | null; roster: RosterEntry[] };
-  opp: Opponent;
+  opp: Opponent | null;
 }) {
+  // Rakip sistemde kayıtlı değilse (sadece yazılmış ad) yalnızca kendi kadromuz gösterilir
   const sides = [
     { id: mine.id, name: mine.name, color: mine.color, roster: mine.roster, self: true },
-    { id: opp.team.id, name: opp.team.name, color: opp.team.color, roster: opp.roster, self: false },
+    ...(opp ? [{ id: opp.team.id, name: opp.team.name, color: opp.team.color, roster: opp.roster, self: false }] : []),
   ];
+  const single = sides.length === 1;
   return (
     <Card className="mb-4 overflow-hidden p-0">
-      <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-2 px-3 py-4">
+      <div className={cx("grid items-start gap-2 px-3 py-4", single ? "grid-cols-1" : "grid-cols-[1fr_auto_1fr]")}>
         {sides.map((t, i) => (
           <div key={t.id} className="contents">
             {i === 1 && <span className="mt-3 text-sm font-bold text-muted">VS</span>}
@@ -1015,7 +1020,7 @@ function VersusCard({
           </div>
         ))}
       </div>
-      <div className="grid grid-cols-2 divide-x divide-line border-t border-line">
+      <div className={cx("grid divide-x divide-line border-t border-line", single ? "grid-cols-1" : "grid-cols-2")}>
         {sides.map((t) => (
           <ul key={t.id} className="min-w-0 space-y-1.5 p-3">
             {t.roster.length === 0 && <li className="py-2 text-center text-xs text-muted">Kadro bekleniyor</li>}
