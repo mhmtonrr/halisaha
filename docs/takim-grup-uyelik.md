@@ -37,8 +37,11 @@ planlanmış ve gelecekteki maçları sayar; bekleyen 10 başvuru sınırı yeni
 Tuzak: canlı yenilenen sunucu bileşeninde `<details open={koşul}>` her yenilemede kullanıcının açtığını kapatır → `AutoOpenDetails`
 (sadece ilk yüklemede açar).
 
-**Roller (`group_players.role`)**: `captain` (takımda "Kaptan", grupta "Kurucu"), `admin` ("Yetkili"), `member`.
-- Maç ve maç çağrısını sadece captain/admin kurar (RLS). Rolleri sadece captain değiştirir (`set_member_role` RPC;
+**Roller (`group_players.role`)**: `captain` (takımda "Kaptan", grupta "Kurucu"), `admin` ("Yetkili"), `organizer` ("Organizatör", 0034), `member`.
+- Maç ve maç çağrısını sadece captain/admin/organizer açar (`can_create_match`, RLS; üye açamaz — spam önlemi, kullanıcı kararı).
+- Herkes **kendi kurduğu maçı** yönetir (`can_manage_match`: kadro, misafir `add_match_guest`, sonuç, "gelmedi", çekilme kararı, kart paylaşımı);
+  kendi çağrısını `can_manage_poll` ile (rolü alınınca çağrı yönetimi düşer, maç sahipliği kalır). Başkasının maçını sadece captain/admin yönetir.
+- Organizatör üye yönetemez (çıkarma, mevki, rol, davet kodu yenileme, sohbet moderasyonu `is_group_admin`'de kalır); TS'de `canCreateMatch(role)`. Rolleri sadece captain değiştirir (`set_member_role` RPC;
   doğrudan UPDATE politikası bilerek yok). Kaptanlık devrinde eski kaptan admin olur.
 - Oyuncu çıkarma: captain çıkarılamaz; admin'leri sadece captain çıkarır.
 - `is_group_admin()` captain'ı da kapsar.

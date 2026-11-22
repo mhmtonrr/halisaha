@@ -16,11 +16,11 @@ export default async function NewMatchPage({
   const { supabase } = await requireUser();
   const [{ data: group }, { data: canCreate }] = await Promise.all([
     supabase.from("groups").select("id, kind").eq("id", groupId).maybeSingle(),
-    supabase.rpc("is_group_admin", { p_group_id: groupId }),
+    supabase.rpc("can_create_match", { p_group_id: groupId }),
   ]);
   if (!group) notFound();
-  // Maçı sadece kaptan/kurucu ve yetkililer kurar (veritabanı da bunu zorunlu kılar)
-  if (!canCreate) redirect(`/g/${groupId}?error=${encodeURIComponent("Maçı sadece yetkililer kurabilir")}`);
+  // Maçı sadece kaptan/kurucu, yetkililer ve organizatörler kurar (veritabanı da bunu zorunlu kılar)
+  if (!canCreate) redirect(`/g/${groupId}?error=${encodeURIComponent("Maçı sadece kurucu, yetkili ve organizatörler kurabilir")}`);
 
   // Maç çağrısından geliniyorsa: tarih, saha ve onaylanan oyuncular hazır gelsin
   const poll = cagri

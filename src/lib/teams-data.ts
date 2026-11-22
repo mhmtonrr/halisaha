@@ -4,12 +4,17 @@ import { one } from "@/lib/data";
 import { loadUserCards, type UserCard } from "@/lib/user-cards";
 
 export type GroupKind = "community" | "team";
-export type Role = "captain" | "admin" | "member";
+export type Role = "captain" | "admin" | "organizer" | "member";
 
 export const ROLE_LABEL: Record<GroupKind, Record<Role, string>> = {
-  team: { captain: "Kaptan", admin: "Yetkili", member: "Oyuncu" },
-  community: { captain: "Kurucu", admin: "Yetkili", member: "Üye" },
+  team: { captain: "Kaptan", admin: "Yetkili", organizer: "Organizatör", member: "Oyuncu" },
+  community: { captain: "Kurucu", admin: "Yetkili", organizer: "Organizatör", member: "Üye" },
 };
+
+/** Maç ve maç çağrısı açabilir mi? (veritabanındaki can_create_match ile aynı) */
+export function canCreateMatch(role: string | null | undefined): boolean {
+  return role === "captain" || role === "admin" || role === "organizer";
+}
 
 /** Takım renkleri: koyu zeminde okunur, birbirinden ayırt edilir */
 export const TEAM_COLORS = [

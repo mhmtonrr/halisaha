@@ -44,7 +44,7 @@ export interface PersonGroup {
   name: string;
   kind: "community" | "team";
   color: string | null;
-  role: "captain" | "admin" | "member";
+  role: "captain" | "admin" | "organizer" | "member";
   isLoan: boolean;
   /** Ayrılmış: maç geçmişi için kayıt durur ama üye değil */
   left: boolean;

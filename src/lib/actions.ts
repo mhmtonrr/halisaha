@@ -472,34 +472,9 @@ export async function addGuestToMatch(_prev: GuestState, fd: FormData): Promise<
   const error = (message: string): GuestState => ({ error: message, name, at: Date.now() });
   if (name.length < 2) return error("Misafirin ismi en az 2 karakter olmalı");
 
-  const [{ data: match }, roster] = await Promise.all([
-    supabase.from("matches").select("kind, status").eq("id", matchId).eq("group_id", groupId).maybeSingle(),
-    loadRoster(supabase, matchId),
-  ]);
-  if (!match) return error("Maç bulunamadı");
-  if (match.status !== "planned") return error("Misafir sadece planlanmış maça eklenir");
-
-  const { data: guest, error: insertError } = await supabase
-    .from("group_players")
-    .insert({ group_id: groupId, display_name: name.slice(0, 60), position })
-    .select("id")
-    .single();
-  if (insertError || !guest) return error("Misafir eklenemedi (yetkiniz olmayabilir)");
-
-  const countA = roster.filter((r) => r.team === "A").length;
-  const team = match.kind === "external" || countA <= roster.length - countA ? "A" : "B";
-  const { error: rosterError } = await supabase.from("match_players").insert({
-    match_id: matchId,
-    player_id: guest.id,
-    team,
-    position,
-    is_goalkeeper: position === "GK",
-  });
-  if (rosterError) {
-    // Kadroya girmeyen misafir grupta yetim kalmasın
-    await supabase.from("group_players").delete().eq("id", guest.id);
-    return error("Misafir maça eklenemedi");
-  }
+  // Misafiri gruba ve maçın kadrosuna tek işlemde yazar; maçı kuran organizatör de ekleyebilir (yetki veritabanında)
+  const { error: rpcError } = await supabase.rpc("add_match_guest", { p_match: matchId, p_name: name, p_position: position });
+  if (rpcError) return error(rpcMessage(rpcError, "Misafir eklenemedi"));
   revalidatePath(`/g/${groupId}/m/${matchId}`);
   return { ok: true, added: name.slice(0, 60), at: Date.now() };
 }
@@ -560,9 +535,11 @@ export async function requestWithdrawal(fd: FormData) {
     const admin = createAdminClient();
     const [{ data: profile }, { data: match }, ids] = await Promise.all([
       admin.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
-      admin.from("matches").select("played_at").eq("id", matchId).maybeSingle(),
+      admin.from("matches").select("played_at, created_by").eq("id", matchId).maybeSingle(),
       groupMemberIds(admin, groupId, { adminsOnly: true }),
     ]);
+    // Kararı maçı kuran (organizatör) da verir; ona da haber gitsin
+    if (match?.created_by && !ids.includes(match.created_by)) ids.push(match.created_by);
     const who = profile?.display_name ?? "Bir oyuncu";
     const when = match ? formatDate(match.played_at) : "";
     const late = match ? new Date(match.played_at).getTime() - Date.now() < 3 * 3600_000 : false;
@@ -1092,7 +1069,7 @@ export async function createPoll(fd: FormData) {
     })
     .select("id")
     .single();
-  if (error) fail(back, "Çağrıyı sadece yetkililer açabilir");
+  if (error) fail(back, "Çağrıyı sadece kurucu, yetkili ve organizatörler açabilir");
   announcePoll(groupId, data.id, user.id, parseLocalDateTime(when), str(fd, "venue").slice(0, 80) || null);
   redirect(`/g/${groupId}/cagri/${data.id}`);
 }

@@ -5,7 +5,7 @@ import { finalizeExpired } from "@/lib/finalize";
 import { settleExpiredPolls } from "@/lib/polls";
 import { byRanking, formatDate, getGroupSummaries, isGuestLike, isSquadMember, POSITION_LABEL } from "@/lib/data";
 import { formatRegion } from "@/lib/regions";
-import { ROLE_LABEL, teamRating, type GroupKind, type Role } from "@/lib/teams-data";
+import { ROLE_LABEL, canCreateMatch, teamRating, type GroupKind, type Role } from "@/lib/teams-data";
 import { TeamBadge } from "@/components/TeamBadge";
 import { RosterTabs } from "@/components/RosterTabs";
 import { Badge, Card, Header, LinkButton, SectionTitle } from "@/components/ui";
@@ -75,6 +75,7 @@ export default async function GroupPage({
   const me = players.find((p) => p.user_id === user.id && !p.is_loan);
   const myRole = (me?.role ?? null) as Role | null;
   const canManage = myRole === "captain" || myRole === "admin";
+  const canCreate = canCreateMatch(myRole);
   // Asıl kadro hesabı olan üyelerdir; misafirler ayrı sekmede (istatistikleri orada görünür)
   const members = players.filter(isSquadMember);
   const guests = players.filter(isGuestLike);
@@ -223,7 +224,7 @@ export default async function GroupPage({
         </LinkButton>
       )}
 
-      {canManage && (
+      {canCreate && (
         <div className="mb-2 grid grid-cols-2 gap-2">
           <LinkButton href={`/g/${groupId}/cagri/yeni`}>📣 Maç çağrısı</LinkButton>
           <LinkButton href={`/g/${groupId}/matches/new`} variant="secondary">
@@ -246,11 +247,6 @@ export default async function GroupPage({
           </Card>
         </Link>
       ))}
-      {!isTeam && me && !canManage && (
-        <LinkButton href={`/g/${groupId}/cagri/yeni`} className="mb-2 w-full">
-          📣 Maç çağrısı aç
-        </LinkButton>
-      )}
       {isTeam && me && (
         <LinkButton href={`/g/${groupId}/teklifler`} variant="secondary" className="mb-2 w-full justify-between">
           <span>🤝 Maç teklifleri</span>
@@ -308,11 +304,9 @@ export default async function GroupPage({
           Bu takımın oyuncusu değilsin. Katılmak için kaptandan davet linki iste.
         </p>
       )}
-      {me && !canManage && (
+      {me && !canCreate && (
         <p className="mt-2 text-center text-xs text-muted">
-          {isTeam
-            ? "Maçları kaptan ve yetkililer kurar."
-            : "Maçı kurucu ve yetkililer kurar; sen çağrı açabilirsin, yeterli kişi toplanınca maç kendiliğinden kurulur."}
+          Maçları ve maç çağrılarını {labels.captain.toLocaleLowerCase("tr")}, yetkililer ve organizatörler açar.
         </p>
       )}
 

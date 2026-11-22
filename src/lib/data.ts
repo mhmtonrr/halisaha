@@ -37,7 +37,7 @@ export interface GroupPlayer {
   is_loan: boolean;
   /** Gruptan/takımdan ayrılmış (kayıt geçmiş için kalır); aktif üye sayılmaz */
   left_at: string | null;
-  role: "captain" | "admin" | "member";
+  role: "captain" | "admin" | "organizer" | "member";
   position: Position | null;
   overall: number;
   matches_played: number;

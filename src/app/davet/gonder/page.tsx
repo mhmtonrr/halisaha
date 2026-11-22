@@ -41,8 +41,14 @@ export default async function SendCardPage({ searchParams }: { searchParams: Pro
 
   const source = await loadSource(supabase, tur as Tur, ref);
   if (!source) notFound();
-  const { data: isAdmin } = await supabase.rpc("is_group_admin", { p_group_id: source.groupId });
-  if (!isAdmin) redirect("/");
+  // Kaptan/yetkili her şeyi; organizatör kendi çağrısını ve kendi kurduğu maçı paylaşır (share_match_card ile aynı kural)
+  const { data: canShare } =
+    tur === "poll"
+      ? await supabase.rpc("can_manage_poll", { p_poll_id: ref })
+      : tur === "match"
+        ? await supabase.rpc("can_manage_match", { p_match_id: ref })
+        : await supabase.rpc("is_group_admin", { p_group_id: source.groupId });
+  if (!canShare) redirect("/");
 
   const needle = q.trim().replace(/[%_,()]/g, " ");
   const [{ data: rows }, { data: found }] = await Promise.all([

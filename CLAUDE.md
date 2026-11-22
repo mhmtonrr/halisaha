@@ -67,7 +67,7 @@ En kritik: `src/lib/rating.ts` (puanlama), `src/lib/actions.ts` (Server Action'l
 | E2E çalıştırma, senaryolar, bozuk testler | `docs/test.md` |
 
 Kısa özet: **Grup** (`kind='community'`) özel topluluk, sadece kendi aramızda maç, rating etkisi yarım. **Takım** (`kind='team'`) herkese açık, sadece rakibe karşı maç, tam etki.
-Roller: captain/admin/member. Misafir = `user_id IS NULL`. Davet kodu sütunu okunamaz (RPC). Rating ve yetenekler hesap bazında genel: `user_ratings`/`user_skills` (tek satır, `user_id`); satır başına kopya YOK (misafir hariç).
+Roller: captain/admin/organizer/member (maçı ilk üçü açar). Misafir = `user_id IS NULL`. Davet kodu sütunu okunamaz (RPC). Rating ve yetenekler hesap bazında genel: `user_ratings`/`user_skills` (tek satır, `user_id`); satır başına kopya YOK (misafir hariç).
 Yetki hep RLS/RPC'de; `groups` seçerken sütunları açıkça yaz (`invite_code` yok). Yeni konu/tuzak çıkarsa ilgili docs dosyasına ekle, buraya sadece tek satırlık işaret koy.
 
 ## Veritabanı değişikliği iş akışı

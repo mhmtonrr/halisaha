@@ -47,7 +47,7 @@ function RoleButton({ groupId, playerId, role, children, danger }: { groupId: st
   );
 }
 
-const ROLE_ORDER: Record<Role, number> = { captain: 0, admin: 1, member: 2 };
+const ROLE_ORDER: Record<Role, number> = { captain: 0, admin: 1, organizer: 2, member: 3 };
 
 export default async function ManagePage({
   params,
@@ -85,7 +85,7 @@ export default async function ManagePage({
 
   /** Bu oyuncuyu ben çıkarabilir miyim? (veritabanı kuralıyla aynı) */
   const canRemove = (p: (typeof players)[number]) =>
-    canManage && p.id !== me?.id && p.role !== "captain" && (p.role === "member" || isCaptain) && (!!p.user_id || p.totals.played === 0);
+    canManage && p.id !== me?.id && p.role !== "captain" && (p.role === "member" || p.role === "organizer" || isCaptain) && (!!p.user_id || p.totals.played === 0);
 
   return (
     <main>
@@ -100,7 +100,8 @@ export default async function ManagePage({
 
       <Card className="mb-4 text-sm text-muted">
         <b className="text-white">{labels.captain}</b> rolleri yönetir ve {isTeam ? "kaptanlığı" : "kuruculuğu"} devredebilir.{" "}
-        <b className="text-white">{labels.admin}</b>ler maç kurar, kadroyu ve mevkileri düzenler; misafir oyuncuyu maç ekranından ekler.{" "}
+        <b className="text-white">{labels.admin}</b>ler maç kurar, tüm maçları ve üyeleri yönetir (mevki, çıkarma).{" "}
+        <b className="text-white">{labels.organizer}</b>ler maç ve maç çağrısı açar, sadece kendi kurduğu maçı yönetir (kadro, misafir, sonuç); üyelere dokunamaz.{" "}
         <b className="text-white">{labels.member}</b>ler oynar ve oy verir.
       </Card>
 
@@ -151,12 +152,17 @@ export default async function ManagePage({
                 </div>
                 {isCaptain && p.user_id && p.id !== me?.id && (
                   <div className="mt-2 flex flex-wrap justify-end gap-1">
-                    {role === "member" && (
+                    {role !== "organizer" && role !== "captain" && (
+                      <RoleButton groupId={groupId} playerId={p.id} role="organizer">
+                        {labels.organizer} yap
+                      </RoleButton>
+                    )}
+                    {role !== "admin" && role !== "captain" && (
                       <RoleButton groupId={groupId} playerId={p.id} role="admin">
                         {labels.admin} yap
                       </RoleButton>
                     )}
-                    {role === "admin" && (
+                    {(role === "admin" || role === "organizer") && (
                       <RoleButton groupId={groupId} playerId={p.id} role="member" danger>
                         Yetkiyi al
                       </RoleButton>

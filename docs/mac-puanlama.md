@@ -2,7 +2,7 @@
 
 (CLAUDE.md'den taşındı; ilgili konuda çalışırken oku. Konu değişirse sadece bu dosyayı güncelle.)
 
-**Üye çağrısı (migration 0014, yapıldı)**: grupta üyeler maç kuramaz, **çağrı** açar (`create_member_poll` RPC: `match_polls.auto_match`,
+**Otomatik çağrı (migration 0014; 0034'ten beri üye açamaz, sadece `can_create_match`: kurucu/yetkili/organizatör; arayüzde artık açılmıyor, birleşik çağrıyla (2. parça) kalkacak)**: eskiden grupta üyeler **çağrı** açardı (`create_member_poll` RPC: `match_polls.auto_match`,
 `team_size`; kontenjan = 2 × kişi sayısı). Sınırlar DB'de: maç en az 3 saat sonra, en fazla 14 gün içinde; son yanıt süresi (boşsa maçtan
 3 saat önce) maçtan en az 1 saat önce ve gelecekte; yetkili olmayan üye aynı anda 1 açık çağrı; açan otomatik "geliyorum". Takımda üye
 çağrı açamaz. Maça dönüşüm (`polls.ts`, `poll-rules.ts`): **kontenjan dolunca hemen** (`respondPoll` sonrası `settlePoll`); **son yanıt süresi

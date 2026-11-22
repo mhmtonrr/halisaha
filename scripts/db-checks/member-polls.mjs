@@ -1,7 +1,7 @@
 import { setupDb } from "./migrations.mjs";
 const db = await setupDb();
 const U = (n) => `0000000${n}-0000-0000-0000-000000000000`;
-for (const n of [1, 2, 3, 4]) await db.exec(`insert into auth.users values ('${U(n)}','u${n}@x','{"full_name":"U${n}"}')`);
+for (const n of [1, 2, 3, 4, 5]) await db.exec(`insert into auth.users values ('${U(n)}','u${n}@x','{"full_name":"U${n}"}')`);
 const as = async (n) => { await db.exec(`reset role; delete from auth.current; insert into auth.current values ('${U(n)}'); set role authenticated`); };
 const ok = (l, c) => console.log((c ? "✓ " : "✗ HATA: ") + l);
 const fails = async (sql, args) => { try { await db.query(sql, args); return false; } catch { return true; } };
@@ -9,24 +9,28 @@ const q = async (sql, args) => (await db.query(sql, args)).rows;
 const at = (h) => `now() + interval '${h} hours'`;
 const mk = (g, hours, size = 7, deadline = "null") => q(`select create_member_poll($1, ${at(hours)}, 'Saha', ${size}::smallint, ${deadline}, 'Not') id`, [g]);
 
-// Grup G: u1 kurucu, u2 ve u3 üye. Takım T: u1 kaptan, u2 oyuncu. u4 yabancı.
+// Grup G: u1 kurucu, u2 ve u3 organizatör (0034: çağrıyı sadece maç açabilenler açar), u5 düz üye. Takım T: u1 kaptan, u2 oyuncu. u4 yabancı.
 await as(1);
 const G = (await q(`insert into groups (name, created_by) values ('Grup G','${U(1)}') returning id`))[0].id;
 const codeG = (await q(`select group_invite_code($1) c`, [G]))[0].c;
 const T = (await q(`insert into groups (name, created_by, kind, city) values ('Takım T','${U(1)}','team','İstanbul') returning id`))[0].id;
 const codeT = (await q(`select group_invite_code($1) c`, [T]))[0].c;
-for (const n of [2, 3]) { await as(n); await db.query(`select join_group($1)`, [codeG]); }
+for (const n of [2, 3, 5]) { await as(n); await db.query(`select join_group($1)`, [codeG]); }
+await as(1);
+for (const n of [2, 3]) await db.query(`select set_member_role((select id from group_players where group_id=$1 and user_id=$2), 'organizer')`, [G, U(n)]);
 await as(2); await db.query(`select join_group($1)`, [codeT]);
 
 // --- üye çağrısı
+await as(5);
+ok("düz üye doğrudan çağrı tablosuna yazamaz (RLS)", await fails(`insert into match_polls (group_id, created_by, starts_at) values ($1,$2, ${at(48)})`, [G, U(5)]));
+ok("düz üye otomatik çağrı da açamaz", await fails(`select create_member_poll($1, ${at(48)}, null, 7::smallint, null, null)`, [G]));
 await as(2);
-ok("üye doğrudan çağrı tablosuna yazamaz (RLS)", await fails(`insert into match_polls (group_id, created_by, starts_at) values ($1,$2, ${at(48)})`, [G, U(2)]));
 const p1 = (await mk(G, 48))[0].id;
 const row = (await q(`select auto_match, team_size, capacity, status, deadline, starts_at from match_polls where id=$1`, [p1]))[0];
-ok("üye çağrı açtı: otomatik, 7v7 → kontenjan 14", row.auto_match && row.team_size === 7 && row.capacity === 14 && row.status === "open");
+ok("organizatör çağrı açtı: otomatik, 7v7 → kontenjan 14", row.auto_match && row.team_size === 7 && row.capacity === 14 && row.status === "open");
 ok("son yanıt süresi varsayılan: maçtan 3 saat önce", Math.abs(new Date(row.starts_at) - new Date(row.deadline) - 3 * 3600e3) < 1000);
 ok("çağrıyı açan otomatik 'geliyorum'", (await q(`select count(*)::int c from poll_responses where poll_id=$1 and answer='yes'`, [p1]))[0].c === 1);
-ok("üye ikinci açık çağrı açamaz", await fails(`select create_member_poll($1, ${at(72)}, null, 7::smallint, null, null)`, [G]));
+ok("organizatör ikinci açık otomatik çağrı açamaz", await fails(`select create_member_poll($1, ${at(72)}, null, 7::smallint, null, null)`, [G]));
 
 await as(3);
 ok("3 saatten yakın maç reddedilir", await fails(`select create_member_poll($1, ${at(2)}, null, 7::smallint, null, null)`, [G]));
@@ -50,7 +54,7 @@ ok("eski usul çağrı otomatik değil", (await q(`select count(*)::int c from m
 
 // --- iptal
 await as(3);
-ok("başkasının çağrısını üye iptal edemez", await fails(`select close_poll($1)`, [p1]));
+ok("başkasının çağrısını organizatör iptal edemez", await fails(`select close_poll($1)`, [p1]));
 await as(2);
 await db.query(`select close_poll($1)`, [p1]);
 ok("açan kişi çağrıyı iptal edebilir", (await q(`select status from match_polls where id=$1`, [p1]))[0].status === "closed");

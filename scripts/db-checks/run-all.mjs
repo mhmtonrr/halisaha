@@ -3,8 +3,9 @@
 import { execFileSync } from "child_process";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
-const dir = path.dirname(new URL(import.meta.url).pathname);
+const dir = path.dirname(fileURLToPath(import.meta.url));
 let failed = 0;
 for (const f of fs.readdirSync(dir).filter((f) => f.endsWith(".mjs") && !["run-all.mjs", "migrations.mjs"].includes(f)).sort()) {
   console.log(`\n=== ${f}`);

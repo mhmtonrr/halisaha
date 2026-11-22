@@ -48,7 +48,7 @@ export default async function PollPage({
   // Süresi dolmuşsa veya kontenjan dolduysa üye çağrısı bu ziyarette maça dönüşür / iptal olur
   await settlePoll(pollId);
 
-  const [{ data: poll }, players, { data: isAdmin }] = await Promise.all([
+  const [{ data: poll }, players, { data: canManage }] = await Promise.all([
     supabase
       .from("match_polls")
       .select("id, created_by, auto_match, team_size, starts_at, venue, capacity, deadline, note, status, match_id, poll_responses(player_id, answer, approved, responded_at)")
@@ -56,7 +56,7 @@ export default async function PollPage({
       .eq("group_id", groupId)
       .maybeSingle(),
     getGroupPlayers(supabase, groupId),
-    supabase.rpc("is_group_admin", { p_group_id: groupId }),
+    supabase.rpc("can_manage_poll", { p_poll_id: pollId }),
   ]);
   if (!poll) notFound();
 
@@ -117,7 +117,7 @@ export default async function PollPage({
         }
       />
       <ErrorNote message={error} />
-      {isAdmin && open && <SendInviteLink tur="poll" refId={pollId} className="mb-4" />}
+      {canManage && open && <SendInviteLink tur="poll" refId={pollId} className="mb-4" />}
 
       <Card className="mb-4">
         <div className="text-2xl font-black">{formatDate(poll.starts_at)}</div>
@@ -205,7 +205,7 @@ export default async function PollPage({
 
       {me && mine && open && <PushPrompt reason="Maç kurulunca veya çağrı değişince haber verelim mi?" />}
 
-      {auto && poll.status === "open" && (isCreator || isAdmin) && (
+      {auto && poll.status === "open" && canManage && (
         <form action={closePoll} className="mt-4 text-center">
           <Hidden groupId={groupId} pollId={pollId} />
           <SubmitButton variant="secondary" className="w-full" pendingLabel="İptal ediliyor…">
@@ -214,7 +214,7 @@ export default async function PollPage({
         </form>
       )}
 
-      {isAdmin && !auto && poll.status !== "converted" && (
+      {canManage && !auto && poll.status !== "converted" && (
         <Card className="mt-4 space-y-2 border-accent/30">
           <div className="text-sm font-semibold">Yetkili işlemleri</div>
           <p className="text-xs text-muted">
@@ -256,7 +256,7 @@ export default async function PollPage({
             {yes.map((r, i) => (
               <Person key={r.player_id} id={r.player_id}>
                 {i >= poll.capacity && <Badge>Yedek</Badge>}
-                {isAdmin && !auto && poll.status !== "converted" ? (
+                {canManage && !auto && poll.status !== "converted" ? (
                   <form action={togglePollApproval}>
                     <Hidden groupId={groupId} pollId={pollId} />
                     <input type="hidden" name="playerId" value={r.player_id} />

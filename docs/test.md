@@ -12,7 +12,7 @@ Uçtan uca (canlı Supabase'e karşı; test kullanıcıları/grupları oluşturu
 node scripts/e2e/nav.mjs
 ```
 **Bilinen bozuk/kırılgan senaryolar (benim değişikliklerimle ilgisiz)**: `teams-polls` ("grup üyesi maç/çağrı açamıyor" ve "Doğrudan maç" eski varsayımlar, üye çağrısından/0013'ten önce yazıldı), `auth-onboarding` (ilçe artık `input[name=district]` değil seçim listesi),
-`member-poll` (akşam saatlerinde formun varsayılan 21:00 maçı "en az 3 saat sonra" kuralına takılır → günün saatine bağlı). Menü/davet testlerinde çekmece içeriği `waitFor` ile beklenir.
+`member-poll` (0034'ten beri üye çağrı açamıyor; birleşik çağrıyla yeniden yazılacak). Menü/davet testlerinde çekmece içeriği `waitFor` ile beklenir.
 Senaryolar: `nav` (geri oku), `profile-links`, `invite`, `withdrawal`, `leave`, `menu`, `profile`, `skills`, `positions-external`, `auth-onboarding`, `teams-polls`, `regions-community`, `chat`, `challenges`, `guest-match`, `realtime`, `member-poll`, `listings`, `notifications`.
 Ekran görüntülerine bak (390px genişlik, telefon) — görsel sorunlar çoğu zaman sadece orada yakalanıyor.
 Port doluysa: `fuser -k 3000/tcp`. Arayüzden kayıt (signUp) test etme: onay maili gönderir, limit saatte 2.
