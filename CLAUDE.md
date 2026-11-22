@@ -93,7 +93,7 @@ src/lib/actions.ts       Tüm Server Action'lar (yetkiyi RLS yapar; burada sadec
 src/lib/finalize.ts      Oylama kapanışı, hesap bazlı genel rating hesabı ve yazımı (service role)
 src/components/LiveRefresh.tsx  Canlı güncelleme: Realtime dinler, router.refresh() yapar (filtre yardımcısı src/lib/live.ts)
 src/components/SubmitButton.tsx  Form gönderilirken anında "…" durumu (useFormStatus)
-src/components/NavHistory.tsx  Uygulama içi gezinti geçmişi; Header geri oku geldiği sayfaya döner
+src/components/NavHistory.tsx  Uygulama içi gezinti geçmişi (yol+sorgu); BackLink geldiği sayfaya döner, form sayfaları geri hedefi olmaz. Yeni geri oku her zaman BackLink/Header ile yap (sabit Link koyma)
 src/components/AppMenu.tsx  ☰ çekmecesi (AppMenuShell layout'ta) ve başlık düğmeleri (MenuControls: bildirim çanı + ☰); veri src/lib/menu-data.ts
 src/lib/authErrors.ts    Supabase Auth hatalarının Türkçesi
 src/lib/supabase/        server.ts (requireUser + karşılama yönlendirmesi), client.ts, admin.ts

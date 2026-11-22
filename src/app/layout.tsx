@@ -5,6 +5,7 @@ import "./globals.css";
 const jakarta = Plus_Jakarta_Sans({ subsets: ["latin", "latin-ext"], variable: "--font-jakarta", display: "swap" });
 const grotesk = Space_Grotesk({ subsets: ["latin", "latin-ext"], weight: ["500", "600", "700"], variable: "--font-grotesk", display: "swap" });
 import { BottomNav } from "@/components/BottomNav";
+import { Suspense } from "react";
 import { NavTracker } from "@/components/NavHistory";
 import { AppMenuShell } from "@/components/AppMenu";
 
@@ -31,7 +32,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="antialiased">
         <AppMenuShell>
           <div className="mx-auto w-full max-w-lg px-4 pb-28">{children}</div>
-          <NavTracker />
+          <Suspense fallback={null}>
+            <NavTracker />
+          </Suspense>
           <BottomNav />
         </AppMenuShell>
       </body>

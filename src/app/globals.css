@@ -121,3 +121,13 @@ input[type="range"] {
 
 .no-scrollbar { scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Sayfa geçişi: kısa solma (transform yok; sabit konumlu yazma kutuları bozulmasın) */
+@keyframes hs-page-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.hs-page-in { animation: hs-page-in 160ms ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .hs-page-in { animation: none; }
+}

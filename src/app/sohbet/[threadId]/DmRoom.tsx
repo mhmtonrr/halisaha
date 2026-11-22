@@ -6,6 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createClient } from "@/lib/supabase/client";
 import { cancelGroupInvite, notifyDm, respondDmRequest, respondGroupInvite } from "@/lib/actions";
 import { Avatar } from "@/components/Avatar";
+import { BackLink } from "@/components/NavHistory";
 import { cx } from "@/components/ui";
 
 export interface DmMessage {
@@ -259,9 +260,9 @@ export function DmRoom({
   return (
     <main className="pb-24">
       <header className="sticky top-0 z-10 -mx-4 mb-2 flex items-center gap-3 border-b border-line bg-pitch-950/95 px-4 py-3 backdrop-blur">
-        <Link href="/sohbet" aria-label="Geri" className="-ml-2 rounded-lg p-2 text-muted hover:bg-pitch-800">
+        <BackLink fallback="/sohbet" className="-ml-2 rounded-lg p-2 text-muted hover:bg-pitch-800">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6" /></svg>
-        </Link>
+        </BackLink>
         <Link href={`/oyuncu/${other.id}`} className="flex min-w-0 flex-1 items-center gap-3">
           <Avatar name={other.name} photoUrl={other.photoUrl} className="h-9 w-9 bg-pitch-700 text-xs" />
           <div className="min-w-0">

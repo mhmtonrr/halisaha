@@ -5,6 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createClient } from "@/lib/supabase/client";
 import { notifyChatMessage } from "@/lib/actions";
 import { Avatar } from "@/components/Avatar";
+import { BackLink } from "@/components/NavHistory";
 import { TeamBadge } from "@/components/TeamBadge";
 import { cx } from "@/components/ui";
 
@@ -271,9 +272,9 @@ export function ChatRoom({
   return (
     <main className="pb-24">
       <header className="sticky top-0 z-10 -mx-4 mb-2 flex items-center gap-3 border-b border-line bg-pitch-950/95 px-4 py-3 backdrop-blur">
-        <Link href={`/g/${groupId}`} aria-label="Geri" className="-ml-2 rounded-lg p-2 text-muted hover:bg-pitch-800">
+        <BackLink fallback={`/g/${groupId}`} className="-ml-2 rounded-lg p-2 text-muted hover:bg-pitch-800">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6" /></svg>
-        </Link>
+        </BackLink>
         <TeamBadge name={groupName} color={groupColor} size="sm" />
         <div className="min-w-0 flex-1">
           <div className="truncate font-bold">{groupName}</div>

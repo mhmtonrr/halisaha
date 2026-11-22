@@ -65,3 +65,8 @@ Tuzak: PL/pgSQL'de satır değişkeni için `if v_f is not null` tüm alanlar do
 **Sosyal sayfası (`/sosyal`, ☰ menüde "Sosyal", bekleyen istek sayısı rozetli)**: sekmeler Arkadaşlar (gelen istekler, arkadaşlarım + "Mesaj", gönderilenler) / Takımlar / Gruplar (üyeliklerim, sohbet kısayolu).
 Arkadaşlık işlemleri tek form eylemi `friendAction` (op = add|accept|decline|remove, `back` ile aynı sayfaya döner); `/oyuncu/[id]` sayfasında duruma göre Arkadaş ekle / İstek gönderildi (geri çek) / Kabul-Reddet / Arkadaşsınız (çıkar).
 Bildirimler: istek gitti → karşı tarafa; kabul (veya karşılıklı istek) → isteği atana. Test: `scripts/e2e/friends.mjs`.
+
+**Geri gezinti (`NavHistory.tsx`)**: sekme başına yığın (sessionStorage), kayıtlar yol+sorgu (`?sekme=` korunur; `error/davet/voted/ok/hata` tutulmaz). Geri ok (`BackLink`, `Header` ve sohbet ekranları kullanır) yığındaki önceki
+sayfaya gider, geçmiş yoksa `fallback`'e; **form/oluşturma sayfaları (grup-kur, takim-kur, katil, join, matches/new, cagri/yeni, teklif…) geri hedefi sayılmaz** (form gönderilip yönlendirilince geri ok formu değil önceki sayfayı açar —
+yeni oluşturma sayfası eklersen `TRANSIENT_PATHS`'e ekle). Geri okla dönüşte yığın hedefe kadar kesilir (döngü olmaz). `NavTracker` `useSearchParams` kullandığı için layout'ta `Suspense` içinde. Test: `scripts/e2e/nav.mjs`.
+Geçiş efekti: `app/template.tsx` (160 ms solma, **transform yok** — sabit konumlu yazma kutusu bozulmasın), konuşma ekranı için `sohbet/[threadId]/loading.tsx` iskeleti.
