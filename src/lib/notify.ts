@@ -58,9 +58,15 @@ export async function notify(
   opts: NotifyOptions = {},
 ): Promise<{ stored: number; sent: number }> {
   try {
-    const ids = [...new Set(userIds)].filter((id) => id && id !== opts.excludeUserId);
-    if (!ids.length) return { stored: 0, sent: 0 };
+    const wanted = [...new Set(userIds)].filter((id) => id && id !== opts.excludeUserId);
+    if (!wanted.length) return { stored: 0, sent: 0 };
     const admin = createAdminClient();
+
+    // Hesabı dondurulanlara bildirim gitmez
+    const { data: frozenRows } = await admin.from("profiles").select("id").in("id", wanted).not("frozen_at", "is", null);
+    const frozen = new Set((frozenRows ?? []).map((r) => r.id as string));
+    const ids = wanted.filter((id) => !frozen.has(id));
+    if (!ids.length) return { stored: 0, sent: 0 };
 
     const { data: prefRows } = await admin.from("notification_prefs").select("user_id, votes, matches, offers, chat").in("user_id", ids);
     const prefsByUser = new Map<string, Partial<Prefs>>((prefRows ?? []).map((p) => [p.user_id as string, p as Partial<Prefs>]));

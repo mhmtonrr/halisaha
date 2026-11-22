@@ -161,7 +161,11 @@ async function PlayersTab({
 }) {
   const { filter, sort } = parseFilter(sp);
   const page = Math.max(1, Math.min(50, Number(sp.sayfa) || 1));
-  const candidates = await loadCandidates(createAdminClient(), {
+  const admin = createAdminClient();
+  // Engellediklerim aramada görünmez
+  const { data: blocks } = await admin.from("user_blocks").select("blocked_user_id").eq("blocker_id", userId).not("blocked_user_id", "is", null);
+  const blocked = new Set((blocks ?? []).map((b) => b.blocked_user_id as string));
+  const allCandidates = await loadCandidates(admin, {
     city: city || undefined,
     district,
     q: filter.q,
@@ -169,6 +173,7 @@ async function PlayersTab({
     includeSecondary: filter.includeSecondary,
     foot: filter.foot,
   });
+  const candidates = allCandidates.filter((c) => !blocked.has(c.userId));
   const found = searchCandidates(candidates, filter, sort);
   const items = found.slice(0, page * PAGE_SIZE);
   const more = new URLSearchParams(Object.entries(sp).filter((e): e is [string, string] => e[1] !== undefined && e[0] !== "sayfa" && e[0] !== "error"));

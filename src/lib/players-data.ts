@@ -94,7 +94,7 @@ export async function loadCandidates(
   admin: SupabaseClient,
   f: { city?: string; district?: string; q?: string; position?: Position; includeSecondary?: boolean; foot?: Foot },
 ): Promise<PlayerCandidate[]> {
-  let query = admin.from("profiles").select(PROFILE_COLS).eq("discoverable", true).not("onboarded_at", "is", null);
+  let query = admin.from("profiles").select(PROFILE_COLS).eq("discoverable", true).is("frozen_at", null).not("onboarded_at", "is", null);
   if (f.city) query = query.eq("city", f.city);
   if (f.district) query = query.ilike("district", f.district.trim());
   if (f.q) query = query.ilike("display_name", `%${f.q.trim().replace(/[%_,()]/g, "")}%`);
@@ -113,7 +113,7 @@ export async function loadCandidates(
 export async function loadCandidatesByIds(admin: SupabaseClient, userIds: string[]): Promise<PlayerCandidate[]> {
   if (!userIds.length) return [];
   const profiles = await fetchIn<ProfileRow>(userIds, (part, from, to) =>
-    admin.from("profiles").select(PROFILE_COLS).in("id", part).eq("discoverable", true).range(from, to),
+    admin.from("profiles").select(PROFILE_COLS).in("id", part).eq("discoverable", true).is("frozen_at", null).range(from, to),
   );
   return buildCandidates(admin, profiles);
 }

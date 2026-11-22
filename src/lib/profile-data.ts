@@ -29,6 +29,13 @@ export interface PersonProfile {
   statsVisibility: StatsVisibility;
   /** Oyuncu aramasında ve öne çıkanlarda görünür mü */
   discoverable: boolean;
+  /** Boy (cm) ve kilo (kg); girilmediyse null */
+  heightCm: number | null;
+  weightKg: number | null;
+  /** Müsait günler: 0=Pzt ... 6=Paz */
+  availableDays: number[];
+  /** Hesap geçici donduruldu mu */
+  frozen: boolean;
 }
 
 export interface PersonGroup {
@@ -59,7 +66,7 @@ export async function loadPerson(admin: SupabaseClient, userId: string): Promise
   const [{ data: p }, { data: rows, error }] = await Promise.all([
     admin
       .from("profiles")
-      .select("id, display_name, card_name, photo_url, city, district, preferred_position, secondary_positions, preferred_foot, shirt_number, bio, stats_visibility, discoverable")
+      .select("id, display_name, card_name, photo_url, city, district, preferred_position, secondary_positions, preferred_foot, shirt_number, bio, stats_visibility, discoverable, height_cm, weight_kg, available_days, frozen_at")
       .eq("id", userId)
       .maybeSingle(),
     admin.from("group_players").select("id, group_id, role, is_loan, left_at, groups(name, kind, color)").eq("user_id", userId),
@@ -92,6 +99,10 @@ export async function loadPerson(admin: SupabaseClient, userId: string): Promise
       bio: p.bio,
       statsVisibility: p.stats_visibility === "public" ? "public" : "teammates",
       discoverable: p.discoverable !== false,
+      heightCm: p.height_cm ?? null,
+      weightKg: p.weight_kg ?? null,
+      availableDays: (p.available_days ?? []) as number[],
+      frozen: !!p.frozen_at,
     },
     rowIds,
     groups: (rows ?? []).map((r) => {
