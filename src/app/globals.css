@@ -1,15 +1,16 @@
 @import "tailwindcss";
 
+/* Obsidian Pitch teması (Stitch tasarımı). Mevcut jeton adları korunur; tüm sayfalar otomatik yeni renge geçer. */
 @theme {
-  --color-pitch-950: #04130b;
-  --color-pitch-900: #072112;
-  --color-pitch-800: #0b2e1a;
-  --color-pitch-700: #124127;
-  --color-pitch-600: #1a5a36;
-  --color-line: #1f4d33;
-  --color-muted: #8fb39d;
-  --color-accent: #3ddc84;
-  --color-accent-strong: #22c06a;
+  --color-pitch-950: #051424;
+  --color-pitch-900: #122131;
+  --color-pitch-800: #1c2b3c;
+  --color-pitch-700: #273647;
+  --color-pitch-600: #2c3a4c;
+  --color-line: rgb(255 255 255 / 0.1);
+  --color-muted: #9fb0b2;
+  --color-accent: #4be277;
+  --color-accent-strong: #22c55e;
   --color-team-a: #f5c542;
   --color-team-b: #5aa9ff;
   --color-gold-1: #f9e29c;
@@ -18,7 +19,29 @@
   --color-silver-2: #9aa4ae;
   --color-bronze-1: #f0c29a;
   --color-bronze-2: #a3643a;
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /* Tasarım jetonları (profil sekmeleri bunları kullanır) */
+  --color-surface: #051424;
+  --color-surface-low: #0d1c2d;
+  --color-surface-container: #122131;
+  --color-surface-high: #1c2b3c;
+  --color-surface-highest: #273647;
+  --color-surface-bright: #2c3a4c;
+  --color-on-surface: #d4e4fa;
+  --color-on-surface-variant: #bccbb9;
+  --color-outline: #869585;
+  --color-outline-variant: #3d4a3d;
+  --color-primary: #4be277;
+  --color-primary-container: #22c55e;
+  --color-on-primary: #003915;
+  --color-secondary: #4edea3;
+  --color-tertiary: #7cd0ff;
+  --color-tertiary-container: #2eb7f2;
+  --color-error: #ffb4ab;
+  --color-error-container: #93000a;
+
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: var(--font-grotesk), var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
 }
 
 :root {
@@ -27,12 +50,40 @@
 
 body {
   background: var(--color-pitch-950);
-  background-image: radial-gradient(ellipse at top, #0d3a20 0%, transparent 60%);
+  background-image: radial-gradient(ellipse at top, rgb(34 197 94 / 0.1) 0%, transparent 55%);
   background-attachment: fixed;
-  color: #e8f3ec;
+  color: var(--color-on-surface);
+  font-family: var(--font-sans);
   min-height: 100dvh;
+}
+
+/* Başlıklar ve skor/sayı vurgusu Space Grotesk; sayılar sabit genişlikli */
+h1,
+h2,
+h3,
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+.tabular-nums,
+.font-display {
+  font-feature-settings: "tnum" 1;
 }
 
 input[type="range"] {
   accent-color: var(--color-accent);
+}
+
+/* Kart çevirme (Genel sekmesi) */
+.perspective-1000 {
+  perspective: 1000px;
+}
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+.backface-hidden {
+  backface-visibility: hidden;
+}
+.rotate-y-180 {
+  transform: rotateY(180deg);
 }

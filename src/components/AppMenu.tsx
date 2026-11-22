@@ -27,8 +27,8 @@ export function MenuControls({ className }: { className?: string }) {
   const unread = useUnreadCount();
   if (!available) return null;
   return (
-    <div className={cx("flex shrink-0 items-center", className)}>
-      <Link href="/bildirimler" aria-label="Bildirimler" className="relative flex h-11 w-11 items-center justify-center rounded-xl text-muted hover:bg-pitch-800 hover:text-white">
+    <div className={cx("flex shrink-0 items-center gap-2", className)}>
+      <Link href="/bildirimler" aria-label="Bildirimler" className="relative flex h-10 w-10 items-center justify-center rounded-full bg-pitch-900 text-on-surface shadow-sm transition active:scale-95 hover:text-accent">
         <Icon>
           <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.7 21a2 2 0 0 1-3.4 0" />
@@ -44,7 +44,7 @@ export function MenuControls({ className }: { className?: string }) {
         onClick={open}
         aria-label="Menüyü aç"
         aria-haspopup="dialog"
-        className="flex h-11 w-11 items-center justify-center rounded-xl text-muted hover:bg-pitch-800 hover:text-white"
+        className="flex h-10 w-10 items-center justify-center rounded-full bg-pitch-900 text-on-surface shadow-sm transition active:scale-95 hover:text-accent"
       >
         <Icon>
           <path d="M4 7h16M4 12h16M4 17h16" />
@@ -167,7 +167,7 @@ function Drawer({ data, onClose }: { data: MenuData | null; onClose: () => void 
       <aside className="absolute inset-y-0 right-0 flex w-[88%] max-w-sm flex-col border-l border-line bg-pitch-950 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] shadow-2xl">
         <div className="flex items-center justify-between px-4 py-3">
           <span className="text-sm font-semibold uppercase tracking-wider text-muted">Menü</span>
-          <button type="button" onClick={onClose} aria-label="Kapat" className="flex h-11 w-11 items-center justify-center rounded-xl text-muted hover:bg-pitch-800 hover:text-white">
+          <button type="button" onClick={onClose} aria-label="Kapat" className="flex h-10 w-10 items-center justify-center rounded-full bg-pitch-900 text-on-surface shadow-sm transition active:scale-95 hover:text-accent">
             <Icon>
               <path d="M6 6l12 12M18 6 6 18" />
             </Icon>

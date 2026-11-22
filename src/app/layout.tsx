@@ -1,5 +1,9 @@
 import type { Metadata, Viewport } from "next";
+import { Plus_Jakarta_Sans, Space_Grotesk } from "next/font/google";
 import "./globals.css";
+
+const jakarta = Plus_Jakarta_Sans({ subsets: ["latin", "latin-ext"], variable: "--font-jakarta", display: "swap" });
+const grotesk = Space_Grotesk({ subsets: ["latin", "latin-ext"], weight: ["500", "600", "700"], variable: "--font-grotesk", display: "swap" });
 import { BottomNav } from "@/components/BottomNav";
 import { NavTracker } from "@/components/NavHistory";
 import { AppMenuShell } from "@/components/AppMenu";
@@ -11,14 +15,14 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#04130b",
+  themeColor: "#051424",
   width: "device-width",
   initialScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="tr">
+    <html lang="tr" className={`${jakarta.variable} ${grotesk.variable}`}>
       <body className="antialiased">
         <AppMenuShell>
           <div className="mx-auto w-full max-w-lg px-4 pb-28">{children}</div>

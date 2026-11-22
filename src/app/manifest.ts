@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Maç sonrası puanlama, FIFA tarzı rating ve dengeli takım kurma",
     start_url: "/",
     display: "standalone",
-    background_color: "#04130b",
-    theme_color: "#04130b",
+    background_color: "#051424",
+    theme_color: "#051424",
     icons: [{ src: "/icon.svg", sizes: "any", type: "image/svg+xml" }],
   };
 }

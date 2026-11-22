@@ -49,7 +49,7 @@ export function BackLink({ fallback, children }: { fallback: string; children: R
     <Link
       href={fallback}
       aria-label="Geri"
-      className="-ml-2 rounded-lg p-2 text-muted hover:bg-pitch-800"
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-pitch-900 text-on-surface shadow-sm transition active:scale-95 hover:text-accent"
       onClick={(e) => {
         const stack = read();
         // Üstteki kayıt şu anki sayfa olmalı; bir öncekine dön
