@@ -47,6 +47,7 @@ export default async function ProfilePage({
         matches={data.matches}
         noShows={data.noShows}
         viewerGroups={data.viewerGroups}
+        upcoming={data.upcoming}
         settings={
           form && (
             <SettingsPanel

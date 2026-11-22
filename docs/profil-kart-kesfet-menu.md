@@ -78,5 +78,7 @@ Formlarda `RegionSelect` (il seçilince ilçeler) kullan.
 
 Kullanıcı kararları: rozetler eldeki verilerden hesaplanan kurallarla (hat-trick, yenilmezlik serisi, MVP, maç sayısı; "Pas Ustası" yok); telefon doğrulama yok, sadece e-posta doğrulaması; dil satırı "Türkçe" sabit; tema seçici durur, ikinci tema ("Klasik Gece") "yakında".
 - **Parça 1 (yapıldı)**: Genel (hızlı sayı kartları, son maç formu, Profili paylaş, oyuncu bilgisi ızgarası), İstatistik (radar grafik `profile/RadarChart.tsx`, güvenilirlik kartları), Maçlar (`profile/MatchesList.tsx` filtre çipleri + sonuç renkli kartlar), Ayarlar (üst kart, çıkış düğmesi).
-- **Parça 2 (sırada, migration)**: rozetler, haftalık müsaitlik günleri, "istatistiklerimi paylaş", engellenenler, hesabı geçici dondurma, boy/kilo, doğum tarihi, kartın arka yüzü (çevirme), planlanmış maçlar/yaklaşan maç.
+- **Parça 2a (yapıldı, migration yok)**: rozetler (`src/lib/badges.ts`, saf + testli; maç kayıtlarından hesaplanır, saklanmaz; İstatistik sekmesinde), yaklaşan/planlanmış maç (`loadUpcomingMatches`, sadece kendi profilinde), kart çevirme (`profile/FlipCard.tsx`; arka yüz özet istatistik, boy/kilo 2b'de eklenecek).
+- **Parça 2b (sırada, migration)**: boy/kilo, doğum tarihi, haftalık müsaitlik günleri, "istatistiklerimi paylaş" anahtarı, Ayarlar'da düzenleme.
+- **Parça 2c (migration)**: engellenen oyuncu/takımlar, hesabı geçici dondurma (kural kararı gerekir).
 - **Parça 3**: Yardım/SSS, Geri bildirim, KVKK sayfaları, tema/dil satırları, Ayarlar'ın tasarımdaki gruplu liste düzeni.

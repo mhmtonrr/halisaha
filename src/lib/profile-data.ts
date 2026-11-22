@@ -214,15 +214,65 @@ export async function loadPersonMatches(admin: SupabaseClient, person: Person): 
   return out.sort((a, b) => b.playedAt.localeCompare(a.playedAt));
 }
 
+export interface UpcomingMatch {
+  matchId: string;
+  groupId: string;
+  groupName: string;
+  groupKind: "community" | "team";
+  playedAt: string;
+  venue: string | null;
+  kind: "internal" | "external";
+  opponentName: string | null;
+}
+
+/** Kişinin kadrosunda olduğu, henüz oynanmamış (planned) en yakın maçlar. Sadece kendi profili için çağrılır. */
+export async function loadUpcomingMatches(admin: SupabaseClient, person: Person, limit = 5): Promise<UpcomingMatch[]> {
+  if (!person.rowIds.length) return [];
+  const groupMeta = new Map(person.groups.map((g) => [g.groupId, g]));
+  const rows = await fetchIn<{
+    match_id: string;
+    matches: { group_id: string; played_at: string; venue: string | null; kind: "internal" | "external" | null; opponent_name: string | null }
+      | { group_id: string; played_at: string; venue: string | null; kind: "internal" | "external" | null; opponent_name: string | null }[];
+  }>(person.rowIds, (part, from, to) =>
+    admin
+      .from("match_players")
+      .select("match_id, matches!inner(group_id, played_at, venue, kind, opponent_name)")
+      .in("player_id", part)
+      .eq("matches.status", "planned")
+      .gte("matches.played_at", new Date().toISOString())
+      .range(from, to),
+  );
+  const seen = new Set<string>();
+  const out: UpcomingMatch[] = [];
+  for (const r of rows) {
+    const m = one(r.matches);
+    if (!m || seen.has(r.match_id)) continue;
+    seen.add(r.match_id);
+    const g = groupMeta.get(m.group_id);
+    out.push({
+      matchId: r.match_id,
+      groupId: m.group_id,
+      groupName: g?.name ?? "Grup",
+      groupKind: g?.kind ?? "community",
+      playedAt: m.played_at,
+      venue: m.venue,
+      kind: m.kind ?? "internal",
+      opponentName: m.opponent_name,
+    });
+  }
+  return out.sort((a, b) => a.playedAt.localeCompare(b.playedAt)).slice(0, limit);
+}
+
 /** Bir profil sayfası için her şey: görünürlük kontrolü dahil. İstatistik göremiyorsa stats/matches/noShows null. */
 export async function loadProfileForViewer(admin: SupabaseClient, viewerId: string, targetId: string) {
   const person = await loadPerson(admin, targetId);
   if (!person) return null;
   const canStats = await canViewStats(admin, viewerId, person);
-  const [matches, noShows, viewerGroups] = await Promise.all([
+  const [matches, noShows, viewerGroups, upcoming] = await Promise.all([
     canStats ? loadPersonMatches(admin, person) : Promise.resolve(null),
     canStats ? countNoShows(admin, targetId) : Promise.resolve(null),
     viewerGroupIds(admin, viewerId),
+    viewerId === targetId ? loadUpcomingMatches(admin, person) : Promise.resolve([] as UpcomingMatch[]),
   ]);
-  return { person, matches, noShows, viewerGroups, stats: matches ? computeProfileStats(matches) : null };
+  return { person, matches, noShows, viewerGroups, upcoming, stats: matches ? computeProfileStats(matches) : null };
 }
