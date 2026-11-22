@@ -56,3 +56,9 @@ Test: `scripts/e2e/dm.mjs` (istek → kabul → canlı yazışma, bildirim, ekra
 **Davet arayüzü**: `/oyuncu/[id]` sayfasında, görüntüleyen kaptan/yetkili olduğu takım/gruplar için "Takıma / gruba davet et" kutusu çıkar (kişi zaten üyeyse veya bekleyen davet varsa o grup listelenmez; `inviteToGroup` eylemi RPC'yi çağırır, yetkiyi RPC denetler).
 Davet kartı davet edilenin konuşmasında "Katıl / Reddet" düğmeli görünür (`respondGroupInvite`; kabul = üyelik + gruba yönlendirme), gönderende "Daveti geri çek". Davet edilene `invite` bildirimi gider (kart ve bildirim `/sohbet/<konuşma>` açar).
 Davet kabul edilince/reddedilince daveti edene bildirim **gitmez** (sadece kartın durumu değişir; istenirse eklenir). Üye olmayan biri takım sayfasından "Kaptana mesaj yaz" ile kaptana birebir yazabilir (özel gruplarda yok; gruplar zaten kapalı). Test: `scripts/e2e/dm-invite.mjs`.
+
+**Arkadaşlık (migration 0030, DB katmanı yapıldı; arayüz sıradaki parça)**: `friendships` (user_a<user_b, `pending|accepted`, karşılıklı onaylı). Yazma sadece RPC:
+`send_friend_request` (karşı taraf zaten istek atmışsa kendiliğinden kabul; engelliye atılamaz; 30/gün), `respond_friend_request` (reddedilen istek silinir),
+`remove_friendship` (arkadaşlıktan çık / kendi bekleyen isteğini geri çek), `are_friends`. **Arkadaşlar arasında mesaj isteği yok**: `start_dm` arkadaşa
+doğrudan `accepted` konuşma açar; bekleyen konuşma varsa arkadaşlık kabulü onu açar. Engel arkadaşlığı siler (tetikleyici). Bildirim türü `friend` eklendi (kod henüz göndermiyor).
+Tuzak: PL/pgSQL'de satır değişkeni için `if v_f is not null` tüm alanlar doluysa doğrudur (boş sütunlu satırı "yok" sayar) → `select … into` sonrası `found` kullan. Kontrol: `scripts/db-checks/friendships.mjs`.
