@@ -65,3 +65,25 @@ describe("elle kırpma", () => {
     expect(box).toEqual({ x: 0, y: 824, width: 1000, height: 1176 });
   });
 });
+
+import { cleanEdges, keepMainBlobs } from "./card-photo";
+
+describe("kenar temizliği", () => {
+  const make = (w: number, h: number, on: (x: number, y: number) => number) => {
+    const a = new Uint8ClampedArray(w * h * 4);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = (y * w + x) * 4; a[i] = 200; a[i + 3] = on(x, y); }
+    return a;
+  };
+  it("küçük adacıkları siler, ana gövdeyi korur", () => {
+    const a = make(20, 20, (x, y) => ((x >= 2 && x < 12 && y >= 2 && y < 12) || (x === 17 && y === 17) ? 255 : 0));
+    keepMainBlobs(a, 20, 20);
+    expect(a[(17 * 20 + 17) * 4 + 3]).toBe(0);
+    expect(a[(5 * 20 + 5) * 4 + 3]).toBe(255);
+  });
+  it("dış halkayı aşındırır, iç kalır", () => {
+    const a = make(12, 12, (x, y) => (x >= 2 && x < 10 && y >= 2 && y < 10 ? 255 : 0));
+    cleanEdges(a, 12, 12, 1);
+    expect(a[(2 * 12 + 2) * 4 + 3]).toBe(0);
+    expect(a[(5 * 12 + 5) * 4 + 3]).toBe(255);
+  });
+});

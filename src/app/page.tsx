@@ -151,7 +151,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
           {profile?.photo_url ? (
             <div className="relative h-full w-full overflow-hidden rounded-2xl">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={profile.photo_url} alt={profile.display_name ?? ""} className="h-full w-full object-cover object-top" draggable={false} />
+              <img src={profile.photo_url} alt={profile.display_name ?? ""} className="h-full w-full object-contain object-bottom" draggable={false} />
               <span className="absolute bottom-0.5 left-0.5 rounded-md bg-black/55 px-1.5 py-0.5 text-xs leading-none text-white">{best}</span>
             </div>
           ) : (

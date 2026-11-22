@@ -95,3 +95,101 @@ export function clampCropOffset(ox: number, oy: number, imgW: number, imgH: numb
 export function cropBoxFromView(ox: number, oy: number, frameW: number, frameH: number, scale: number) {
   return { x: Math.round(-ox / scale) || 0, y: Math.round(-oy / scale) || 0, width: Math.round(frameW / scale), height: Math.round(frameH / scale) };
 }
+
+/**
+ * Kişi dışındaki kalıntıları siler (yerinde): alfası eşiğin üstünde bağlantılı bölgelerden en büyüğü
+ * (ve en büyüğün `keepShare` oranından büyük olanlar, ör. ayrı duran kol) kalır; geri kalan adacıklar şeffaflaşır.
+ */
+export function keepMainBlobs(rgba: { length: number; [i: number]: number }, width: number, height: number, threshold = 128, keepShare = 0.15) {
+  const n = width * height;
+  const label = new Int32Array(n); // 0 = etiketsiz
+  const sizes: number[] = [0];
+  const stack = new Int32Array(n);
+  for (let start = 0; start < n; start++) {
+    if (label[start] || rgba[start * 4 + 3] <= threshold) continue;
+    const id = sizes.length;
+    let size = 0, sp = 0;
+    stack[sp++] = start;
+    label[start] = id;
+    while (sp) {
+      const p = stack[--sp];
+      size++;
+      const x = p % width, y = (p - x) / width;
+      const nb = [x > 0 ? p - 1 : -1, x < width - 1 ? p + 1 : -1, y > 0 ? p - width : -1, y < height - 1 ? p + width : -1];
+      for (const q of nb) {
+        if (q >= 0 && !label[q] && rgba[q * 4 + 3] > threshold) { label[q] = id; stack[sp++] = q; }
+      }
+    }
+    sizes.push(size);
+  }
+  const biggest = Math.max(0, ...sizes);
+  for (let p = 0; p < n; p++) {
+    const id = label[p];
+    if (id ? sizes[id] < biggest * keepShare : rgba[p * 4 + 3] > 0) {
+      // kalan adacık ya da bir bölgeye bağlanmamış silik piksel (eşik altı) — silik pikseller kenar yumuşaklığı olarak
+      // sadece bir bölgenin komşusuysa kalsın
+      if (id) rgba[p * 4 + 3] = 0;
+    }
+  }
+  // Hiçbir bölgeye komşu olmayan silik (eşik altı) pikselleri de temizle
+  for (let p = 0; p < n; p++) {
+    if (label[p] || rgba[p * 4 + 3] === 0) continue;
+    const x = p % width, y = (p - x) / width;
+    let near = false;
+    for (let dy = -1; dy <= 1 && !near; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+        const l = label[ny * width + nx];
+        if (l && sizes[l] >= biggest * keepShare) { near = true; break; }
+      }
+    }
+    if (!near) rgba[p * 4 + 3] = 0;
+  }
+  return rgba;
+}
+
+/**
+ * Kenar temizliği (yerinde): alfayı `radius` piksel aşındırır (arka plan renginin sızdığı dış halka gider),
+ * sonra kalan yarı saydam kenar piksellerinin rengini içteki tam opak komşulardan alır (renk kirliliği kalmaz).
+ */
+export function cleanEdges(rgba: { length: number; [i: number]: number }, width: number, height: number, radius = 1) {
+  const n = width * height;
+  const alpha = new Uint8Array(n);
+  for (let p = 0; p < n; p++) alpha[p] = rgba[p * 4 + 3];
+  const eroded = new Uint8Array(alpha);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let m = alpha[y * width + x];
+      for (let dy = -radius; dy <= radius && m; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          const nx = x + dx, ny = y + dy;
+          // Görsel kenarı "boş" sayılmaz (kesilmiş kişi kenarda erimesin)
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+          const a = alpha[ny * width + nx];
+          if (a < m) m = a;
+        }
+      }
+      eroded[y * width + x] = m;
+    }
+  }
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const p = y * width + x;
+      if (eroded[p] > 0 && eroded[p] < 255) {
+        let r = 0, g = 0, b = 0, c = 0;
+        for (let dy = -3; dy <= 3; dy++) {
+          for (let dx = -3; dx <= 3; dx++) {
+            const nx = x + dx, ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+            const q = ny * width + nx;
+            if (eroded[q] === 255) { r += rgba[q * 4]; g += rgba[q * 4 + 1]; b += rgba[q * 4 + 2]; c++; }
+          }
+        }
+        if (c) { rgba[p * 4] = Math.round(r / c); rgba[p * 4 + 1] = Math.round(g / c); rgba[p * 4 + 2] = Math.round(b / c); }
+      }
+      rgba[p * 4 + 3] = eroded[p];
+    }
+  }
+  return rgba;
+}

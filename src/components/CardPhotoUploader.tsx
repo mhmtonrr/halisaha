@@ -7,7 +7,7 @@ import { PhotoCropper } from "./PhotoCropper";
 import { Button } from "./ui";
 import { createClient } from "@/lib/supabase/client";
 import { deleteCardPhoto, saveCardPhoto } from "@/lib/actions";
-import { MAX_PHOTO_BYTES, alphaBounds, cardPhotoPath, centerCrop, fitWithin, hardenAlpha, hasTransparency } from "@/lib/card-photo";
+import { MAX_PHOTO_BYTES, alphaBounds, cardPhotoPath, centerCrop, fitWithin, cleanEdges, hardenAlpha, hasTransparency, keepMainBlobs } from "@/lib/card-photo";
 
 type Preview = Omit<ComponentProps<typeof CardFace>, "photoUrl" | "compact" | "fontSize" | "className">;
 type Box = { x: number; y: number; width: number; height: number };
@@ -137,6 +137,8 @@ export function CardPhotoUploader({ userId, currentUrl, preview }: { userId: str
           const ctx = cutCanvas.getContext("2d")!;
           const data = ctx.getImageData(0, 0, cutCanvas.width, cutCanvas.height);
           hardenAlpha(data.data);
+          keepMainBlobs(data.data, data.width, data.height); // arka plan adacıkları
+          cleanEdges(data.data, data.width, data.height); // kenar halkası + renk kirliliği
           ctx.putImageData(data, 0, 0);
           out = trimmed(cutCanvas);
         } catch (e) {
