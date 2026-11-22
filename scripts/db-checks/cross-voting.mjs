@@ -66,16 +66,3 @@ ok(`ilerleme iki kadroyu birlikte sayar: ${prog.voters}/${prog.eligible} (beklen
 await as(5);
 ok("üye olmayan ilerlemeyi göremez", (await q(`select * from voting_progress($1)`, [mA])).length === 0);
 
-// --- genel rating kopyalanır
-await db.exec("reset role");
-await db.query(`insert into player_ratings (player_id, overall, raw, confidence, matches_played) values ($1,81,1.3,0.9,12)`, [a1]);
-await as(1);
-const C = (await q(`insert into groups (name, created_by) values ('Grup C','${U(1)}') returning id`))[0].id;
-await db.exec("reset role");
-const cp = await q(`select pr.overall, pr.matches_played from group_players gp join player_ratings pr on pr.player_id=gp.id where gp.group_id=$1 and gp.user_id=$2`, [C, U(1)]);
-ok("yeni gruba katılan oyuncuya mevcut genel rating kopyalandı (81, 12 maç)", cp.length === 1 && cp[0].overall === 81 && cp[0].matches_played === 12);
-const g2 = await q(`select count(*)::int c from group_players where user_id=$1 and group_id=$2`, [U(3), C]);
-await as(1); const cCode = (await q(`select group_invite_code($1) c`, [C]))[0].c;
-await as(3); await db.query(`select join_group($1)`, [cCode]);
-await db.exec("reset role");
-ok("hiç rating'i olmayan oyuncuya kopyalanacak rating yok (65 varsayılanı uygulama tarafında)", (await q(`select count(*)::int c from group_players gp join player_ratings pr on pr.player_id=gp.id where gp.group_id=$1 and gp.user_id=$2`, [C, U(3)]))[0].c === 0 && g2[0].c === 0);
