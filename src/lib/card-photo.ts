@@ -77,3 +77,21 @@ export function centerCrop(width: number, height: number, aspect = PHOTO_ASPECT)
 
 /** Depo sınırı 512 KB; biraz pay bırak */
 export const MAX_PHOTO_BYTES = 500 * 1024;
+
+/** Elle kırpma: görsel çerçeveye `scale` (çerçeve pikseli / kaynak pikseli) ile yerleşir; `ox,oy` görselin çerçevedeki sol-üst konumu */
+export function minCropScale(imgW: number, imgH: number, frameW: number, frameH: number) {
+  return Math.max(frameW / imgW, frameH / imgH);
+}
+
+/** Görselin çerçeveyi her zaman tamamen kaplaması için konumu sınırlar */
+export function clampCropOffset(ox: number, oy: number, imgW: number, imgH: number, frameW: number, frameH: number, scale: number) {
+  return {
+    x: Math.min(0, Math.max(frameW - imgW * scale, ox)),
+    y: Math.min(0, Math.max(frameH - imgH * scale, oy)),
+  };
+}
+
+/** Çerçevenin kaynak görseldeki karşılığı (piksel) */
+export function cropBoxFromView(ox: number, oy: number, frameW: number, frameH: number, scale: number) {
+  return { x: Math.round(-ox / scale) || 0, y: Math.round(-oy / scale) || 0, width: Math.round(frameW / scale), height: Math.round(frameH / scale) };
+}

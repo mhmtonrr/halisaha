@@ -51,3 +51,17 @@ describe("hardenAlpha", () => {
     expect(px).toEqual([10, 20, 30, 0, 10, 20, 30, 172, 10, 20, 30, 255, 10, 20, 30, 128]);
   });
 });
+
+import { clampCropOffset, cropBoxFromView, minCropScale } from "./card-photo";
+
+describe("elle kırpma", () => {
+  it("görsel çerçeveyi kaplar, konum sınırlanır, kutu kaynak pikselinde", () => {
+    const s = minCropScale(1000, 2000, 340, 400); // 0.34 (görsel 340×680)
+    expect(s).toBeCloseTo(0.34);
+    const o = clampCropOffset(50, -9999, 1000, 2000, 340, 400, s);
+    expect(o.x).toBe(0);
+    expect(o.y).toBeCloseTo(400 - 680);
+    const box = cropBoxFromView(o.x, o.y, 340, 400, s);
+    expect(box).toEqual({ x: 0, y: 824, width: 1000, height: 1176 });
+  });
+});

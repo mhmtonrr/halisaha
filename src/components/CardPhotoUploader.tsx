@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ComponentProps } from "react";
 import { useRouter } from "next/navigation";
 import { CardFace } from "./PlayerCard";
+import { PhotoCropper } from "./PhotoCropper";
 import { Button } from "./ui";
 import { createClient } from "@/lib/supabase/client";
 import { deleteCardPhoto, saveCardPhoto } from "@/lib/actions";
@@ -78,19 +79,42 @@ export function CardPhotoUploader({ userId, currentUrl, preview }: { userId: str
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<{ file: File; img: HTMLImageElement } | null>(null);
 
   useEffect(() => () => { if (result) URL.revokeObjectURL(result.url); }, [result]);
 
-  async function process(file: File) {
+  /** Seçilen dosyayı açıp kırpma adımına geçer */
+  async function pick(file: File) {
     setError(null);
     setNote(null);
     setResult(null);
     if (!file.type.startsWith("image/")) return setError("Bir fotoğraf seç");
+    try {
+      const blobImg = await loadImage(file);
+      // Kırpıcıda gösterim için kalıcı adres (loadImage adresi hemen bırakıyor)
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      await img.decode().catch(() => undefined);
+      setPending({ file, img: img.naturalWidth ? img : blobImg });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Fotoğraf açılamadı");
+    } finally {
+      if (input.current) input.current.value = "";
+    }
+  }
+
+  function closePending() {
+    if (pending) URL.revokeObjectURL(pending.img.src);
+    setPending(null);
+  }
+
+  async function process(file: File, img: HTMLImageElement, crop?: Box) {
     setBusy(true);
     try {
       setStatus("Fotoğraf hazırlanıyor…");
-      const img = await loadImage(file);
-      const base = canvasOf(img, img.naturalWidth, img.naturalHeight);
+      const base = crop
+        ? canvasOf(img, img.naturalWidth, img.naturalHeight, crop)
+        : canvasOf(img, img.naturalWidth, img.naturalHeight);
       let out: HTMLCanvasElement;
       if (/png|webp/.test(file.type) && hasTransparency(pixels(base))) {
         out = trimmed(base); // zaten dekupe edilmiş
@@ -130,7 +154,6 @@ export function CardPhotoUploader({ userId, currentUrl, preview }: { userId: str
     } finally {
       setBusy(false);
       setStatus(null);
-      if (input.current) input.current.value = "";
     }
   }
 
@@ -163,6 +186,18 @@ export function CardPhotoUploader({ userId, currentUrl, preview }: { userId: str
 
   const shown = result?.url ?? currentUrl;
 
+  if (pending) {
+    const { file, img } = pending;
+    return (
+      <PhotoCropper
+        img={img}
+        onConfirm={(box) => { setPending(null); process(file, img, box).finally(() => URL.revokeObjectURL(img.src)); }}
+        onSkip={() => { setPending(null); process(file, img).finally(() => URL.revokeObjectURL(img.src)); }}
+        onCancel={closePending}
+      />
+    );
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex justify-center">
@@ -177,7 +212,7 @@ export function CardPhotoUploader({ userId, currentUrl, preview }: { userId: str
         type="file"
         accept="image/*"
         className="hidden"
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) process(f); }}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) pick(f); }}
       />
       {result ? (
         <div className="grid grid-cols-2 gap-2">
