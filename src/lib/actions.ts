@@ -1501,6 +1501,46 @@ export async function notifyDm(threadId: string, messageId: number) {
   });
 }
 
+/** Oyuncuyu takıma/gruba davet et (sadece kaptan/yetkili; yetkiyi RPC denetler). Davet kartı konuşmaya düşer, davet edilene bildirim gider. */
+export async function inviteToGroup(fd: FormData) {
+  const { supabase, user } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const userId = str(fd, "userId");
+  const back = `/oyuncu/${userId}`;
+  if (!UUID_RE.test(groupId) || !UUID_RE.test(userId)) fail("/", "Geçersiz istek");
+  const { data: inviteId, error } = await supabase.rpc("invite_to_group", { p_group_id: groupId, p_user_id: userId });
+  if (error || !inviteId) fail(back, rpcMessage(error ?? {}, "Davet gönderilemedi"));
+  later(async () => {
+    const admin = createAdminClient();
+    const [{ data: inv }, { data: me }, { data: thread }] = await Promise.all([
+      admin.from("group_invites").select("group_name, group_kind").eq("id", inviteId as string).maybeSingle(),
+      admin.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
+      admin.from("dm_threads").select("id").eq("user_a", user.id < userId ? user.id : userId).eq("user_b", user.id < userId ? userId : user.id).maybeSingle(),
+    ]);
+    if (!inv || !thread) return;
+    await notify([userId], "invite", text.groupInvite(me?.display_name ?? "Bir oyuncu", inv.group_name, inv.group_kind as "team" | "community", thread.id, inviteId as string), { excludeUserId: user.id });
+  });
+  redirect(`${back}?davet=1`);
+}
+
+/** Daveti kabul et (üye olur) / reddet */
+export async function respondGroupInvite(inviteId: string, accept: boolean) {
+  const { supabase } = await requireUser();
+  if (!UUID_RE.test(inviteId)) return { ok: false, error: "Geçersiz istek" };
+  const { data, error } = await supabase.rpc("respond_group_invite", { p_invite_id: inviteId, p_accept: accept });
+  revalidatePath("/sohbet");
+  revalidatePath("/");
+  return { ok: !error, groupId: (data as string | null) ?? undefined, error: error ? rpcMessage(error, "İşlem yapılamadı") : undefined };
+}
+
+/** Gönderilmiş daveti geri çek */
+export async function cancelGroupInvite(inviteId: string) {
+  const { supabase } = await requireUser();
+  if (!UUID_RE.test(inviteId)) return { ok: false, error: "Geçersiz istek" };
+  const { error } = await supabase.rpc("cancel_group_invite", { p_invite_id: inviteId });
+  return { ok: !error, error: error ? rpcMessage(error, "İşlem yapılamadı") : undefined };
+}
+
 /** Bekleyen mesaj isteğini kabul et / reddet */
 export async function respondDmRequest(threadId: string, accept: boolean) {
   const { supabase } = await requireUser();

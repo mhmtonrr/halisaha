@@ -39,7 +39,7 @@ kaçırılanları çeker — bunu kaldırma, yoksa mesajlar ara sıra düşmüyo
 (çağrı açıldı, maç kuruldu, oylama açıldı); "sonuçlar açıklandı" kartı finalize başarılı olunca koddan yazılır.
 Spam: dakikada 20 mesaj, 1000 karakter. Silme `delete_message` RPC (yazar veya yetkili; içerik silinir).
 
-**Birebir sohbet + davet (migration 0029; DB + `/sohbet` gelen kutusu + birebir sohbet yapıldı, davet arayüzü sıradaki parça)**: `dm_threads` (user_a<user_b, tek konuşma),
+**Birebir sohbet + davet (migration 0029; DB + `/sohbet` gelen kutusu + birebir sohbet + davet arayüzü yapıldı)**: `dm_threads` (user_a<user_b, tek konuşma),
 `dm_messages` (text|invite), `dm_reads`, `group_invites`. Yazma sadece RPC: `start_dm` (herkes herkese; engel iki yönde keser), `send_dm`,
 `respond_dm_request`, `delete_dm_message`, `mark_dm_read`, `dm_unread_counts`, `invite_to_group` (sadece kaptan/yetkili; davet kartı konuşmaya düşer,
 konuşma yoksa istek açılır), `respond_group_invite` (kabul = `join_group` ile aynı katılma), `cancel_group_invite`.
@@ -53,3 +53,6 @@ ile aynı yakalama/okundu mantığı). Giriş noktaları: başlıkta 💬 düğm
 `/oyuncu/[id]` sayfasında "Mesaj gönder" (`openDm` form eylemi: `start_dm` + yönlendirme; GET ile konuşma açılmaz, Link ön yüklemesi yan etki yaratmasın).
 Birebir bildirim: `notifyDm` (tür `dm`, tercih "chat", etiket `dm:<konuşma>`, 10 dk birleştirme); istekse başlık "… sana mesaj isteği gönderdi". `BottomNav` konuşma ekranlarında gizlenir (gelen kutusunda görünür).
 Test: `scripts/e2e/dm.mjs` (istek → kabul → canlı yazışma, bildirim, ekran görüntüleri).
+**Davet arayüzü**: `/oyuncu/[id]` sayfasında, görüntüleyen kaptan/yetkili olduğu takım/gruplar için "Takıma / gruba davet et" kutusu çıkar (kişi zaten üyeyse veya bekleyen davet varsa o grup listelenmez; `inviteToGroup` eylemi RPC'yi çağırır, yetkiyi RPC denetler).
+Davet kartı davet edilenin konuşmasında "Katıl / Reddet" düğmeli görünür (`respondGroupInvite`; kabul = üyelik + gruba yönlendirme), gönderende "Daveti geri çek". Davet edilene `invite` bildirimi gider (kart ve bildirim `/sohbet/<konuşma>` açar).
+Davet kabul edilince/reddedilince daveti edene bildirim **gitmez** (sadece kartın durumu değişir; istenirse eklenir). Üye olmayan biri takım sayfasından "Kaptana mesaj yaz" ile kaptana birebir yazabilir (özel gruplarda yok; gruplar zaten kapalı). Test: `scripts/e2e/dm-invite.mjs`.

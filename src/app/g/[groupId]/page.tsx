@@ -12,7 +12,7 @@ import { Badge, Card, Header, LinkButton, SectionTitle } from "@/components/ui";
 import { OvrBadge } from "@/components/PlayerCard";
 import { Avatar } from "@/components/Avatar";
 import { InviteLink } from "./InviteLink";
-import { regenerateInvite } from "@/lib/actions";
+import { openDm, regenerateInvite } from "@/lib/actions";
 import { countIncoming } from "@/lib/challenges-data";
 import { getOpenListings } from "@/lib/listings-data";
 import { LiveRefresh } from "@/components/LiveRefresh";
@@ -202,6 +202,15 @@ export default async function GroupPage({
           🤝 Maç teklif et
         </LinkButton>
       )}
+      {isTeam && !me && (() => {
+        const captain = players.find((p) => p.role === "captain" && isSquadMember(p));
+        return captain?.user_id ? (
+          <form action={openDm} className="mb-2">
+            <input type="hidden" name="userId" value={captain.user_id} />
+            <button className="w-full rounded-xl border border-accent/40 bg-pitch-900 py-3 font-bold hover:border-accent">💬 Kaptana mesaj yaz</button>
+          </form>
+        ) : null;
+      })()}
 
       {me && (
         <LinkButton href={`/g/${groupId}/sohbet`} variant="secondary" className="mb-2 w-full justify-between border-accent/40">

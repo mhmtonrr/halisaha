@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { notifyDm, respondDmRequest } from "@/lib/actions";
+import { cancelGroupInvite, notifyDm, respondDmRequest, respondGroupInvite } from "@/lib/actions";
 import { Avatar } from "@/components/Avatar";
 import { cx } from "@/components/ui";
 
@@ -228,6 +228,23 @@ export function DmRoom({
     else upsert({ ...messages.find((m) => m.id === id)!, deleted_at: new Date().toISOString(), body: "—" });
   }
 
+  async function answerInvite(inv: InviteInfo, accept: boolean) {
+    setBusy(true);
+    const r = await respondGroupInvite(inv.id, accept);
+    setBusy(false);
+    if (!r.ok) return setError(r.error ?? "İşlem yapılamadı");
+    if (accept && r.groupId) router.push(`/g/${r.groupId}`);
+    else router.refresh();
+  }
+
+  async function withdrawInvite(inv: InviteInfo) {
+    setBusy(true);
+    const r = await cancelGroupInvite(inv.id);
+    setBusy(false);
+    if (!r.ok) return setError(r.error ?? "İşlem yapılamadı");
+    router.refresh();
+  }
+
   async function respond(accept: boolean) {
     setBusy(true);
     const r = await respondDmRequest(threadId, accept);
@@ -311,6 +328,26 @@ export function DmRoom({
                     <div className="mt-1 text-[11px] text-muted">
                       {invite ? INVITE_STATUS[invite.status] : "—"} · {time(m.created_at)}
                     </div>
+                    {invite?.status === "pending" && !mine && (
+                      <div className="mt-2 flex gap-2">
+                        <button disabled={busy} onClick={() => answerInvite(invite, true)} className="rounded-lg bg-accent px-3 py-1.5 font-bold text-pitch-950 disabled:opacity-50">
+                          Katıl
+                        </button>
+                        <button disabled={busy} onClick={() => answerInvite(invite, false)} className="rounded-lg bg-pitch-800 px-3 py-1.5 disabled:opacity-50">
+                          Reddet
+                        </button>
+                      </div>
+                    )}
+                    {invite?.status === "pending" && mine && (
+                      <button disabled={busy} onClick={() => withdrawInvite(invite)} className="mt-2 rounded-lg bg-pitch-800 px-3 py-1.5 text-xs disabled:opacity-50">
+                        Daveti geri çek
+                      </button>
+                    )}
+                    {invite?.status === "accepted" && !mine && (
+                      <Link href={`/g/${invite.group_id}`} className="mt-2 inline-block text-xs text-accent">
+                        {invite.group_kind === "team" ? "Takıma git ›" : "Gruba git ›"}
+                      </Link>
+                    )}
                   </div>
                 </div>
               ) : (
