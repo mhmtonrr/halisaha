@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { openDm } from "@/lib/actions";
 import { RegionSelect } from "@/components/RegionSelect";
 import { Button, Card, Input, Label, cx } from "@/components/ui";
 import { OvrBadge, PositionChip } from "@/components/PlayerCard";
@@ -170,7 +171,8 @@ export function PlayerRow({ c, me, skill }: { c: PlayerCandidate; me: boolean; s
     .slice(0, 3);
   const shown = skill && typeof c.skills[skill] === "number" ? [[skill, c.skills[skill] as number] as [string, number]] : topSkills;
   return (
-    <Link href={me ? "/profil" : `/oyuncu/${c.userId}`} className="flex items-center gap-3 px-4 py-3 transition hover:bg-pitch-800">
+    <div className="flex items-center transition hover:bg-pitch-800">
+    <Link href={me ? "/profil" : `/oyuncu/${c.userId}`} className="flex min-w-0 flex-1 items-center gap-3 py-3 pl-4">
       <OvrBadge overall={c.overall} className={c.matches === 0 ? "opacity-50" : ""} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
@@ -201,6 +203,15 @@ export function PlayerRow({ c, me, skill }: { c: PlayerCandidate; me: boolean; s
       </div>
       <span className="text-muted">›</span>
     </Link>
+    {!me && (
+      <form action={openDm} className="shrink-0 pl-1 pr-3">
+        <input type="hidden" name="userId" value={c.userId} />
+        <button aria-label={`${c.name} ile mesajlaş`} className="rounded-lg bg-pitch-800 px-2.5 py-1.5 text-sm hover:text-accent">
+          💬
+        </button>
+      </form>
+    )}
+    </div>
   );
 }
 

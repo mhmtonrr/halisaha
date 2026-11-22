@@ -2,7 +2,7 @@ import { LiveRefresh } from "@/components/LiveRefresh";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
-import { claimGuest, deleteGroup, leaveGroup, removePlayer, setMemberRole, setPosition, updateTeam } from "@/lib/actions";
+import { claimGuest, deleteGroup, leaveGroup, openDm, removePlayer, setMemberRole, setPosition, updateTeam } from "@/lib/actions";
 import { getGroupSummaries, isGuestLike, isSquadMember, type Position } from "@/lib/data";
 import { ROLE_LABEL, type GroupKind, type Role } from "@/lib/teams-data";
 import { Badge, Button, Card, ErrorNote, Header, SectionTitle } from "@/components/ui";
@@ -133,6 +133,14 @@ export default async function ManagePage({
                       <span className="text-xs text-muted">{p.totals.played} maç</span>
                     </div>
                   </div>
+                  {p.user_id && p.id !== me?.id && (
+                    <form action={openDm}>
+                      <input type="hidden" name="userId" value={p.user_id} />
+                      <button aria-label={`${p.display_name} ile mesajlaş`} className="rounded-lg bg-pitch-800 px-2.5 py-1.5 text-sm hover:text-accent">
+                        💬
+                      </button>
+                    </form>
+                  )}
                   {canRemove(p) && (
                     <form action={removePlayer}>
                       <input type="hidden" name="groupId" value={groupId} />

@@ -70,3 +70,7 @@ Bildirimler: istek gitti → karşı tarafa; kabul (veya karşılıklı istek) �
 sayfaya gider, geçmiş yoksa `fallback`'e; **form/oluşturma sayfaları (grup-kur, takim-kur, katil, join, matches/new, cagri/yeni, teklif…) geri hedefi sayılmaz** (form gönderilip yönlendirilince geri ok formu değil önceki sayfayı açar —
 yeni oluşturma sayfası eklersen `TRANSIENT_PATHS`'e ekle). Geri okla dönüşte yığın hedefe kadar kesilir (döngü olmaz). `NavTracker` `useSearchParams` kullandığı için layout'ta `Suspense` içinde. Test: `scripts/e2e/nav.mjs`.
 Geçiş efekti: `app/template.tsx` (160 ms solma, **transform yok** — sabit konumlu yazma kutusu bozulmasın), konuşma ekranı için `sohbet/[threadId]/loading.tsx` iskeleti.
+
+**Sohbet listesi ve kısayollar**: `/sohbet` listesi istemci bileşeni `InboxList` (anında arama — Türkçe harf/aksan farkı yok — ve süzgeçler Tümü/Okunmamış/Kişiler/Gruplar; sunucu satırları düz veri olarak verir).
+"Mesaj" kısayolu (`openDm` formu) var: grup/takım üye listesi (`/g/[id]/players`, hesabı olan üyelerde 💬), Keşfet oyuncu sonuçları (satır artık Link + yanında form; iç içe etkileşimli öğe yok), Sosyal arkadaş satırı.
+Sosyal arkadaş satırında kaptan/yetkili isen 🛡️ kısayolu `/oyuncu/[id]#davet` (davet kutusuna) götürür. Test: `scripts/e2e/inbox.mjs`.

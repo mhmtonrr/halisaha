@@ -68,6 +68,7 @@ export default async function SocialPage({ searchParams }: { searchParams: Promi
   const outgoing = pick((r) => r.status === "pending" && r.requested_by === user.id);
   const friends = pick((r) => r.status === "accepted").sort((a, b) => a.display_name.localeCompare(b.display_name, "tr"));
 
+  const canInvite = memberships.some((m) => m.role === "captain" || m.role === "admin");
   const mine = (kind: "team" | "community") =>
     memberships.filter((m) => m.group.kind === kind).sort((a, b) => a.group.name.localeCompare(b.group.name, "tr"));
 
@@ -158,6 +159,11 @@ export default async function SocialPage({ searchParams }: { searchParams: Promi
             ) : (
               friends.map((p) => (
                 <PersonRow key={p.id} p={p}>
+                  {canInvite && (
+                    <Link href={`/oyuncu/${p.id}#davet`} aria-label={`${p.display_name} kişisini davet et`} className="rounded-lg bg-pitch-800 px-2.5 py-1.5 text-sm hover:text-accent">
+                      🛡️
+                    </Link>
+                  )}
                   <form action={openDm}>
                     <input type="hidden" name="userId" value={p.id} />
                     <button aria-label={`${p.display_name} ile mesajlaş`} className="rounded-lg bg-pitch-800 px-3 py-1.5 text-sm hover:text-accent">

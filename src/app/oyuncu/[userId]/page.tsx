@@ -109,7 +109,7 @@ export default async function PlayerProfilePage({
         <button className="w-full rounded-xl bg-accent py-3 font-bold text-pitch-950">✉️ Mesaj gönder</button>
       </form>
       {invitable.length > 0 && (
-        <form action={inviteToGroup} className="mt-3 space-y-2 rounded-xl border border-line bg-pitch-900 p-3">
+        <form id="davet" action={inviteToGroup} className="mt-3 space-y-2 rounded-xl border border-line bg-pitch-900 p-3">
           <input type="hidden" name="userId" value={userId} />
           <label className="block text-sm font-bold" htmlFor="invite-group">
             🛡️ Takıma / gruba davet et
