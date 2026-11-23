@@ -394,11 +394,15 @@ export async function updateTeam(fd: FormData) {
   const { supabase } = await requireUser();
   const groupId = str(fd, "groupId");
   const back = `/g/${groupId}/players`;
+  // Takım ve grup bilgileri aynı formla düzenlenir; grupta il isteğe bağlı
+  const { data: g } = await supabase.from("groups").select("kind").eq("id", groupId).maybeSingle();
+  const isTeam = g?.kind === "team";
+  const word = isTeam ? "Takım" : "Grup";
   const fields = teamFields(fd);
-  if (fields.name.length < 2) fail(back, "Takım adı en az 2 karakter olmalı");
-  if (!fields.city) fail(back, "Takımın ilini seç");
+  if (fields.name.length < 2) fail(back, `${word} adı en az 2 karakter olmalı`);
+  if (isTeam && !fields.city) fail(back, "Takımın ilini seç");
   const { data, error } = await supabase.from("groups").update(fields).eq("id", groupId).select("id");
-  if (error || !data?.length) fail(back, "Takım bilgilerini sadece kaptan ve yetkililer değiştirebilir");
+  if (error || !data?.length) fail(back, `${word} bilgilerini sadece ${isTeam ? "kaptan" : "kurucu"} ve yetkililer değiştirebilir`);
   revalidatePath(`/g/${groupId}`, "layout");
   redirect(`${back}?saved=1`);
 }

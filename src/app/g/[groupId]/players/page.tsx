@@ -106,15 +106,6 @@ export default async function ManagePage({
         <b className="text-white">{labels.member}</b>ler oynar ve oy verir.
       </Card>
 
-      {me && (
-        <Link href="/profil?sekme=ayarlar">
-          <Card className="mb-4 flex items-center justify-between transition hover:border-accent/50">
-            <span className="text-sm">Mevkini, ayağını ve forma numaranı profilinden düzenle</span>
-            <span className="text-muted">›</span>
-          </Card>
-        </Link>
-      )}
-
       <Card className="p-0">
         <ul className="divide-y divide-line">
           {sorted.map((p) => {
@@ -239,13 +230,13 @@ export default async function ManagePage({
         </>
       )}
 
-      {canManage && isTeam && (
+      {canManage && (
         <>
-          <SectionTitle>Takım bilgileri</SectionTitle>
+          <SectionTitle>{isTeam ? "Takım bilgileri" : "Grup bilgileri"}</SectionTitle>
           <form action={updateTeam} className="space-y-3">
             <input type="hidden" name="groupId" value={groupId} />
             <Card className="space-y-4">
-              <TeamFields values={group} />
+              <TeamFields values={group} kind={kind} />
             </Card>
             <Button variant="secondary" className="w-full">
               Kaydet

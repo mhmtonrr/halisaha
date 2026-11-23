@@ -72,6 +72,18 @@ try {
   await P.goto(`${BASE}/g/${gid}`); await shot(P, "33-topluluk-sayfasi");
   log("topluluk sayfası:", (await P.locator("text=👥 Topluluk").count()) ? "✓ Topluluk etiketi" : "HATA", "|", (await P.locator("text=2 üye").count()) ? "✓ üye şeridi" : "HATA");
 
+  // Grubu yönet: kurucu adı/açıklamayı değiştirir; profil kısayolu kaldırıldı; üye formu görmez
+  await P.goto(`${BASE}/g/${gid}/players`);
+  log("profil kısayolu yok:", (await P.locator("text=profilinden düzenle").count()) === 0 ? "✓" : "HATA");
+  await P.fill('input[name="name"]', "Moda Futbolseverler");
+  await P.fill('textarea[name="description"]', "Salı akşamları Moda'da.");
+  await shot(P, "33b-grup-bilgileri");
+  await P.click('form:has(input[name="name"]) button:has-text("Kaydet")'); await P.waitForURL(/saved=1/);
+  const { data: g2 } = await admin.from("groups").select("name, description, city").eq("id", gid).single();
+  log("grup bilgileri kaydedildi:", g2.name === "Moda Futbolseverler" && g2.description === "Salı akşamları Moda'da." && g2.city === "İstanbul" ? "✓" : `HATA (${JSON.stringify(g2)})`);
+  await B.goto(`${BASE}/g/${gid}/players`);
+  log("üye grup bilgileri formunu görmez:", (await B.locator("text=Grup bilgileri").count()) === 0 ? "✓" : "HATA");
+
   // Keşfet: il/ilçe filtresi. Keşfet en az 5 hesaplı asıl üyesi olan takımı listeler (MIN_LISTED_MEMBERS, 0037) → 4 üye eklenir
   await admin.from("group_players").insert(users.slice(2).map((u, i) => ({ group_id: groupIds[0], user_id: u.id, display_name: "Üye " + i, position: "MID" })));
   await P.goto(BASE + "/kesfet"); await P.selectOption('select[name="ilce"]', "Kadıköy"); await P.waitForURL(/ilce=/);

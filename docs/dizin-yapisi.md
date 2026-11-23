@@ -51,7 +51,7 @@ src/components/BottomNav.tsx  Alt gezinme çubuğu (sohbet ekranında gizlenir);
 src/components/Icon.tsx  Material Symbols ikonu (tasarımdaki adlarla)
 src/components/AutoOpenDetails.tsx  İlk yüklemede bir kez açılan açılır bölüm
 src/components/ProfileFields.tsx  Profil ve karşılama formlarının ortak alanları; RegionSelect.tsx bağlı il/ilçe seçimi
-src/components/TeamFields.tsx  Takım kurma/düzenleme form alanları; TeamSizeSelect.tsx kaç kişilik (5v5…11v11); TeamBadge.tsx renkli baş harf rozeti
+src/components/TeamFields.tsx  Takım kurma ve takım/grup bilgileri düzenleme form alanları; TeamSizeSelect.tsx kaç kişilik (5v5…11v11); TeamBadge.tsx renkli baş harf rozeti
 src/components/RosterTabs.tsx  Kadro / Misafirler sekmesi
 src/components/SendInviteLink.tsx  Maç/çağrı kartını sohbetten göndermeye götüren bağlantı (/davet/gonder)
 src/components/ShareLink.tsx  Sayfa linkini paylaş (paylaşım menüsü ya da panoya kopyala); profile/ShareButton.tsx profil için
