@@ -106,7 +106,7 @@ Uçtan uca (e2e) çalıştırma, senaryo listesi ve bilinen bozuk senaryolar: `d
 - Sayfa dosyaları (`page.tsx`) Next'in tanıdığı alanlar dışında bir şey export edemez.
 - Vitest `@/` alias'ı `vitest.config.ts`'de. Türkçe sıralama `localeCompare(x, "tr")` (ı<i, s<ş).
 - `datetime-local` değerleri Türkiye saati: `parseLocalDateTime` (+03:00, yaz saati yok).
-- Tailwind v4: seçili radio/checkbox stili için `has-checked:` kullan.
+- Tailwind v4: seçili radio/checkbox stili için `has-checked:` kullan. Çakışan sınıflarda sıra CSS'e göre belirlenir; `cx` (ui.tsx) tailwind-merge ile sonradan vereni kazandırır, sınıf birleştirirken hep `cx` kullan.
 - Güvenlik tanımlayıcı (security definer) fonksiyonlarda `search_path = public`; pgcrypto orada görünmez
   (rastgele kod için `md5(random()...)`).
 - Service role anahtarı sadece `src/lib/supabase/admin.ts` (server-only) içinde.
@@ -131,7 +131,8 @@ Ertelenenlerin ve sıradaki işlerin tam listesi: `docs/yayin-sonrasi.md`.
 3. ~~Bildirimler~~ (yapıldı: kutu + web push; kullanıcı Vercel'e VAPID anahtarlarını eklemeli, bkz. yukarı)
 4. Halısaha tesis rehberi, işletme hesapları, rezervasyon/turnuva (gelir modeli)
 5. **Sıradaki (sırayla): ~~a) kart adı alanı~~ (yapıldı: 0025), ~~b) kart fotoğrafı yükleme + arka plan kaldırma~~ (yapıldı: 0026, kartlara bağlandı; gerçek model telefonda denenmeli)**; sıradaki: takım rozeti tasarımı. Rozetler, ~~yetenek oylaması (hız/şut/pas…)~~ (yapıldı: 0019), sohbette fotoğraf
-6. Türkiye geneli açılış öncesi: KVKK aydınlatma metni, 18 yaş altı kuralı, e-posta onayı tekrar açık
+6. **Arayüz yenilemesi (2026-11-24, sırayla):** ~~1) ortak tasarım dili (`ui.tsx` profil stiline)~~ (yapıldı; emoji→`Icon` 2-3. parçada sayfa sayfa) · 2) ana sayfa (yapılacaklar kutusu, yaklaşan maç kartları, takımlarım/gruplarım sekmeli, öne çıkan takım/oyuncu sıralaması + "Meydan Oku" + bölge seçici İlçe·İl·Türkiye (veri azsa üst kademe; MVP/Yükselen dahil), duruma göre alt eylem şeridi; taslak: `Desktop/tasarım/yapılacaklar/Ana Sayfa`) · 3) diğer sayfalar · 4) **"Maça Çağır"** (grup dışı oyuncuyu maça/çağrıya davet) + **herkese açık adam arama** (RLS/migration gerekir)
+7. Türkiye geneli açılış öncesi: KVKK aydınlatma metni, 18 yaş altı kuralı, e-posta onayı tekrar açık
 
 ## Git
 

@@ -48,6 +48,7 @@ src/components/LineupPitch.tsx  Diziliş sahası parçaları (Pitch, SlotBox, Pi
 src/components/Avatar.tsx  Yuvarlak avatar: kart fotoğrafı varsa o, yoksa baş harfler
 src/components/CardPhotoUploader.tsx  Kart fotoğrafı yükleme: küçült, arka plan kaldır, önizle, kaydet/sil; PhotoCropper.tsx elle kırpma
 src/components/BottomNav.tsx  Alt gezinme çubuğu (sohbet ekranında gizlenir); NotificationBadge.tsx okunmamış bildirim rozeti (Realtime)
+src/components/ui.tsx  Ortak parçalar (Card, Button/LinkButton, Input, Label, SectionTitle, Header, Badge, ErrorNote) Obsidian Pitch/profil stilinde; `cx` = tailwind-merge (sonradan verilen sınıf kazanır)
 src/components/Icon.tsx  Material Symbols ikonu (tasarımdaki adlarla)
 src/components/AutoOpenDetails.tsx  İlk yüklemede bir kez açılan açılır bölüm
 src/components/ProfileFields.tsx  Profil ve karşılama formlarının ortak alanları; RegionSelect.tsx bağlı il/ilçe seçimi
