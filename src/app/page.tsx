@@ -464,7 +464,12 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
         </section>
       ) : null}
 
-      <FeaturedSections city={profile?.city ?? null} />
+      <FeaturedSections
+        city={profile?.city ?? null}
+        district={profile?.district ?? null}
+        challengerTeamIds={memberships.filter((m) => m.group.kind === "team" && m.role !== "member" && !m.group.archived).map((m) => m.group.id)}
+        myTeamIds={memberships.filter((m) => m.group.kind === "team").map((m) => m.group.id)}
+      />
     </main>
   );
 }

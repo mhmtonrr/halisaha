@@ -102,7 +102,15 @@ try {
   check("'Öne çıkan oyuncular' bölümü", t.includes("öne çıkan oyuncular"));
   check("öne çıkanlarda yüksek ratingli oyuncu", t.includes("zeki forvet"));
   check("gizlenen (kaleci, defans) öne çıkanlarda yok", !t.includes("zeki kaleci") && !t.includes("zeki defans"));
+  const chips = other.locator('[role="tablist"][aria-label="Öne çıkanların bölgesi"] [role="tab"]');
+  check("bölge çipleri İlçe · İl · Türkiye (Merkez, Edirne, Türkiye)", (await chips.allInnerTexts()).join("|") === "Merkez|Edirne|Türkiye");
   await other.screenshot({ path: `${SHOTS}/discover-home.png`, fullPage: true });
+  await chips.filter({ hasText: "Türkiye" }).click();
+  const trPanel = other.locator('[role="tabpanel"]:visible').filter({ hasText: /öne çıkan takımlar/i }).first();
+  check("Türkiye çipi seçilince Türkiye listesi görünür", await trPanel.isVisible());
+  await trPanel.locator('[role="tab"]:has-text("Yükselenler")').click();
+  check("oyuncu sekmesi değişir (Yükselenler)", (await trPanel.locator('[role="tab"][aria-selected="true"]').last().innerText()) === "Yükselenler");
+  await other.screenshot({ path: `${SHOTS}/discover-home-tr.png`, fullPage: true });
   const bad = await other.evaluate(() => document.documentElement.scrollWidth > innerWidth);
   check("yatay taşma yok (390px)", !bad);
 } catch (e) {

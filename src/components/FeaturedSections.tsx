@@ -1,114 +1,225 @@
 import Link from "next/link";
-import { Suspense } from "react";
-import { PlayerCard, OvrBadge } from "@/components/PlayerCard";
+import { Suspense, type ReactNode } from "react";
+import { initials, tierOf } from "@/components/PlayerCard";
 import { TeamBadge } from "@/components/TeamBadge";
-import { Card, LinkButton, SectionTitle, cx } from "@/components/ui";
-import { cardSkills } from "@/lib/skills";
+import { Icon } from "@/components/Icon";
+import { HomeTabs } from "@/components/home/HomeTabs";
+import { SectionTitle, cx } from "@/components/ui";
+import { POSITION_LABEL } from "@/lib/data";
 import { formatRegion } from "@/lib/regions";
 import { loadFeatured, type Featured } from "@/lib/featured-data";
+import { availableLevels, levelLabel, type FeaturedLevel, type Section } from "@/lib/featured-rules";
 import type { PlayerCandidate } from "@/lib/player-search";
 
-/** Yatay kaydırmalı şerit; kenarlara taşar (ana sayfadaki "Yaklaşan maçlar" ile aynı düzen) */
-function Strip({ children }: { children: React.ReactNode }) {
-  return <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1">{children}</div>;
+interface Viewer {
+  city: string | null;
+  district: string | null;
+  /** Kaptan/yetkili olduğum takımlar: "Meydan oku" sadece bunlar varsa görünür */
+  challengerTeamIds: string[];
+  /** Üyesi olduğum takımlar: kendi takımıma meydan okunmaz */
+  myTeamIds: string[];
 }
 
-function MiniCard({ c, children }: { c: PlayerCandidate; children?: React.ReactNode }) {
+const rankClass = (i: number) => cx("w-6 shrink-0 font-display text-sm font-bold tabular-nums", i < 3 ? "text-gold-1" : "text-on-surface-variant");
+const listBox = "overflow-hidden rounded-xl border border-line bg-surface-low divide-y divide-white/[0.06]";
+
+/** Seçilen kademede yeterli kayıt yoksa nereden gösterildiğini söyler */
+function Fallback({ s, chosen, v }: { s: Section<unknown>; chosen: FeaturedLevel; v: Viewer }) {
+  if (s.level === chosen || s.items.length === 0) return null;
   return (
-    <Link href={`/oyuncu/${c.userId}`} className="w-36 shrink-0 snap-start">
-      <PlayerCard
-        size="sm"
-        name={c.name}
-        cardName={c.cardName}
-        photoUrl={c.photoUrl}
-        overall={c.overall}
-        position={c.position}
-        skills={cardSkills(c.skills, c.position === "GK")}
-        city={c.city}
-        district={c.district}
-        team={c.teams[0] ?? null}
-        unrated={c.matches === 0}
-      />
-      {children}
+    <p className="mb-2 flex items-center gap-1 text-xs text-on-surface-variant">
+      <Icon name="info" className="text-[14px]" />
+      {levelLabel(chosen, v.city, v.district)} için yeterli kayıt yok, {levelLabel(s.level, v.city, v.district)} gösteriliyor
+    </p>
+  );
+}
+
+function Empty({ children }: { children: ReactNode }) {
+  return <p className="rounded-xl border border-dashed border-line p-4 text-center text-sm text-on-surface-variant">{children}</p>;
+}
+
+/** Kart rengine göre küçük oyuncu rozeti (fotoğraf varsa o) */
+function PlayerTile({ c }: { c: PlayerCandidate }) {
+  const tier = tierOf(c.overall);
+  return (
+    <span
+      className={cx(
+        "relative flex h-12 w-10 shrink-0 flex-col items-center justify-center overflow-hidden rounded-[8px_8px_14px_14px] bg-gradient-to-b",
+        tier === "gold" ? "from-gold-1 to-gold-2 text-[#3b2a05]" : tier === "silver" ? "from-silver-1 to-silver-2 text-[#1f262d]" : "from-bronze-1 to-bronze-2 text-[#3a1d0a]",
+      )}
+    >
+      {c.photoUrl ? (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={c.photoUrl} alt="" className="absolute inset-0 h-full w-full object-cover object-top" draggable={false} />
+          <span className="absolute bottom-0 left-0 right-0 bg-black/55 text-center font-display text-[11px] font-bold leading-4 text-white">{c.overall}</span>
+        </>
+      ) : (
+        <>
+          <span className="font-display text-base font-bold leading-4">{c.overall}</span>
+          <span className="text-[8px] font-bold tracking-wide opacity-75">{initials(c.name)}</span>
+        </>
+      )}
+    </span>
+  );
+}
+
+function PlayerRow({ c, i, sub, stat, statClass }: { c: PlayerCandidate; i: number; sub: string; stat: string; statClass: string }) {
+  return (
+    <Link href={`/oyuncu/${c.userId}`} className="flex items-center gap-3 p-3 transition hover:bg-surface-container">
+      <span className={rankClass(i)}>#{i + 1}</span>
+      <PlayerTile c={c} />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate font-semibold">{c.cardName || c.name}</span>
+          {c.position && <span className="shrink-0 rounded-full bg-surface-high px-1.5 font-display text-[10px] font-bold text-tertiary">{POSITION_LABEL[c.position]}</span>}
+        </span>
+        <span className="truncate text-xs text-on-surface-variant">{sub}</span>
+      </span>
+      <span className={cx("shrink-0 font-display text-base font-bold tabular-nums", statClass)}>{stat}</span>
     </Link>
   );
 }
 
-function FeaturedBody({ f, city }: { f: Featured; city: string | null }) {
-  const where = city ?? "Türkiye";
-  const region = city ? `?il=${encodeURIComponent(city)}` : "?il=";
+function TeamsList({ s, chosen, v }: { s: Featured["teams"]; chosen: FeaturedLevel; v: Viewer }) {
+  if (!s.items.length) return <Empty>Henüz sıralanacak takım yok. 5+ oyunculu takımlar maç oynadıkça burada sıralanır.</Empty>;
+  const canChallenge = v.challengerTeamIds.length > 0;
   return (
     <>
-      {f.players.length > 0 && (
-        <>
-          <SectionTitle
-            action={<LinkButton href={`/kesfet${region}&sekme=oyuncu`} variant="ghost" className="min-h-8 px-2 text-accent">Ara ›</LinkButton>}
-          >
-            ⭐ Öne çıkan oyuncular · {f.playersNational ? "Türkiye" : where}
-          </SectionTitle>
-          <Strip>{f.players.map((c) => <MiniCard key={c.userId} c={c} />)}</Strip>
-        </>
-      )}
-
-      {f.teams.length > 0 && (
-        <>
-          <SectionTitle
-            action={<LinkButton href={`/kesfet${region}`} variant="ghost" className="min-h-8 px-2 text-accent">Tümü ›</LinkButton>}
-          >
-            🏆 Öne çıkan takımlar · {f.teamsNational ? "Türkiye" : where}
-          </SectionTitle>
-          <Strip>
-            {f.teams.map((t, i) => (
-              <Link key={t.id} href={`/g/${t.id}`} className="w-40 shrink-0 snap-start">
-                <Card className="h-full p-3 transition hover:border-accent/50">
-                  <div className="flex items-start justify-between">
-                    <TeamBadge name={t.name} color={t.color} />
-                    <span className={cx("text-xs font-black", i < 3 ? "text-gold-1" : "text-muted")}>#{i + 1}</span>
-                  </div>
-                  <div className="mt-2 truncate text-sm font-semibold">{t.name}</div>
-                  <div className="truncate text-xs text-muted">{formatRegion(t.city, t.district)}</div>
-                  <div className="mt-2 flex items-center justify-between">
-                    <span className="text-xs text-muted">{t.members} oyuncu</span>
-                    <OvrBadge overall={t.rating} />
-                  </div>
-                </Card>
+      <Fallback s={s} chosen={chosen} v={v} />
+      <div className={listBox}>
+        {s.items.slice(0, 5).map((t, i) => (
+          <div key={t.id} className="flex items-center gap-2.5 p-3">
+            <span className={rankClass(i)}>#{i + 1}</span>
+            <Link href={`/g/${t.id}`} className="flex min-w-0 flex-1 items-center gap-2.5">
+              <TeamBadge name={t.name} color={t.color} size="sm" />
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate font-semibold">{t.name}</span>
+                <span className="truncate text-xs text-on-surface-variant">
+                  {formatRegion(t.city, t.district)} · {t.members} oyuncu
+                </span>
+              </span>
+            </Link>
+            <span className="flex min-w-9 shrink-0 flex-col items-center rounded-lg bg-surface-high px-2 py-1">
+              <span className="font-display text-[9px] font-bold tracking-wider text-on-surface-variant">PUAN</span>
+              <span className="font-display text-lg font-bold leading-5 tabular-nums">{t.rating}</span>
+            </span>
+            {canChallenge && !v.myTeamIds.includes(t.id) && (
+              <Link
+                href={`/g/${t.id}/teklif`}
+                aria-label={`${t.name} takımına meydan oku`}
+                className="flex min-h-9 shrink-0 items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2.5 text-xs font-bold text-primary transition hover:bg-primary/20"
+              >
+                <Icon name="swords" className="text-[16px]" />
+                <span className="hidden min-[400px]:inline">Meydan oku</span>
               </Link>
-            ))}
-          </Strip>
-        </>
-      )}
+            )}
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
 
-      {f.mvps.length > 0 && (
-        <>
-          <SectionTitle>🔥 Haftanın MVP&apos;leri</SectionTitle>
-          <Strip>
-            {f.mvps.map((m) => (
-              <MiniCard key={m.player.userId} c={m.player}>
-                <div className="mt-1 text-center text-[11px] leading-tight text-muted">
-                  <span className="font-semibold text-gold-1">MVP</span> · {m.team.name}
-                  {m.opponent ? ` vs ${m.opponent}` : ""}
-                  {m.score ? ` (${m.score})` : ""}
-                </div>
-              </MiniCard>
-            ))}
-          </Strip>
-        </>
-      )}
+function PlayersTabs({ f, chosen, v }: { f: Featured; chosen: FeaturedLevel; v: Viewer }) {
+  const teamOf = (c: PlayerCandidate) => c.teams[0]?.name;
+  return (
+    <HomeTabs
+      initial="puan"
+      tabs={[
+        {
+          key: "puan",
+          label: "En yüksek",
+          content: f.players.items.length ? (
+            <>
+              <Fallback s={f.players} chosen={chosen} v={v} />
+              <div className={listBox}>
+                {f.players.items.slice(0, 5).map((c, i) => (
+                  <PlayerRow key={c.userId} c={c} i={i} sub={[teamOf(c), `${c.matches} maç`].filter(Boolean).join(" · ")} stat={String(c.overall)} statClass={tierOf(c.overall) === "gold" ? "text-gold-1" : "text-on-surface"} />
+                ))}
+              </div>
+            </>
+          ) : (
+            <Empty>Maç oynayan oyuncular burada sıralanır. İlk maçını oyna, burada sen ol!</Empty>
+          ),
+        },
+        {
+          key: "mvp",
+          label: "Haftanın MVP'leri",
+          content: f.mvps.items.length ? (
+            <>
+              <Fallback s={f.mvps} chosen={chosen} v={v} />
+              <div className={listBox}>
+                {f.mvps.items.slice(0, 5).map((m, i) => (
+                  <PlayerRow
+                    key={m.player.userId}
+                    c={m.player}
+                    i={i}
+                    sub={`${m.team.name}${m.opponent ? ` vs ${m.opponent}` : ""}${m.score ? ` (${m.score})` : ""}`}
+                    stat="MVP"
+                    statClass="text-gold-1 text-sm"
+                  />
+                ))}
+              </div>
+            </>
+          ) : (
+            <Empty>Bu hafta takım maçlarında MVP seçilen olmadı.</Empty>
+          ),
+        },
+        {
+          key: "yukselen",
+          label: "Yükselenler",
+          content: f.risers.items.length ? (
+            <>
+              <Fallback s={f.risers} chosen={chosen} v={v} />
+              <div className={listBox}>
+                {f.risers.items.slice(0, 5).map((r, i) => (
+                  <PlayerRow key={r.player.userId} c={r.player} i={i} sub={`son 30 gün · ${r.matches} maç`} stat={`+${r.delta}`} statClass="text-primary" />
+                ))}
+              </div>
+            </>
+          ) : (
+            <Empty>Son 30 günde puanı yükselen oyuncu yok.</Empty>
+          ),
+        },
+      ]}
+    />
+  );
+}
 
-      {f.risers.length > 0 && (
-        <>
-          <SectionTitle>📈 Yükselen yıldızlar</SectionTitle>
-          <Strip>
-            {f.risers.map((r) => (
-              <MiniCard key={r.player.userId} c={r.player}>
-                <div className="mt-1 text-center text-[11px] leading-tight text-muted">
-                  <span className="font-semibold text-accent">+{r.delta}</span> son 30 gün · {r.matches} maç
-                </div>
-              </MiniCard>
-            ))}
-          </Strip>
-        </>
-      )}
+function LevelBody({ f, level, v }: { f: Featured; level: FeaturedLevel; v: Viewer }) {
+  const region = new URLSearchParams(level === "tr" ? { il: "" } : { il: v.city ?? "", ...(level === "ilce" && v.district ? { ilce: v.district } : {}) }).toString();
+  return (
+    <>
+      <SectionTitle
+        action={
+          <Link href={`/kesfet?${region}`} className="flex items-center text-sm font-semibold text-primary">
+            Tümü
+            <Icon name="chevron_right" className="text-[18px]" />
+          </Link>
+        }
+      >
+        <span className="inline-flex items-center gap-1.5">
+          <Icon name="military_tech" fill className="text-[18px] text-gold-1" />
+          Öne çıkan takımlar
+        </span>
+      </SectionTitle>
+      <TeamsList s={f.teams} chosen={level} v={v} />
+
+      <SectionTitle
+        action={
+          <Link href={`/kesfet?${region}&sekme=oyuncu`} className="flex items-center text-sm font-semibold text-primary">
+            Ara
+            <Icon name="chevron_right" className="text-[18px]" />
+          </Link>
+        }
+      >
+        <span className="inline-flex items-center gap-1.5">
+          <Icon name="stars" fill className="text-[18px] text-primary" />
+          Öne çıkan oyuncular
+        </span>
+      </SectionTitle>
+      <PlayersTabs f={f} chosen={level} v={v} />
     </>
   );
 }
@@ -116,28 +227,38 @@ function FeaturedBody({ f, city }: { f: Featured; city: string | null }) {
 function Skeleton() {
   return (
     <div aria-hidden className="mt-8 space-y-3">
-      <div className="h-4 w-48 animate-pulse rounded bg-pitch-800" />
-      <div className="flex gap-3 overflow-hidden">
-        {[0, 1, 2].map((i) => <div key={i} className="h-48 w-36 shrink-0 animate-pulse rounded-2xl bg-pitch-800" />)}
-      </div>
+      <div className="h-4 w-48 animate-pulse rounded bg-surface-high" />
+      <div className="h-40 animate-pulse rounded-xl bg-surface-high" />
     </div>
   );
 }
 
-async function FeaturedAsync({ city }: { city: string | null }) {
+async function FeaturedAsync(v: Viewer) {
+  const levels = availableLevels(v.city, v.district);
   // Hata ana sayfayı bozmasın: öne çıkanlar süs, asıl içerik değil
-  const f = await loadFeatured(city).catch((e) => {
+  const all = await Promise.all(levels.map((l) => loadFeatured(v.city, v.district, l))).catch((e) => {
     console.error("[öne çıkanlar]", e);
     return null;
   });
-  return f ? <FeaturedBody f={f} city={city} /> : null;
+  if (!all) return null;
+  if (levels.length === 1) return <LevelBody f={all[0]} level="tr" v={v} />;
+  return (
+    <div className="mt-8">
+      <HomeTabs
+        variant="chips"
+        label="Öne çıkanların bölgesi"
+        initial={levels[0]}
+        tabs={levels.map((l, i) => ({ key: l, label: levelLabel(l, v.city, v.district), content: <div className="[&>div:first-child]:mt-1"><LevelBody f={all[i]} level={l} v={v} /></div> }))}
+      />
+    </div>
+  );
 }
 
-/** Ana sayfa "öne çıkanlar": ana içeriği bekletmesin diye akışla gelir */
-export function FeaturedSections({ city }: { city: string | null }) {
+/** Ana sayfa "öne çıkanlar": ana içeriği bekletmesin diye akışla gelir; bölge seçici İlçe · İl · Türkiye */
+export function FeaturedSections(props: Viewer) {
   return (
     <Suspense fallback={<Skeleton />}>
-      <FeaturedAsync city={city} />
+      <FeaturedAsync {...props} />
     </Suspense>
   );
 }

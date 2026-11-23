@@ -1,19 +1,17 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchIn } from "@/lib/fetch-in";
 import { one } from "@/lib/data";
 import { findTeams, type TeamSummary } from "@/lib/teams-data";
 import { loadCandidates, loadCandidatesByIds } from "@/lib/players-data";
 import { searchCandidates, type PlayerCandidate } from "@/lib/player-search";
+import { FEATURED_MIN_MATCHES, FEATURED_MIN_ITEMS, levelChain, pickSection, type FeaturedLevel, type Section } from "@/lib/featured-rules";
 
-/** Ana sayfadaki "öne çıkanlar": herkese aynı gösterilir, bu yüzden bölge başına 5 dakika önbelleğe alınır */
-
-/** Öne çıkması için en az bu kadar puanlı maç (tek maçlık yıldız çıkmasın) */
-const FEATURED_MIN_MATCHES = 3;
-/** Bölgede bu kadar oyuncu/takım yoksa Türkiye geneli gösterilir */
-const MIN_REGIONAL = 3;
+/**
+ * Ana sayfadaki "öne çıkanlar": herkese aynı gösterilir. Havuzlar (bölgedeki oyuncular/takımlar, Türkiye geneli MVP ve
+ * yükselenler) 5 dakika önbellekte; seçilen kademede (ilçe/il/Türkiye) yeterli kayıt yoksa bir üst kademeye çıkılır.
+ */
 
 export interface MvpEntry {
   player: PlayerCandidate;
@@ -28,19 +26,18 @@ export interface RiserEntry {
   matches: number;
 }
 export interface Featured {
-  /** true ise bölgede yeterli kayıt yoktu, Türkiye geneli gösteriliyor */
-  playersNational: boolean;
-  teamsNational: boolean;
-  players: PlayerCandidate[];
-  teams: TeamSummary[];
-  mvps: MvpEntry[];
-  risers: RiserEntry[];
+  players: Section<PlayerCandidate>;
+  teams: Section<TeamSummary>;
+  mvps: Section<MvpEntry>;
+  risers: Section<RiserEntry>;
 }
 
 const DAY = 864e5;
+const LIST = 8;
 
-/** Son 7 günde kapanan, herkese açık TAKIM maçlarının MVP'leri (özel grup maçları sızmasın) */
-async function weeklyMvps(admin: SupabaseClient, city: string | null): Promise<MvpEntry[]> {
+/** Son 7 günde kapanan, herkese açık TAKIM maçlarının MVP'leri (özel grup maçları sızmasın); Türkiye geneli */
+async function weeklyMvps(): Promise<MvpEntry[]> {
+  const admin = createAdminClient();
   type M = {
     played_at: string;
     status: string;
@@ -73,7 +70,7 @@ async function weeklyMvps(admin: SupabaseClient, city: string | null): Promise<M
   for (const r of rows) {
     const uid = userOf.get(r.playerId);
     const player = uid ? people.get(uid) : undefined;
-    if (!uid || !player || seen.has(uid) || (city && player.city !== city)) continue;
+    if (!uid || !player || seen.has(uid)) continue;
     const g = one(r.m.groups)!;
     seen.add(uid);
     out.push({
@@ -83,13 +80,13 @@ async function weeklyMvps(admin: SupabaseClient, city: string | null): Promise<M
       playedAt: r.m.played_at,
       score: r.m.score_a !== null && r.m.score_b !== null ? `${r.m.score_a}-${r.m.score_b}` : "",
     });
-    if (out.length >= 8) break;
   }
   return out;
 }
 
-/** Son 30 günde rating'i en çok artanlar (en az 2 puanlı maç) */
-async function risingStars(admin: SupabaseClient, city: string | null): Promise<RiserEntry[]> {
+/** Son 30 günde rating'i en çok artanlar (en az 2 puanlı maç); Türkiye geneli */
+async function risingStars(): Promise<RiserEntry[]> {
+  const admin = createAdminClient();
   type M = { played_at: string };
   const { data, error } = await admin
     .from("match_results")
@@ -114,44 +111,61 @@ async function risingStars(admin: SupabaseClient, city: string | null): Promise<
     a.matches += 1;
     agg.set(uid, a);
   }
-  const top = [...agg.entries()].filter(([, a]) => a.matches >= 2 && a.delta > 0).sort((a, b) => b[1].delta - a[1].delta).slice(0, 30);
+  const top = [...agg.entries()].filter(([, a]) => a.matches >= 2 && a.delta > 0).sort((a, b) => b[1].delta - a[1].delta).slice(0, 100);
   const people = new Map((await loadCandidatesByIds(admin, top.map(([u]) => u))).map((c) => [c.userId, c]));
-  return top
-    .flatMap(([uid, a]) => {
-      const player = people.get(uid);
-      return player && (!city || player.city === city) ? [{ player, delta: a.delta, matches: a.matches }] : [];
-    })
-    .slice(0, 8);
+  return top.flatMap(([uid, a]) => {
+    const player = people.get(uid);
+    return player ? [{ player, delta: a.delta, matches: a.matches }] : [];
+  });
 }
 
-async function compute(city: string | null): Promise<Featured> {
-  const admin = createAdminClient();
-  const [regional, regionalTeams, mvps, risers] = await Promise.all([
-    city ? loadCandidates(admin, { city }) : Promise.resolve([] as PlayerCandidate[]),
-    findTeams(admin, { city: city ?? undefined, limit: 8 }),
-    weeklyMvps(admin, city),
-    risingStars(admin, city),
-  ]);
-  const pick = (list: PlayerCandidate[]) => searchCandidates(list, { minMatches: FEATURED_MIN_MATCHES }, "rating").slice(0, 8);
-  let players = pick(regional);
-  let playersNational = !city;
-  if (players.length < MIN_REGIONAL && city) {
-    players = pick(await loadCandidates(admin, {}));
-    playersNational = true;
-  }
-  let teams = regionalTeams.filter((t) => t.rated);
-  let teamsNational = !city;
-  if (teams.length < MIN_REGIONAL && city) {
-    teams = (await findTeams(admin, { limit: 8 })).filter((t) => t.rated);
-    teamsNational = true;
-  }
-  return { playersNational, teamsNational, players, teams, mvps, risers };
+/** Bölgedeki en az 1 maçlı oyuncular, rating'e göre (ilk 50) */
+async function playersPool(city: string | null, district: string | null): Promise<PlayerCandidate[]> {
+  const list = await loadCandidates(createAdminClient(), { city: city ?? undefined, district: district ?? undefined });
+  return searchCandidates(list, { minMatches: 1 }, "rating").slice(0, 50);
+}
+
+/** Bölgedeki puanı oluşmuş takımlar (ilk 20) */
+async function teamsPool(city: string | null, district: string | null): Promise<TeamSummary[]> {
+  const teams = await findTeams(createAdminClient(), { city: city ?? undefined, district: district ?? undefined, limit: 40 });
+  return teams.filter((t) => t.rated).slice(0, 20);
 }
 
 /** Aramada görünme ayarı değişince hemen yenilenir (actions.ts) */
 export const FEATURED_TAG = "featured";
+const opts = { revalidate: 300, tags: [FEATURED_TAG] };
+const cachedMvps = unstable_cache(weeklyMvps, ["featured-mvps-v2"], opts);
+const cachedRisers = unstable_cache(risingStars, ["featured-risers-v2"], opts);
+const cachedPlayers = unstable_cache(playersPool, ["featured-players-v2"], opts);
+const cachedTeams = unstable_cache(teamsPool, ["featured-teams-v2"], opts);
 
-const cached = unstable_cache(compute, ["featured-v1"], { revalidate: 300, tags: [FEATURED_TAG] });
+const same = (a: string | null, b: string | null) => (a ?? "").toLocaleLowerCase("tr") === (b ?? "").toLocaleLowerCase("tr");
 
-/** `city` boşsa Türkiye geneli */
-export const loadFeatured = (city: string | null) => cached(city);
+/**
+ * Seçilen kademe için öne çıkanlar. `level` kullanıcının bölgesine göre: ilçe (il + ilçe), il, Türkiye.
+ * Her bölüm ayrı ayrı yeterli kayıt bulana kadar üst kademeye çıkar.
+ */
+export async function loadFeatured(city: string | null, district: string | null, level: FeaturedLevel): Promise<Featured> {
+  const chain = levelChain(level, city, district);
+  const region = (l: FeaturedLevel) => (l === "tr" ? { c: null, d: null } : l === "il" ? { c: city, d: null } : { c: city, d: district });
+  const inRegion = (p: PlayerCandidate, l: FeaturedLevel) => {
+    const r = region(l);
+    return (!r.c || same(p.city, r.c)) && (!r.d || same(p.district, r.d));
+  };
+  const [mvpsAll, risersAll] = await Promise.all([cachedMvps(), cachedRisers()]);
+
+  // Oyuncular: önce en az FEATURED_MIN_MATCHES maçlılar; hiçbir kademede yetmezse 1 maçlılara düş
+  const playersAt = (min: number) => async (l: FeaturedLevel) => {
+    const r = region(l);
+    return (await cachedPlayers(r.c, r.d)).filter((p) => p.matches >= min).slice(0, LIST);
+  };
+  let players = await pickSection(chain, playersAt(FEATURED_MIN_MATCHES), FEATURED_MIN_ITEMS);
+  if (players.items.length < FEATURED_MIN_ITEMS) players = await pickSection(chain, playersAt(1), FEATURED_MIN_ITEMS);
+
+  const [teams, mvps, risers] = await Promise.all([
+    pickSection(chain, async (l) => (await cachedTeams(region(l).c, region(l).d)).slice(0, LIST), FEATURED_MIN_ITEMS),
+    pickSection(chain, async (l) => mvpsAll.filter((m) => inRegion(m.player, l)).slice(0, LIST), FEATURED_MIN_ITEMS),
+    pickSection(chain, async (l) => risersAll.filter((r) => inRegion(r.player, l)).slice(0, LIST), FEATURED_MIN_ITEMS),
+  ]);
+  return { players, teams, mvps, risers };
+}

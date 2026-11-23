@@ -32,7 +32,7 @@ src/lib/fetch-in.ts      Büyük `in (...)` sorgularını parçalayıp sayfalaya
 src/components/profile/ProfileView.tsx  Sekmeli profil (Genel/İstatistik/Maçlar/Ayarlar); /profil ve /oyuncu/[id] aynı bileşeni kullanır
 src/lib/team-stats.ts    Takım karnesi, form, seri, rakip bazlı geçmiş, oyuncu liderleri (saf, testli)
 src/lib/player-search.ts  Oyuncu arama süzgeçleri/sıralama/URL ayrıştırma (saf, testli); veri: src/lib/players-data.ts (service role, sadece `discoverable` kişiler)
-src/lib/featured-data.ts  Ana sayfa "öne çıkanlar" (bölge başına 5 dk `unstable_cache`, etiket `featured`); src/components/FeaturedSections.tsx (Suspense ile akar)
+src/lib/featured-data.ts  Ana sayfa "öne çıkanlar" (havuzlar 5 dk `unstable_cache`, etiket `featured`; kademe kuralları src/lib/featured-rules.ts, testli); src/components/FeaturedSections.tsx (Suspense ile akar)
 src/lib/challenges-data.ts  Maç teklifleri sorguları (gelen/giden, bekleyen sayısı)
 src/lib/badges.ts        Profil rozetleri: maç kayıtlarından hesaplanır, saklanmaz (saf, testli)
 src/lib/card-name.ts     Karttaki ad: kısaltma ve "kartta görünen ad" doğrulaması + küfür kontrolü (saf, testli)
