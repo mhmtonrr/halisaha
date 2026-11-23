@@ -20,7 +20,7 @@ export const PREF_OF: Record<NotificationType, PrefKey> = {
 
 export const PREF_LABEL: Record<PrefKey, { title: string; hint: string }> = {
   votes: { title: "Oylama", hint: "Maç bitip oylama açılınca, oylama kapanmadan hatırlatma ve sonuçlar açıklanınca" },
-  matches: { title: "Maç çağrısı ve maç", hint: "Yeni çağrı ve adam arama, kadroya seçilme/yedek/çıkarılma, maç kuruldu/iptal, rakibin skoru, başvuru ve yer açılması (organizatöre)" },
+  matches: { title: "Maç çağrısı ve maç", hint: "Yeni çağrı ve adam arama, kadroya seçilme/yedek/çıkarılma, maç kuruldu/iptal, rakibin skoru, başvuru ve yer açılması (organizatöre), üye katıldı/ayrıldı (yetkililere), rolün değişti" },
   offers: { title: "Maç teklifi", hint: "Takımlar arası maç teklifleri, yanıtları ve geri çekilmesi" },
   chat: { title: "Sohbet", hint: "Grup/takım ve birebir mesajlar, takıma/gruba davetler (bir sohbette 10 dakikada en fazla 1 bildirim)" },
 };
@@ -101,6 +101,18 @@ export const text = {
     body: truncate(join(groupName, `${who} gruptan ayrıldı`), 300),
     url: `/g/${groupId}/players`,
     tag: `member-left:${groupId}`,
+  }),
+  memberJoined: (groupName: string, who: string, groupId: string, kind: "team" | "community"): Content => ({
+    title: kind === "team" ? "👋 Takıma yeni oyuncu" : "👋 Gruba yeni üye",
+    body: truncate(`${who}, “${oneLine(groupName)}” ${kind === "team" ? "takımına" : "grubuna"} katıldı`, 300),
+    url: `/g/${groupId}/players`,
+    tag: `member-joined:${groupId}`,
+  }),
+  roleChanged: (groupName: string, groupId: string, roleLabel: string): Content => ({
+    title: "🎖️ Rolün değişti",
+    body: truncate(`${oneLine(groupName)}: artık ${roleLabel}`, 300),
+    url: `/g/${groupId}`,
+    tag: `role:${groupId}`,
   }),
   voteOpened: (groupId: string, matchId: string, opponent?: string | null): Content => ({
     title: "🗳️ Oylama açıldı",

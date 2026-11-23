@@ -16,6 +16,7 @@ import { loadMenuData } from "@/lib/menu-data";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { groupMemberIds, groupName, linkedMatches, matchAccountIds } from "@/lib/recipients";
 import { notifySpotOpened } from "@/lib/calls-notify";
+import { announceJoin, announceRole } from "@/lib/membership-notify";
 import { balanceTeams, pickVariant, type TeamCandidate } from "@/lib/teams";
 import { formatDate, getGroupPlayers, parseLocalDateTime, POSITIONS, type Position } from "@/lib/data";
 import { canonicalDistrict, isProvince } from "@/lib/regions";
@@ -403,14 +404,16 @@ export async function updateTeam(fd: FormData) {
 }
 
 export async function setMemberRole(fd: FormData) {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
   const groupId = str(fd, "groupId");
+  const playerId = str(fd, "playerId");
   const back = `/g/${groupId}/players`;
   const { error } = await supabase.rpc("set_member_role", {
-    p_player_id: str(fd, "playerId"),
+    p_player_id: playerId,
     p_role: str(fd, "role"),
   });
   if (error) fail(back, error.message);
+  announceRole(playerId, user.id);
   revalidatePath(`/g/${groupId}`, "layout");
 }
 
@@ -427,7 +430,7 @@ export async function regenerateInvite(fd: FormData) {
  * yapıştırılırsa içindeki kod alınır. Zaten üyeyse doğrudan grubuna gider.
  */
 export async function joinGroup(fd: FormData) {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
   const code = extractInviteCode(str(fd, "code"));
   const kind = parseKind(str(fd, "tur"));
   const back = `/katil${kind ? `?tur=${kind}` : ""}`;
@@ -443,6 +446,7 @@ export async function joinGroup(fd: FormData) {
   if (info.already_member) redirect(`/g/${info.group_id}`);
   const { data, error } = await supabase.rpc("join_group", { p_invite_code: code });
   if (error || !data) fail(back, rpcMessage(error ?? {}, "Katılınamadı"));
+  announceJoin(data as string, user.id);
   revalidatePath("/", "layout");
   redirect(`/g/${data}`);
 }
@@ -1431,6 +1435,8 @@ export async function respondGroupInvite(inviteId: string, accept: boolean) {
       const { data: me } = await createAdminClient().from("profiles").select("display_name").eq("id", user.id).maybeSingle();
       await notify([inv.inviter_id], "invite", text.inviteReply(me?.display_name ?? "Bir oyuncu", inv.group_name, inv.group_kind as "team" | "community", accept, data as string), { excludeUserId: user.id });
     });
+    // Daveti gönderen zaten "kabul edildi" aldı; diğer yetkililere "katıldı"
+    if (accept) announceJoin(data as string, user.id, [inv.inviter_id as string]);
   }
   return { ok: !error, groupId: (data as string | null) ?? undefined, error: error ? rpcMessage(error, "İşlem yapılamadı") : undefined };
 }

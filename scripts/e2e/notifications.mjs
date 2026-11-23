@@ -214,6 +214,22 @@ try {
   await capP.goto(`${BASE}/g/${A}/teklifler`);
   await capP.locator('button:has-text("Teklifi geri çek")').first().click();
   check("teklif geri çekilince rakibe bildirim", !!(await until(async () => (await notifs(riv, "offer")).some((n) => n.title.includes("geri çekildi")))));
+
+  // 13) Katılım → kaptan/kurucuya; rol değişikliği → kişiye
+  const codeOf = async (g) => (await admin.from("groups").select("invite_code").eq("id", g).single()).data.invite_code;
+  await aplP.goto(`${BASE}/katil?tur=takim&kod=${await codeOf(A)}`);
+  await aplP.click('button:has-text("Takıma katıl")'); await aplP.waitForURL(new RegExp(`/g/${A}`), { timeout: 20000 });
+  check("kodla takıma katılınca kaptana '👋 Takıma yeni oyuncu'", !!(await until(async () => (await notifs(cap, "match")).some((n) => n.title.includes("Takıma yeni oyuncu") && n.body.includes("Ahmet Başvuran")))));
+  check("katılan kendine bildirim almaz, sıradan üyeye gitmez", !(await notifs(apl)).some((n) => n.title.includes("yeni oyuncu")) && !(await notifs(mem)).some((n) => n.title.includes("yeni oyuncu")));
+  await rivP.goto(`${BASE}/join/${await codeOf(G)}`); await rivP.waitForURL(new RegExp(`/g/${G}`), { timeout: 20000 });
+  check("linkle gruba katılınca kurucuya '👋 Gruba yeni üye'", !!(await until(async () => (await notifs(cap, "match")).some((n) => n.title.includes("Gruba yeni üye") && n.body.includes("Rıza Rakip")))));
+  await rivP.goto(`${BASE}/join/${await codeOf(G)}`); await rivP.waitForURL(new RegExp(`/g/${G}`), { timeout: 20000 });
+  await new Promise((r) => setTimeout(r, 3000));
+  check("link tekrar açılınca ikinci 'yeni üye' bildirimi yok", (await notifs(cap, "match")).filter((n) => n.title.includes("Gruba yeni üye")).length === 1);
+  const aplA = await gp(A, apl);
+  await capP.goto(`${BASE}/g/${A}/players`);
+  await capP.locator(`form:has(input[name="playerId"][value="${aplA}"]):has(input[name="role"][value="organizer"]) button`).click();
+  check("rol verilince kişiye '🎖️ Rolün değişti' (Organizatör)", !!(await until(async () => (await notifs(apl, "match")).some((n) => n.title.includes("Rolün değişti") && n.body.includes("Organizatör")))));
 } catch (e) {
   failed++;
   console.log("  ✗ ÇÖKTÜ:", e.message);
