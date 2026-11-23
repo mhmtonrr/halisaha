@@ -2,6 +2,7 @@
 // Canlı Supabase'e karşı çalışır; test verisini sonunda siler.
 import { createRequire } from "module";
 import fs from "fs";
+import { removeTestUsers } from "./cleanup.mjs";
 const PROJ = process.cwd();
 const require = createRequire(PROJ + "/package.json");
 const { createClient } = require("@supabase/supabase-js");
@@ -74,7 +75,7 @@ try {
 } finally {
   await browser?.close();
   for (const g of groupIds) await admin.from("groups").delete().eq("id", g);
-  if (user) await admin.auth.admin.deleteUser(user.id);
+  if (user) await removeTestUsers(admin, [user.id]);
   console.log(failed ? `\n${failed} kontrol BAŞARISIZ` : "\nTüm kontroller geçti");
   process.exit(failed ? 1 : 0);
 }

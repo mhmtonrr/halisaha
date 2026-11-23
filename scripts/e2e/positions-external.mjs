@@ -1,5 +1,6 @@
 import { createRequire } from "module";
 import fs from "fs";
+import { removeTestUsers } from "./cleanup.mjs";
 const PROJ = process.cwd();
 const require = createRequire(PROJ + "/package.json");
 const { createClient } = require("@supabase/supabase-js");
@@ -12,7 +13,7 @@ const URL_ = env.NEXT_PUBLIC_SUPABASE_URL, ANON = env.NEXT_PUBLIC_SUPABASE_ANON_
 const admin = createClient(URL_, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 const BASE = "http://localhost:3000";
 const names = ["Ahmet Yılmaz", "Burak Demir", "Cem Kaya", "Deniz Şahin"];
-const users = []; let groupId;
+const users = []; let groupId, teamId;
 const log = (...a) => console.log("•", ...a);
 
 async function sessionCookies(email, password) {
@@ -27,6 +28,8 @@ try {
     const email = `e2e-test-${Date.now()}-${i}@example.com`, password = "Pw-" + Math.random().toString(36).slice(2) + "A1!";
     const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name: n } });
     if (error) throw error;
+    // Karşılama tamamlanmış sayılsın; yoksa her sayfa /hosgeldin'e yönlenir
+    await admin.from("profiles").update({ city: "İstanbul", onboarded_at: new Date().toISOString() }).eq("id", data.user.id);
     users.push({ id: data.user.id, name: n, cookies: await sessionCookies(email, password) });
   }
   const browser = await chromium.launch();
@@ -48,7 +51,7 @@ try {
   const profiles = [["MID", ["FWD"], "R", 10, "Orta sahanın beyni"], ["GK", [], "R", 1, ""], ["DEF", ["MID"], "L", 4, ""], ["FWD", ["MID"], "R", 9, "Gol makinesi"]];
   for (const [i, u] of users.entries()) {
     const { ctx, page } = await ctxFor(u, i === 0 ? 2 : 1);
-    await page.goto(BASE + "/profil");
+    await page.goto(BASE + "/profil/ayarlar/futbolcu"); // mevki/ayak/forma Ayarlar > Futbolcu profili alt ekranında (0028)
     const [pos, sec, foot, shirt, bio] = profiles[i];
     await page.locator(`input[name="position"][value="${pos}"]`).check({ force: true });
     for (const s of sec) await page.locator(`input[name="secondary"][value="${s}"]`).check({ force: true });
@@ -63,19 +66,13 @@ try {
   log("profiller kaydedildi:", profs.map((p) => `${p.display_name} ${p.preferred_position}/${p.secondary_positions.join("+") || "-"} #${p.shirt_number}`).join(", "));
 
   const A = await ctxFor(users[0], 2);
-  await A.page.goto(BASE + "/"); await A.page.fill('input[name="name"]', "Salı Akşamı Ekibi"); await A.page.click('button:has-text("Kur")');
+  // Grup /grup-kur'dan kurulur; diğerleri davet linkiyle katılır (misafir artık sadece maç ekranından eklenir, burada gerekmez)
+  await A.page.goto(BASE + "/grup-kur"); await A.page.fill('input[name="name"]', "Salı Akşamı Ekibi"); await A.page.click('button:has-text("Grubu kur")');
   await A.page.waitForURL(/\/g\/[0-9a-f-]+$/); groupId = A.page.url().split("/g/")[1];
   const { data: g } = await admin.from("groups").select("invite_code").eq("id", groupId).single();
   for (const u of users.slice(1)) { const { ctx, page } = await ctxFor(u); await page.goto(`${BASE}/join/${g.invite_code}`); await page.waitForURL(/\/g\//); await ctx.close(); }
   const { data: gp } = await admin.from("group_players").select("display_name, position").eq("group_id", groupId);
   log("katılınca mevkiler gruba geldi:", gp.map((p) => `${p.display_name}=${p.position}`).join(", "));
-
-  await A.page.goto(`${BASE}/g/${groupId}/players`);
-  for (const [n, pos] of [["Emre", "GK"], ["Fatih", "DEF"], ["Gökhan", "MID"], ["Hakan", "FWD"]]) {
-    const f = A.page.locator('form:has(input[placeholder="İsim"])');
-    await f.locator('input[name="name"]').fill(n); await f.locator('select[name="position"]').selectOption(pos);
-    await f.locator('button:has-text("Ekle")').click(); await A.page.locator(`ul >> text="${n}"`).waitFor();
-  }
 
   // 1) Kendi aramızda maç + maça özel mevki
   await A.page.goto(`${BASE}/g/${groupId}/matches/new`);
@@ -97,17 +94,20 @@ try {
     const visible = await page.locator("text=Bu maçın mevkilerini düzenle").count();
     log("üye mevki düzenleme görüyor mu:", visible ? "EVET (hata)" : "hayır ✓"); await ctx.close(); }
   await A.page.fill('input[name="scoreA"]', "6"); await A.page.fill('input[name="scoreB"]', "4");
-  await A.page.locator('input[name^="goals_"]').nth(1).fill("3"); await A.page.locator('input[name^="goals_"]').nth(5).fill("2");
+  await A.page.locator('input[name^="goals_"]').nth(1).fill("3"); await A.page.locator('input[name^="goals_"]').nth(3).fill("2");
   await A.page.click('button:has-text("oylamayı başlat")'); await A.page.waitForSelector("text=kişi oy verdi");
   for (const ui of [1, 2, 3, 0]) { const c = ui === 0 ? A : await ctxFor(users[ui]); await c.page.goto(m1); await vote(c.page); if (ui) await c.ctx.close(); }
   await A.page.goto(m1); await A.page.waitForSelector("text=Maçın adamı");
   log("iç maç kapandı");
 
-  // 2) Rakip takıma karşı maç
-  await A.page.goto(`${BASE}/g/${groupId}/matches/new`);
-  await A.page.click('button:has-text("Rakip takıma karşı")');
+  // 2) Rakip takıma karşı maç: grupta yok (kullanıcı kararı 2026-11-23), takımda açılır
+  await A.page.goto(BASE + "/takim-kur"); await A.page.fill('input[name="name"]', "Salı Yıldızları"); await A.page.click('button:has-text("Takımı kur")');
+  await A.page.waitForURL(/\/g\/[0-9a-f-]{36}$/, { timeout: 20000 }); teamId = A.page.url().split("/g/")[1];
+  const { data: tm } = await admin.from("groups").select("invite_code").eq("id", teamId).single();
+  for (const u of users.slice(1)) { const { ctx, page } = await ctxFor(u); await page.goto(`${BASE}/join/${tm.invite_code}`); await page.waitForURL(/\/g\//); await ctx.close(); }
+  await A.page.goto(`${BASE}/g/${teamId}/matches/new`);
   await A.page.fill('input[name="opponent"]', "Yıldızspor");
-  for (const n of ["Ahmet", "Burak", "Cem", "Deniz", "Fatih", "Hakan"]) await A.page.locator(`li button:has-text("${n}")`).first().click();
+  for (const n of ["Ahmet", "Burak", "Cem", "Deniz"]) await A.page.locator(`li button:has-text("${n}")`).first().click();
   await shot(A.page, "03-rakip-mac-olustur");
   await A.page.click('button:has-text("Maçı oluştur")'); await A.page.waitForURL(/\/m\//);
   const m2 = A.page.url();
@@ -126,17 +126,17 @@ try {
   await A.page.goto(`${BASE}/g/${groupId}`); await shot(A.page, "07-grup");
   await A.page.goto(`${BASE}/g/${groupId}/kadro`); await shot(A.page, "08-kadro");
   await A.page.click('button:has-text("Defans")'); const defCount = await A.page.locator('a[href*="/p/"]').count();
-  log("kadro defans filtresi:", defCount, "oyuncu (Cem ana DEF, Fatih DEF, Ahmet yok)");
+  log("kadro defans filtresi:", defCount, "oyuncu (beklenen 1: Cem ana DEF)");
   await A.page.click('button:has-text("Tümü")');
   await A.page.locator('a[href*="/p/"]').first().click(); await A.page.waitForURL(/\/p\//);
   await shot(A.page, "09-oyuncu-detay");
 
-  const { data: res } = await admin.from("match_results").select("match_score, rating_after, is_mvp, group_players(display_name), matches!inner(group_id, kind)").eq("matches.group_id", groupId);
+  const { data: res } = await admin.from("match_results").select("match_score, rating_after, is_mvp, group_players(display_name), matches!inner(group_id, kind)").in("matches.group_id", [groupId, teamId]);
   console.log("\nSonuçlar:"); for (const r of res.sort((a, b) => a.matches.kind.localeCompare(b.matches.kind) || b.match_score - a.match_score)) console.log(`  ${r.matches.kind.padEnd(8)} ${r.group_players.display_name.padEnd(14)} ${r.match_score.toFixed(1)}  → ${r.rating_after}${r.is_mvp ? " ⭐" : ""}`);
   await browser.close();
 } finally {
-  if (groupId) await admin.from("groups").delete().eq("id", groupId);
-  for (const u of users) await admin.auth.admin.deleteUser(u.id);
+  for (const id of [groupId, teamId]) if (id) await admin.from("groups").delete().eq("id", id);
+  await removeTestUsers(admin, users.map((u) => u.id));
   const { data: left } = await admin.from("profiles").select("id").in("id", users.map((u) => u.id));
   log(`temizlendi (kalan test profili: ${left?.length ?? 0})`);
 }

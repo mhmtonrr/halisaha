@@ -1,6 +1,7 @@
 // Geri düğmesi: formdan yönlendirilen sayfada form değil önceki sayfa; sohbet listesinden girilen sohbette liste; sekme korunur.
 import { createRequire } from "module";
 import fs from "fs";
+import { removeTestUsers } from "./cleanup.mjs";
 const PROJ = process.cwd();
 const require = createRequire(PROJ + "/package.json");
 const { createClient } = require("@supabase/supabase-js");
@@ -58,6 +59,6 @@ try {
 } finally {
   await browser?.close();
   if (gid) await admin.from("groups").delete().eq("id", gid);
-  for (const u of users) await admin.auth.admin.deleteUser(u.id);
+  await removeTestUsers(admin, users.map((u) => u.id));
   log("test verileri silindi");
 }

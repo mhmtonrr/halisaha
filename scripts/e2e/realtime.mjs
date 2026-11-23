@@ -3,6 +3,7 @@
 // Canlı Supabase'e karşı çalışır; test verisini sonunda siler.
 import { createRequire } from "module";
 import fs from "fs";
+import { removeTestUsers } from "./cleanup.mjs";
 const PROJ = process.cwd();
 const require = createRequire(PROJ + "/package.json");
 const { createClient } = require("@supabase/supabase-js");
@@ -101,7 +102,7 @@ try {
 } finally {
   await browser?.close();
   if (groupIds.length) await admin.from("groups").delete().in("id", groupIds);
-  for (const u of users) await admin.auth.admin.deleteUser(u.id);
+  await removeTestUsers(admin, users.map((u) => u.id));
   console.log("• temizlendi");
 }
 console.log(failed ? `\n${failed} kontrol BAŞARISIZ` : "\nTüm e2e kontrolleri geçti");

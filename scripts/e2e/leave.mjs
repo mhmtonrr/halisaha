@@ -2,6 +2,7 @@
 // tekrar katılım, tek başına kalan kaptan grubu siler. Canlı Supabase'e karşı çalışır; test verisini sonunda siler.
 import { createRequire } from "module";
 import fs from "fs";
+import { removeTestUsers } from "./cleanup.mjs";
 const PROJ = process.cwd();
 const require = createRequire(PROJ + "/package.json");
 const { createClient } = require("@supabase/supabase-js");
@@ -71,7 +72,7 @@ try {
   check("ayrılan özel grubu artık açamaz", resp?.status() === 404 || !has(await bP.locator("body").innerText(), "E2E Ayrılma Grubu"));
   await bP.goto(`${BASE}/profil?sekme=istatistik`);
   t = await bP.locator("body").innerText();
-  check("ayrılanın profil istatistiği geçmişi korur (1 maç)", /1\s*\n?\s*Maç/.test(t));
+  check("ayrılanın profil istatistiği geçmişi korur (1 maç)", /OYNANAN MAÇ\s+(stadium\s+)?1\s+maç/.test(t)); // "Oynanan Maç" kartı: sayı + "maç" (ikon adı metne karışır)
   await bP.goto(`${BASE}/profil?sekme=maclar`);
   t = await bP.locator("body").innerText();
   check("maç geçmişinde grup adı görünür ama bağlantı yok", has(t, "E2E Ayrılma Grubu") && (await bP.locator(`a[href^="/g/${G}/m/"]`).count()) === 0);
@@ -134,7 +135,7 @@ try {
 } finally {
   await browser?.close();
   for (const g of groupIds) await admin.from("groups").delete().eq("id", g);
-  for (const u of users) await admin.auth.admin.deleteUser(u.id);
+  await removeTestUsers(admin, users.map((u) => u.id));
   console.log(failed ? `\n${failed} kontrol BAŞARISIZ` : "\nTüm kontroller geçti");
   process.exit(failed ? 1 : 0);
 }

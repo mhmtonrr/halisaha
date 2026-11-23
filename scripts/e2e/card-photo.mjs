@@ -2,6 +2,7 @@
 // Düz (opak) fotoğrafta model denenir; indirilemezse düz kırpma yedeği çalışmalı. Canlı Supabase'e karşı; test verisini siler.
 import { createRequire } from "module";
 import fs from "fs";
+import { removeTestUsers } from "./cleanup.mjs";
 const PROJ = process.cwd();
 const require = createRequire(PROJ + "/package.json");
 const { createClient } = require("@supabase/supabase-js");
@@ -41,6 +42,7 @@ try {
   await page.goto(`${BASE}/profil/ayarlar/futbolcu`);
   const file = page.locator('input[type="file"]');
   await file.setInputFiles({ name: "kesim.png", mimeType: "image/png", buffer: Buffer.from(await makeImage("image/png"), "base64") });
+  await page.getByRole("button", { name: "Kırp ve devam" }).click(); // kırpma adımı (PhotoCropper) her yüklemede açılır
   const ready = page.getByRole("button", { name: "Başka fotoğraf" });
   await ready.waitFor({ timeout: 20000 });
   check("şeffaf PNG'de önizleme kartta görünüyor", await page.locator('img[src^="blob:"]').count() === 1);
@@ -56,6 +58,7 @@ try {
 
   // Opak fotoğraf: model ya çalışır ya düz kırpma yedeği devreye girer; her iki durumda önizleme oluşmalı
   await file.setInputFiles({ name: "foto.jpg", mimeType: "image/jpeg", buffer: Buffer.from(await makeImage("image/jpeg"), "base64") });
+  await page.getByRole("button", { name: "Kırp ve devam" }).click(); // kırpma adımı (PhotoCropper) her yüklemede açılır
   await ready.waitFor({ timeout: 180000 });
   const fallback = await page.getByText("düz kırpıldı").count();
   console.log("  · opak fotoğraf:", fallback ? "model yok → düz kırpma" : "arka plan kaldırıldı");
@@ -76,7 +79,7 @@ try {
   await browser?.close();
   if (user) {
     await admin.storage.from("avatars").remove([`${user.id}/card`]);
-    await admin.auth.admin.deleteUser(user.id);
+    await removeTestUsers(admin, [user.id]);
   }
   console.log(failed ? `\n${failed} HATA` : "\nHepsi geçti");
   process.exit(failed ? 1 : 0);

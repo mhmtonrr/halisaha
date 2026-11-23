@@ -25,6 +25,10 @@ Büyük tasarım kararlarını kodlamadan önce kullanıcıyla netleştir; küç
     Arayüz/akış değiştiyse ilgili e2e senaryosunu (`docs/test.md`) yerelde `npm run dev`e karşı çalıştır; senaryo değişikliği kapsamıyorsa önce adımları ekle. 390px ekran görüntülerine bak.
     Migration/RLS → `npm run db:check` (+ yeni kontrol) canlıya uygulamadan önce. Saf mantık → Vitest. Sadece metin/doküman değişikliğinde `tsc` yeterli.
     Test edilemiyorsa (ör. telefon bildirimi, gerçek cihaz) push etmeden önce kullanıcıya söyle ve onay al; yanıtta neyin test edildiğini/edilmediğini açıkça yaz.
+12. **Öneriler** (kullanıcı isteği, 2026-11-23): görev bitince (veya görevi alıp plan yazarken) yanıtın sonuna kısa bir **"Öneriler"** bölümü ekle:
+    - **Sıradaki**: yol haritasına/bekleyen işlere göre mantıklı sonraki 1-2 adım.
+    - **Önerilen düzeltmeler**: iş sırasında fark ettiğin hata, tutarsızlık, eksik test/doküman, güvenlik/hız riski (dosya:satır ile).
+    En fazla ~5 madde, önem sırasıyla, her biri tek satır. Bunları kendiliğinden yapma (kural 5); kullanıcı seçer. Söylenecek bir şey yoksa bölümü yazma.
 
 ## Canlı ortam
 

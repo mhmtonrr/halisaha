@@ -2,6 +2,7 @@
 // Canlı Supabase'e karşı çalışır; test kullanıcıları ve takımlarını sonunda siler.
 import { createRequire } from "module";
 import fs from "fs";
+import { removeTestUsers } from "./cleanup.mjs";
 const PROJ = process.cwd();
 const require = createRequire(PROJ + "/package.json");
 const { createClient } = require("@supabase/supabase-js");
@@ -128,7 +129,7 @@ try {
   const centerPitch = (page) => page.locator('[data-drop="slot:0"]').evaluate((el) => el.closest(".overflow-hidden").scrollIntoView({ block: "center" }));
   await centerPitch(A1);
   // Ali'nin kartını boş forvet slotuna (slot:4) sürükle
-  const aliToken = A1.locator('[data-drop^="slot:"] .cursor-grab:has-text("Ali K.")');
+  const aliToken = A1.locator('[data-drop^="slot:"] .cursor-grab:has-text("Ali Kaptan")');
   const target = await box(A1.locator('[data-drop="slot:4"]'));
   const from = await box(aliToken);
   await A1.mouse.move(from.x, from.y); await A1.mouse.down();
@@ -136,7 +137,7 @@ try {
   lu = await lineupJson(A1);
   check("sürükle-bırak: Ali forvet slotuna (4) geçti", lu[idAli] === 4);
   // Ayşe'yi Ali'nin üzerine bırak → yer değiştirirler (takas)
-  const ayseToken = A1.locator('[data-drop^="slot:"] .cursor-grab:has-text("Ayşe O.")');
+  const ayseToken = A1.locator('[data-drop^="slot:"] .cursor-grab:has-text("Ayşe Oyuncu")');
   const f2 = await box(ayseToken), t2 = await box(A1.locator('[data-drop="slot:4"]'));
   await A1.mouse.move(f2.x, f2.y); await A1.mouse.down(); await A1.mouse.move(f2.x + 12, f2.y + 12, { steps: 3 }); await A1.mouse.move(t2.x, t2.y, { steps: 8 }); await A1.mouse.up();
   lu = await lineupJson(A1);
@@ -151,7 +152,7 @@ try {
   await openEditor(B1, teamB, mB);
   await B1.locator('[role="radio"]:has-text("2-2")').click();
   // dokunarak: kartı seç, sonra boş slota dokun
-  const berkToken = B1.locator('[data-drop^="slot:"] .cursor-grab:has-text("Berk K.")');
+  const berkToken = B1.locator('[data-drop^="slot:"] .cursor-grab:has-text("Berk Kaptan")');
   await berkToken.click();
   await B1.locator('[data-drop="slot:3"]').click();
   lu = await lineupJson(B1);
@@ -260,7 +261,7 @@ try {
 } finally {
   await browser?.close();
   if (groupIds.length) await admin.from("groups").delete().in("id", groupIds);
-  for (const u of users) await admin.auth.admin.deleteUser(u.id);
+  await removeTestUsers(admin, users.map((u) => u.id));
   const { count } = await admin.from("groups").select("id", { count: "exact", head: true }).in("id", groupIds);
   log(`temizlik: ${users.length} kullanıcı, ${groupIds.length} takım silindi (kalan takım: ${count})`);
 }

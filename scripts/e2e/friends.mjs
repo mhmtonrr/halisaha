@@ -1,6 +1,7 @@
 // Arkadaşlık: profilden istek, Sosyal sayfasında kabul, arkadaşlar arası istek beklemeden sohbet, bildirimler.
 import { createRequire } from "module";
 import fs from "fs";
+import { removeTestUsers } from "./cleanup.mjs";
 const PROJ = process.cwd();
 const require = createRequire(PROJ + "/package.json");
 const { createClient } = require("@supabase/supabase-js");
@@ -64,6 +65,6 @@ try {
   log("arkadaşlıktan çıkılabiliyor ✓");
 } finally {
   await browser?.close();
-  for (const u of users) await admin.auth.admin.deleteUser(u.id);
+  await removeTestUsers(admin, users.map((u) => u.id));
   log("test kullanıcıları silindi");
 }

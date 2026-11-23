@@ -2,6 +2,7 @@
 // link yapıştırma, geçersiz kod); menüde Takımlarım ve Gruplarım ayrı başlıklar. Canlı Supabase'e karşı; test verisini siler.
 import { createRequire } from "module";
 import fs from "fs";
+import { removeTestUsers } from "./cleanup.mjs";
 const PROJ = process.cwd();
 const require = createRequire(PROJ + "/package.json");
 const { createClient } = require("@supabase/supabase-js");
@@ -125,7 +126,7 @@ try {
 } finally {
   await browser?.close();
   for (const g of groupIds) await admin.from("groups").delete().eq("id", g);
-  for (const u of users) await admin.auth.admin.deleteUser(u.id);
+  await removeTestUsers(admin, users.map((u) => u.id));
   console.log(failed ? `\n${failed} kontrol BAŞARISIZ` : "\nTüm kontroller geçti");
   process.exit(failed ? 1 : 0);
 }

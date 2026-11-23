@@ -3,6 +3,7 @@
 // Canlı Supabase'e karşı çalışır; test verisini sonunda siler. Kullanım: node scripts/e2e/auth-onboarding.mjs [ekran-klasörü]
 import { createRequire } from "module";
 import fs from "fs";
+import { removeTestUsers } from "./cleanup.mjs";
 import os from "os";
 import path from "path";
 const PROJ = process.cwd();
@@ -110,7 +111,7 @@ try {
 } finally {
   await browser?.close();
   if (groupId) await admin.from("groups").delete().eq("id", groupId);
-  for (const u of users) await admin.auth.admin.deleteUser(u.id);
+  await removeTestUsers(admin, users.map((u) => u.id));
   console.log(failed ? `\n${failed} kontrol BAŞARISIZ` : "\nTüm kontroller geçti");
   process.exit(failed ? 1 : 0);
 }

@@ -1,5 +1,6 @@
 import { createRequire } from "module";
 import fs from "fs";
+import { removeTestUsers } from "./cleanup.mjs";
 const PROJ = process.cwd();
 const require = createRequire(PROJ + "/package.json");
 const { createClient } = require("@supabase/supabase-js");
@@ -59,7 +60,7 @@ try {
   const A2 = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
   await A2.context().addCookies(await A.context().cookies());
   await A2.goto(`${BASE}/g/${gid}/cagri/yeni`); await A2.fill('input[name="venue"]', "Petroller"); await A2.click('button:has-text("Çağrıyı aç")'); await A2.waitForURL(/cagri\/[0-9a-f-]+$/);
-  await B.waitForSelector("text=Maç çağrısı açıldı", { timeout: 10000 });
+  await B.waitForSelector("text=📣 Maç çağrısı:", { timeout: 10000 }); // 0035: kart metni "📣 Maç çağrısı: <tarih>"
   log("çağrı açılınca sohbete etkinlik kartı düştü ✓ (B canlı gördü)");
 
   // Silme: kurucu B'nin mesajını siler, B canlı görür
@@ -90,7 +91,7 @@ try {
   await browser.close();
 } finally {
   if (gid) await admin.from("groups").delete().eq("id", gid);
-  for (const u of users) await admin.auth.admin.deleteUser(u.id);
+  await removeTestUsers(admin, users.map((u) => u.id));
   const { data: left } = await admin.from("profiles").select("id").in("id", users.map((u) => u.id));
   log(`temizlendi (kalan test profili: ${left?.length ?? 0})`);
 }
