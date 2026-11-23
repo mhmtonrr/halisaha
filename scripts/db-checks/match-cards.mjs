@@ -13,38 +13,40 @@ const T = (await q(`insert into groups (name, created_by, kind, city) values ('K
 await db.exec("reset role");
 await db.exec(`insert into group_players (group_id, user_id, display_name, role) values ('${T}','${U(2)}','U2','member')`);
 const m = (await q(`insert into matches (group_id, played_at, venue, created_by, kind, opponent_name) values ($1, now() + interval '3 day', 'Meydan Saha', $2, 'external', 'Rakip FK') returning id`, [T, U(1)]))[0].id;
-const l = (await q(`insert into player_listings (group_id, match_id, created_by, needed, positions) values ($1,$2,$3,2,'{GK}') returning id`, [T, m, U(1)]))[0].id;
-const p = (await q(`insert into match_polls (group_id, created_by, starts_at, venue, capacity) values ($1,$2, now() + interval '4 day','Poll Saha',10) returning id`, [T, U(1)]))[0].id;
+// Adam arama (eski ilan) kartı: birleşik çağrıda purpose='fill'
+const l = (await q(`insert into match_polls (group_id, created_by, purpose, play_on, starts_at, venue, capacity, positions, match_id) values ($1,$2,'fill', current_date + 3, now() + interval '3 day','Meydan Saha',2,'{GK}',$3) returning id`, [T, U(1), m]))[0].id;
+const p = (await q(`insert into match_polls (group_id, created_by, play_on, venue, capacity) values ($1,$2, current_date + 4,'Poll Saha',10) returning id`, [T, U(1)]))[0].id;
 
 await as(1);
-const id1 = (await q(`select share_match_card($1,'listing',$2) id`, [U(3), l]))[0].id;
-ok("kaptan ilan kartı gönderir", !!id1);
-const msg = (await q(`select kind, body, card, listing_id from dm_messages where id=$1`, [id1]))[0];
-ok("kart özeti saklanır (grup adı, saha, ihtiyaç)", msg.kind === "match" && msg.card.group_name === "Kart Takımı" && msg.card.venue === "Meydan Saha" && msg.card.needed === 2 && msg.listing_id === l);
-ok("mesaj gövdesi özet metin taşır", msg.body.includes("Oyuncu ilanı") && msg.body.includes("Kart Takımı"));
-ok("çağrı kartı gönderilir", !!(await q(`select share_match_card($1,'poll',$2) id`, [U(3), p]))[0].id);
+const id1 = (await q(`select share_match_card($1,'poll',$2) id`, [U(3), l]))[0].id;
+ok("kaptan adam arama kartı gönderir", !!id1);
+const msg = (await q(`select kind, body, card, poll_id from dm_messages where id=$1`, [id1]))[0];
+ok("kart özeti saklanır (grup adı, saha, ihtiyaç)", msg.kind === "match" && msg.card.group_name === "Kart Takımı" && msg.card.venue === "Meydan Saha" && msg.card.capacity === 2 && msg.card.purpose === "fill" && msg.poll_id === l);
+ok("mesaj gövdesi özet metin taşır", msg.body.includes("Adam aranıyor") && msg.body.includes("Kart Takımı"));
+const id2 = (await q(`select share_match_card($1,'poll',$2) id`, [U(3), p]))[0].id;
+ok("saati belli olmayan çağrı kartı gönderilir", (await q(`select card from dm_messages where id=$1`, [id2]))[0].card.time_tbd === true);
 ok("planlı maç kartı gönderilir", !!(await q(`select share_match_card($1,'match',$2) id`, [U(3), m]))[0].id);
-ok("aynı kart aynı kişiye tekrar gönderilemez", await fails(`select share_match_card($1,'listing',$2)`, [U(3), l]));
-ok("kendine gönderilemez", await fails(`select share_match_card($1,'listing',$2)`, [U(1), l]));
+ok("aynı kart aynı kişiye tekrar gönderilemez", await fails(`select share_match_card($1,'poll',$2)`, [U(3), l]));
+ok("kendine gönderilemez", await fails(`select share_match_card($1,'poll',$2)`, [U(1), l]));
 ok("geçersiz tür reddedilir", await fails(`select share_match_card($1,'xyz',$2)`, [U(4), l]));
 ok("doğrudan kart insert yapılamaz", await fails(`insert into dm_messages (thread_id, author_id, kind, body, card, match_id) select thread_id, author_id, 'match', 'x', '{}', $1 from dm_messages limit 1`, [m]));
 
 await as(3);
 const rows = await q(`select kind, card from dm_messages where kind='match' order by id`);
-ok("alıcı kartları görür", rows.length === 3 && rows[0].card.type === "listing");
+ok("alıcı kartları görür", rows.length === 3 && rows[0].card.type === "poll");
 ok("tanımayandan gelen kart istek olarak düşer", (await q(`select status from dm_threads`))[0].status === "pending");
 
 await as(2);
-ok("sıradan üye kart gönderemez", await fails(`select share_match_card($1,'listing',$2)`, [U(4), l]));
+ok("sıradan üye kart gönderemez", await fails(`select share_match_card($1,'poll',$2)`, [U(4), l]));
 await as(4);
 ok("yabancı kart gönderemez", await fails(`select share_match_card($1,'match',$2)`, [U(3), m]));
 ok("üçüncü kişi başkasının kartını göremez", (await q(`select * from dm_messages where kind='match'`)).length === 0);
 
 // Kapalı ilan / bitmiş maç
 await db.exec("reset role");
-await db.exec(`update player_listings set status='closed' where id='${l}'; update matches set status='played' where id='${m}'`);
+await db.exec(`update match_polls set status='closed' where id='${l}'; update matches set status='played' where id='${m}'`);
 await as(1);
-ok("kapalı ilan paylaşılamaz", await fails(`select share_match_card($1,'listing',$2)`, [U(4), l]));
+ok("kapalı adam arama paylaşılamaz", await fails(`select share_match_card($1,'poll',$2)`, [U(4), l]));
 ok("planlı olmayan maç paylaşılamaz", await fails(`select share_match_card($1,'match',$2)`, [U(4), m]));
 
 // Engel
