@@ -11,7 +11,7 @@ import { later, notify, sendTestPush } from "@/lib/notify";
 import { skillSet } from "@/lib/skills";
 import { extractInviteCode, kindMatches, parseKind } from "@/lib/invite";
 import { recomputeSkillsForVoter } from "@/lib/skills-data";
-import { text } from "@/lib/notify-rules";
+import { text, type Content, type NotificationType } from "@/lib/notify-rules";
 import { loadMenuData } from "@/lib/menu-data";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { groupMemberIds, groupName, linkedMatches, matchAccountIds } from "@/lib/recipients";
@@ -867,7 +867,7 @@ export async function setMatchPositions(fd: FormData) {
 }
 
 export async function addToMatch(fd: FormData) {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
   const groupId = str(fd, "groupId");
   const matchId = str(fd, "matchId");
   const back = `/g/${groupId}/m/${matchId}`;
@@ -875,8 +875,8 @@ export async function addToMatch(fd: FormData) {
   if (!playerIds.length) fail(back, "Eklenecek oyuncuyu seçin");
   const [roster, { data: match }, { data: players }] = await Promise.all([
     loadRoster(supabase, matchId),
-    supabase.from("matches").select("kind").eq("id", matchId).single(),
-    supabase.from("group_players").select("id, position").in("id", playerIds),
+    supabase.from("matches").select("kind, played_at").eq("id", matchId).single(),
+    supabase.from("group_players").select("id, position, user_id").in("id", playerIds),
   ]);
   let countA = roster.filter((r) => r.team === "A").length;
   let countB = roster.length - countA;
@@ -889,20 +889,45 @@ export async function addToMatch(fd: FormData) {
   });
   const { error } = await supabase.from("match_players").insert(rows);
   if (error) fail(back, rpcMessage(error, "Oyuncu eklenemedi"));
+  // Elle eklenen oyunculara "kadrodasın" (çağrıdan seçilmekle aynı bildirim)
+  const added = (players ?? []).map((pl) => pl.user_id as string | null).filter((id): id is string => !!id);
+  if (added.length && match) {
+    later(async () => {
+      const admin = createAdminClient();
+      await notify(added, "match", text.pollSelected(await groupName(admin, groupId), groupId, matchId, formatDate(match.played_at as string)), { excludeUserId: user.id });
+    });
+  }
   revalidatePath(back);
 }
 
 export async function removeFromMatch(fd: FormData) {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
   const groupId = str(fd, "groupId");
   const matchId = str(fd, "matchId");
+  const playerId = str(fd, "playerId");
   const back = `/g/${groupId}/m/${matchId}`;
-  const { error } = await supabase
+  const { data: removed, error } = await supabase
     .from("match_players")
     .delete()
     .eq("match_id", matchId)
-    .eq("player_id", str(fd, "playerId"));
+    .eq("player_id", playerId)
+    .select("player_id");
   if (error) fail(back, "Oyuncu çıkarılamadı");
+  if (removed?.length) {
+    // Çıkarılana haber; toplama çağrısında yedek varsa organizatöre "yer açıldı" (çıkaran kendisiyse gitmez)
+    later(async () => {
+      const admin = createAdminClient();
+      const [{ data: m }, { data: gp }] = await Promise.all([
+        admin.from("matches").select("status, played_at").eq("id", matchId).maybeSingle(),
+        admin.from("group_players").select("user_id, display_name").eq("id", playerId).maybeSingle(),
+      ]);
+      if (m?.status !== "planned") return;
+      if (gp?.user_id) {
+        await notify([gp.user_id as string], "match", text.removedFromMatch(await groupName(admin, groupId), groupId, matchId, formatDate(m.played_at as string)), { excludeUserId: user.id });
+      }
+      await notifySpotOpened(admin, matchId, (gp?.display_name as string | undefined) ?? "Bir oyuncu", user.id);
+    });
+  }
   revalidatePath(back);
 }
 
@@ -977,11 +1002,40 @@ export async function submitResult(fd: FormData) {
     const { data: state, error: settleError } = await supabase.rpc("settle_linked_match", { p_match_id: matchId });
     if (settleError) fail(back, "Skor eşleştirilemedi");
     if (state === "settled") announceVoting(matchId, user.id);
+    else announceScore(matchId, state === "mismatch", int(fd, "scoreA"), int(fd, "scoreB"), user.id);
     revalidatePath(back);
     redirect(`${back}?skor=${state}`);
   }
   announceVoting(matchId, user.id);
   revalidatePath(back);
+}
+
+/**
+ * Bağlı maçta skor eşleşmedi: rakip henüz girmediyse rakibin yetkililerine "sen de gir", girdiyse ve farklıysa
+ * iki tarafın yetkililerine "uyuşmuyor". Yetkili = kaptan/yönetici + maçı kuran (can_manage_match ile aynı).
+ */
+function announceScore(matchId: string, mismatch: boolean, ownA: number, ownB: number, actorId: string) {
+  later(async () => {
+    const admin = createAdminClient();
+    const { data: cur } = await admin.from("matches").select("challenge_id").eq("id", matchId).maybeSingle();
+    if (!cur?.challenge_id) return;
+    const { data: ms } = await admin.from("matches").select("id, group_id, created_by").eq("challenge_id", cur.challenge_id);
+    const me = ms?.find((m) => m.id === matchId);
+    const other = ms?.find((m) => m.id !== matchId);
+    if (!me || !other) return;
+    const managers = async (m: { group_id: string; created_by: string | null }) => [
+      ...(await groupMemberIds(admin, m.group_id, { adminsOnly: true })),
+      ...(m.created_by ? [m.created_by] : []),
+    ];
+    const [myName, otherName] = await Promise.all([groupName(admin, me.group_id), groupName(admin, other.group_id)]);
+    if (mismatch) {
+      await notify(await managers(me), "match", text.scoreMismatch(otherName, me.group_id, me.id), { excludeUserId: actorId });
+      await notify(await managers(other), "match", text.scoreMismatch(myName, other.group_id, other.id), { excludeUserId: actorId });
+    } else {
+      // Rakibin açısından: kendi skoru = bizim girdiğimiz B
+      await notify(await managers(other), "match", text.opponentScored(myName, other.group_id, other.id, ownB, ownA), { excludeUserId: actorId });
+    }
+  });
 }
 
 /** Oylama açıldı: maçın (bağlı maçta iki takımın) hesap sahiplerine "oy ver" */
@@ -1055,8 +1109,58 @@ export async function closeVoting(fd: FormData) {
   revalidatePath(`/g/${groupId}`, "layout");
 }
 
+type Notice = { ids: string[]; type: NotificationType; content: Content };
+
+/**
+ * Maç silme/teklif iptali bildirimleri. Alıcılar silmeden ÖNCE toplanır (silinince kadro da gider), işlem başarılı olunca
+ * `sendNotices` ile gönderilir. Bekleyen teklif → karşı takımın yetkililerine "geri çekildi"; kabul edilmiş teklif/maç →
+ * her maçın kadrosuna (bağlı maçta iki takımın kadrosu ve yetkilileri) "iptal edildi".
+ */
+async function prepareCancelNotices(opts: { matchId?: string; challengeId?: string }): Promise<Notice[]> {
+  try {
+    const admin = createAdminClient();
+    let matchIds = opts.matchId ? [opts.matchId] : [];
+    if (opts.challengeId) {
+      const { data: c } = await admin.from("match_challenges").select("status, from_group_id, to_group_id").eq("id", opts.challengeId).maybeSingle();
+      if (!c) return [];
+      if (c.status === "pending") {
+        const ids = await groupMemberIds(admin, c.to_group_id as string, { adminsOnly: true });
+        return [{ ids, type: "offer", content: text.challengeWithdrawn(await groupName(admin, c.from_group_id as string), c.to_group_id as string) }];
+      }
+      const { data: ms } = await admin.from("matches").select("id").eq("challenge_id", opts.challengeId);
+      matchIds = (ms ?? []).map((m) => m.id as string);
+    }
+    if (!matchIds.length) return [];
+    const { data: ms } = await admin.from("matches").select("id, group_id, played_at, opponent_name, challenge_id").in("id", matchIds);
+    return await Promise.all(
+      (ms ?? []).map(async (m) => {
+        const [roster, admins, name] = await Promise.all([
+          matchAccountIds(admin, [m.id as string]),
+          m.challenge_id ? groupMemberIds(admin, m.group_id as string, { adminsOnly: true }) : Promise.resolve([] as string[]),
+          groupName(admin, m.group_id as string),
+        ]);
+        return {
+          ids: [...roster, ...admins],
+          type: "match" as const,
+          content: text.matchCancelled(name, m.group_id as string, m.id as string, formatDate(m.played_at as string), m.opponent_name as string | null),
+        };
+      }),
+    );
+  } catch (e) {
+    console.error("[bildirim]", e instanceof Error ? e.message : e);
+    return [];
+  }
+}
+
+function sendNotices(notices: Notice[], actorId: string) {
+  if (!notices.length) return;
+  later(async () => {
+    for (const n of notices) await notify(n.ids, n.type, n.content, { excludeUserId: actorId });
+  });
+}
+
 export async function deleteMatch(fd: FormData) {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
   const groupId = str(fd, "groupId");
   const matchId = str(fd, "matchId");
   const { data: match } = await supabase
@@ -1067,12 +1171,16 @@ export async function deleteMatch(fd: FormData) {
   if (match?.status === "closed") fail(`/g/${groupId}/m/${matchId}`, "Kapanmış maç silinemez");
   if (match?.challenge_id) {
     // Karşı takımla ortak maç: iki taraftaki maç birlikte iptal edilir
+    const notices = await prepareCancelNotices({ challengeId: match.challenge_id as string });
     const { error } = await supabase.rpc("cancel_challenge", { p_challenge_id: match.challenge_id });
     if (error) fail(`/g/${groupId}/m/${matchId}`, rpcMessage(error, "Maç iptal edilemedi"));
+    sendNotices(notices, user.id);
     redirect(`/g/${groupId}`);
   }
-  const { error } = await supabase.from("matches").delete().eq("id", matchId);
+  const notices = await prepareCancelNotices({ matchId });
+  const { data: deleted, error } = await supabase.from("matches").delete().eq("id", matchId).select("id");
   if (error) fail(`/g/${groupId}/m/${matchId}`, "Maç silinemedi");
+  if (deleted?.length) sendNotices(notices, user.id);
   // Geçici takımın maçı iptal olduysa: hiç maçı kalmayan takım silinir, sadece kapanmış maçları kalan arşivlenir
   const { data: cleanup } = await supabase.rpc("cleanup_temp_team", { p_group: groupId });
   revalidatePath("/", "layout");
@@ -1140,11 +1248,14 @@ export async function respondChallenge(fd: FormData) {
 }
 
 export async function cancelChallenge(fd: FormData) {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
   const groupId = str(fd, "groupId");
+  const challengeId = str(fd, "challengeId");
   const back = `/g/${groupId}/teklifler`;
-  const { error } = await supabase.rpc("cancel_challenge", { p_challenge_id: str(fd, "challengeId") });
+  const notices = await prepareCancelNotices({ challengeId });
+  const { error } = await supabase.rpc("cancel_challenge", { p_challenge_id: challengeId });
   if (error) fail(back, rpcMessage(error, "Teklif iptal edilemedi"));
+  sendNotices(notices, user.id);
   revalidatePath(back);
   redirect(back);
 }

@@ -201,3 +201,9 @@ await as(3);
 ok("günü geçen açık çağrı sayfa açılışında kapanır", (await one(`select close_stale_polls($1) n`, [C])).n >= 1 && (await one(`select status from match_polls where id=$1`, [P7])).status === "closed");
 await as(7);
 ok("üye olmayan kapatma tetikleyemez", (await one(`select close_stale_polls($1) n`, [C])).n === 0);
+
+// --- Adam aranan maç silinebilir (0040): adam arama çağrısı maçla birlikte silinir ---
+await db.exec(`reset role`);
+const delOk = await db.query(`delete from matches where id=$1`, [MX]).then(() => true, (e) => (console.log(e.message), false));
+ok("adam arama açılmış maç silinebilir", delOk);
+ok("maçın adam arama çağrısı da silinir", (await db.query(`select count(*)::int c from match_polls where purpose='fill' and match_id is null`)).rows[0].c === 0);

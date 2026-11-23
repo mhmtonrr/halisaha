@@ -17,7 +17,7 @@ aynı grupta en fazla 3 açık çağrı. Tabloya doğrudan yazma yok, hepsi RPC.
   bir toplulukta; maç başına yer başına 1 açık. Başvuranı organizatör **tek tek** `accept_responder`/`reject_responder` ile alır; sayı dolunca `filled`.
 - **Yedek ve yer açılması (kullanıcı kararı: organizatör kontrolünde)**: kadrodan çıkan seçilmişin yanıtı `withdrawn` olur, dolu adam arama yeniden açılır
   (tetikleyici); çekilme onaylanınca yedek varsa organizatöre "yer açıldı" bildirimi (`notifySpotOpened`); yedeği `accept_responder` ile organizatör alır.
-- Maç planlıdan çıkınca açık adam arama kapanır; günü geçen açık çağrılar sayfa açılışında `close_stale_polls` ile kapanır (cron yok). Karar zamanı geçen
+- Maç planlıdan çıkınca açık adam arama kapanır; maç silinince adam araması da silinir (0040); günü geçen açık çağrılar sayfa açılışında `close_stale_polls` ile kapanır (cron yok). Karar zamanı geçen
   toplama çağrısı organizatöre ana sayfada ve çağrı sayfasında "Kadroyu kesinleştir" uyarısı olarak görünür (push yok). Organizatör yanıtlayanları
   `poll_responders` ile rating ve güvenilirlikle görür (diğer üyeler güvenilirlik görmez).
 - Kod: `call-actions.ts` (eylemler + bildirimler), `calls-data.ts`, `call-rules.ts` (saf, testli), sayfa `/g/[id]/cagri/{yeni,[pollId]}` (`?kesinlestir=1`, `?duzenle=1`),

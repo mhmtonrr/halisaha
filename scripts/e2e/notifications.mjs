@@ -157,6 +157,49 @@ try {
   await capP.waitForLoadState("networkidle");
   check("kadroya alınınca başvurana '⚽ Kadrodasın'", !!(await until(async () => (await notifs(mem, "match")).some((n) => n.title.includes("Kadrodasın")))));
   check("kabul bildirimi maç adresine gider", (await notifs(mem, "match")).find((n) => n.title.includes("Kadrodasın"))?.url === `/g/${A}/m/${mid2}`);
+
+  // 9) Elle kadrodan çıkarma / ekleme → oyuncuya bildirim
+  const memA = await gp(A, mem);
+  const kadrodasin = async () => (await notifs(mem, "match")).filter((n) => n.title.includes("Kadrodasın")).length;
+  await capP.goto(`${BASE}/g/${A}/m/${mid2}`);
+  await capP.locator("summary:has-text('Kadroya oyuncu ekle')").click();
+  await capP.locator(`form:has(input[name="playerId"][value="${memA}"]) button:has-text("Çıkar")`).click();
+  check("elle çıkarılana 'kadrosundan çıkarıldın'", !!(await until(async () => (await notifs(mem, "match")).some((n) => n.title.includes("kadrosundan çıkarıldın")))));
+  await capP.goto(`${BASE}/g/${A}/m/${mid2}`);
+  await capP.locator("summary:has-text('Kadroya oyuncu ekle')").click();
+  await capP.locator(`label:has(input[value="${memA}"])`).click();
+  await capP.click('button:has-text("Seçilenleri ekle")');
+  check("elle eklenene '⚽ Kadrodasın'", !!(await until(async () => (await kadrodasin()) === 2)));
+
+  // 10) Maç iptali → kadroya bildirim (iptal edene gitmez)
+  await capP.goto(`${BASE}/g/${A}/m/${mid2}`);
+  await capP.click('button:has-text("Maçı iptal et")');
+  await capP.waitForURL(`${BASE}/g/${A}`);
+  check("maç iptal edilince kadroya '❌ Maç iptal edildi'", !!(await until(async () => (await notifs(mem, "match")).some((n) => n.title.includes("Maç iptal edildi")))));
+  check("iptal edene bildirim yok", !(await notifs(cap, "match")).some((n) => n.title.includes("Maç iptal edildi")));
+
+  // 11) Takımlar arası maç (4'te kabul edilen): skor girince rakibe, farklı skor girilince iki tarafa
+  const lA = (await admin.from("matches").select("id, challenge_id").eq("group_id", A).not("challenge_id", "is", null).single()).data;
+  const lB = (await admin.from("matches").select("id").eq("challenge_id", lA.challenge_id).neq("id", lA.id).single()).data;
+  await admin.from("match_players").insert([await gp(A, cap), memA].map((id) => ({ match_id: lA.id, player_id: id, team: "A" })));
+  await capP.goto(`${BASE}/g/${A}/m/${lA.id}`);
+  await capP.fill('input[name="scoreA"]', "2"); await capP.fill('input[name="scoreB"]', "1");
+  await capP.click('button:has-text("Skoru kaydet")'); await capP.waitForURL(/skor=waiting/);
+  const scored = async () => (await notifs(riv, "match")).find((n) => n.title.includes("Rakip takım skoru girdi"));
+  check("skor girilince rakip kaptana 'Rakip takım skoru girdi'", !!(await until(scored)));
+  check("skor rakibin açısından yazılır (1-2)", (await scored())?.body.includes("1-2"));
+  const { data: guest } = await admin.from("group_players").insert({ group_id: B, user_id: null, display_name: "Misafir B", position: "MID" }).select("id").single();
+  await admin.from("match_players").insert([await gp(B, riv), guest.id].map((id) => ({ match_id: lB.id, player_id: id, team: "A" })));
+  await rivP.goto(`${BASE}/g/${B}/m/${lB.id}`);
+  await rivP.fill('input[name="scoreA"]', "1"); await rivP.fill('input[name="scoreB"]', "1");
+  await rivP.click('button:has-text("Skoru kaydet")'); await rivP.waitForURL(/skor=mismatch/);
+  check("skorlar uyuşmayınca diğer kaptana '⚠️ Skorlar uyuşmuyor'", !!(await until(async () => (await notifs(cap, "match")).some((n) => n.title.includes("Skorlar uyuşmuyor")))));
+
+  // 12) Bekleyen teklif geri çekilince karşı takıma (3'teki ikinci teklif)
+  await admin.from("notification_prefs").update({ offers: true }).eq("user_id", riv.id);
+  await capP.goto(`${BASE}/g/${A}/teklifler`);
+  await capP.locator('button:has-text("Teklifi geri çek")').first().click();
+  check("teklif geri çekilince rakibe bildirim", !!(await until(async () => (await notifs(riv, "offer")).some((n) => n.title.includes("geri çekildi")))));
 } catch (e) {
   failed++;
   console.log("  ✗ ÇÖKTÜ:", e.message);

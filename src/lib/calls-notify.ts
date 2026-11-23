@@ -4,10 +4,10 @@ import { notify } from "@/lib/notify";
 import { text } from "@/lib/notify-rules";
 
 /**
- * Kadrodan biri çıkınca (çekilme onaylandı): maçı kuran toplama çağrısında yedek varsa organizatöre haber ver.
+ * Kadrodan biri çıkınca (çekilme onaylandı veya elle çıkarıldı): maçı kuran toplama çağrısında yedek varsa organizatöre haber ver.
  * Yedeği kadroya almak organizatörün kararı (kullanıcı kararı); otomatik alınmaz.
  */
-export async function notifySpotOpened(admin: SupabaseClient, matchId: string, who: string) {
+export async function notifySpotOpened(admin: SupabaseClient, matchId: string, who: string, actorId?: string) {
   const { data: poll } = await admin
     .from("match_polls")
     .select("id, group_id, created_by")
@@ -21,5 +21,5 @@ export async function notifySpotOpened(admin: SupabaseClient, matchId: string, w
     .eq("poll_id", poll.id)
     .eq("status", "reserve");
   if (!count) return;
-  await notify([poll.created_by as string], "poll", text.spotOpened(who, poll.group_id as string, poll.id as string, count));
+  await notify([poll.created_by as string], "poll", text.spotOpened(who, poll.group_id as string, poll.id as string, count), { excludeUserId: actorId });
 }

@@ -20,8 +20,8 @@ export const PREF_OF: Record<NotificationType, PrefKey> = {
 
 export const PREF_LABEL: Record<PrefKey, { title: string; hint: string }> = {
   votes: { title: "Oylama", hint: "Maç bitip oylama açılınca ve oylama kapanmadan hatırlatma" },
-  matches: { title: "Maç çağrısı ve maç", hint: "Yeni çağrı ve adam arama, kadroya seçilme/yedek, maç kuruldu, başvuru ve yer açılması (organizatöre)" },
-  offers: { title: "Maç teklifi", hint: "Takımlar arası maç teklifleri ve yanıtları" },
+  matches: { title: "Maç çağrısı ve maç", hint: "Yeni çağrı ve adam arama, kadroya seçilme/yedek/çıkarılma, maç kuruldu/iptal, rakibin skoru, başvuru ve yer açılması (organizatöre)" },
+  offers: { title: "Maç teklifi", hint: "Takımlar arası maç teklifleri, yanıtları ve geri çekilmesi" },
   chat: { title: "Sohbet", hint: "Grup/takım ve birebir mesajlar, takıma/gruba davetler (bir sohbette 10 dakikada en fazla 1 bildirim)" },
 };
 
@@ -175,7 +175,7 @@ export const text = {
   /** Organizatöre: kadroda yer açıldı, yedek var */
   spotOpened: (who: string, groupId: string, pollId: string, reserves: number): Content => ({
     title: "🔄 Kadroda yer açıldı",
-    body: truncate(`${who} çekildi. ${reserves} yedek var; çağrıdan kadroya alabilirsin.`, 300),
+    body: truncate(`${who} kadrodan çıktı. ${reserves} yedek var; çağrıdan kadroya alabilirsin.`, 300),
     url: `/g/${groupId}/cagri/${pollId}`,
     tag: `spot:${pollId}`,
   }),
@@ -184,6 +184,40 @@ export const text = {
     body: truncate(join(groupName, opponent ? `vs ${opponent}` : null, when), 300),
     url: `/g/${groupId}/m/${matchId}`,
     tag: `match:${matchId}`,
+  }),
+  /** Kadroya: maç silindi/iptal edildi (bağlı maçta iki takımın kadrosuna) */
+  matchCancelled: (groupName: string, groupId: string, matchId: string, when: string, opponent?: string | null): Content => ({
+    title: "❌ Maç iptal edildi",
+    body: truncate(join(groupName, opponent ? `vs ${opponent}` : null, when), 300),
+    url: `/g/${groupId}`,
+    tag: `match-cancel:${matchId}`,
+  }),
+  /** Elle kadrodan çıkarılan oyuncuya */
+  removedFromMatch: (groupName: string, groupId: string, matchId: string, when: string): Content => ({
+    title: "Maç kadrosundan çıkarıldın",
+    body: truncate(join(groupName, when), 300),
+    url: `/g/${groupId}/m/${matchId}`,
+    tag: `match:${matchId}`,
+  }),
+  /** Bağlı maçta rakip skoru girdi; skor alıcı takımın açısından (kendi-rakip) */
+  opponentScored: (opponent: string, groupId: string, matchId: string, own: number, theirs: number): Content => ({
+    title: "📝 Rakip takım skoru girdi",
+    body: truncate(join(`${opponent} karşısında ${own}-${theirs}`, "sen de skoru gir; aynıysa oylama açılır"), 300),
+    url: `/g/${groupId}/m/${matchId}`,
+    tag: `score:${matchId}`,
+  }),
+  scoreMismatch: (opponent: string, groupId: string, matchId: string): Content => ({
+    title: "⚠️ Skorlar uyuşmuyor",
+    body: truncate(join(`vs ${opponent}`, "iki takımın girdiği skor farklı; rakiple konuşup skoru düzeltin"), 300),
+    url: `/g/${groupId}/m/${matchId}`,
+    tag: `score:${matchId}`,
+  }),
+  /** Bekleyen teklif gönderen takımca geri çekildi */
+  challengeWithdrawn: (fromTeam: string, toGroupId: string): Content => ({
+    title: "Maç teklifi geri çekildi",
+    body: truncate(fromTeam, 300),
+    url: `/g/${toGroupId}/teklifler`,
+    tag: `offer:${toGroupId}`,
   }),
   challengeReceived: (fromTeam: string, toGroupId: string, when: string): Content => ({
     title: "🤝 Maç teklifi geldi",
