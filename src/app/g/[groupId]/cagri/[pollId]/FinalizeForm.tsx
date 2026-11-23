@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { finalizePoll } from "@/lib/call-actions";
 import { isoToTime, type Responder } from "@/lib/call-rules";
-import type { Call, ManagedTeam } from "@/lib/calls-data";
+import type { Call } from "@/lib/calls-data";
 import { SIZES } from "@/lib/formations";
 import { Card, Input, Label, SectionTitle } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -11,7 +11,7 @@ const selectCls = "min-h-11 w-full rounded-xl border border-line bg-pitch-950 px
 
 /**
  * Kadroyu kesinleştir: "geliyorum" ve "belki" diyenler listelenir, ilk gelenler (kontenjan kadar) işaretli gelir.
- * Kendi aramızda (sadece toplulukta) veya rakibe karşı (maç açabildiğim bir takımda) maç kurulur.
+ * Grupta sadece kendi aramızda; takımda sadece rakibe karşı (o takımın adına) maç kurulur.
  */
 export function FinalizeForm({
   groupId,
@@ -19,17 +19,13 @@ export function FinalizeForm({
   candidates,
   preselected,
   isCommunity,
-  teams,
 }: {
   groupId: string;
   call: Call;
   candidates: Responder[];
   preselected: Set<string>;
   isCommunity: boolean;
-  teams: ManagedTeam[];
 }) {
-  // Takımın kendi çağrısında maç o takımda ve rakibe karşı kurulur; toplulukta takımlarım + hızlı takım
-  const teamChoices: ManagedTeam[] = isCommunity ? teams : [{ id: groupId, name: "Bu takım", temporary: false, archived: false }];
   return (
     <form action={finalizePoll} className="space-y-4">
       <input type="hidden" name="groupId" value={groupId} />
@@ -64,52 +60,30 @@ export function FinalizeForm({
           </label>
         </div>
 
-        <fieldset className="space-y-2">
-          <Label>Maç türü</Label>
-          {isCommunity && (
-            <label className="flex items-center gap-2 rounded-xl border border-line p-3 text-sm has-checked:border-accent has-checked:bg-accent/10">
-              <input type="radio" name="kind" value="internal" defaultChecked />
-              <span>
-                <b>Kendi aramızda</b> <span className="text-muted">· taraflar dengeli bölünür</span>
-              </span>
-            </label>
-          )}
-          <label className="flex items-center gap-2 rounded-xl border border-line p-3 text-sm has-checked:border-accent has-checked:bg-accent/10">
-            <input type="radio" name="kind" value="external" defaultChecked={!isCommunity} />
-            <span>
-              <b>Rakibe karşı</b> <span className="text-muted">· takımın adına; takımda olmayanlar ödünç yazılır</span>
-            </span>
-          </label>
-          {(
-            <div className="grid grid-cols-2 gap-3">
-              <label className="block">
-                <Label>Takım</Label>
-                <select name="teamId" defaultValue={teamChoices[0]?.id ?? "__new"} className={selectCls}>
-                  {teamChoices.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                      {t.temporary ? (t.archived ? " (geçici, yeniden aç)" : " (geçici)") : ""}
-                    </option>
-                  ))}
-                  {isCommunity && <option value="__new">+ Hızlı takım kur</option>}
-                </select>
-              </label>
-              <label className="block">
-                <Label hint="uygulamada olmasa da">Rakip adı</Label>
-                <Input name="opponent" maxLength={60} placeholder="Örn. Yıldızspor" />
-              </label>
-              {isCommunity && (
-                <label className="col-span-2 block">
-                  <Label hint="sadece “Hızlı takım kur” seçiliyse">Hızlı takımın adı</Label>
-                  <Input name="newTeam" maxLength={60} placeholder="Örn. Cuma Ekibi" />
-                  <span className="mt-1 block text-xs text-muted">
-                    Geçici takım: Keşfet&apos;te görünmez, son maçı bitince kendiliğinden arşivlenir. İstersen sonra kalıcı yaparsın.
-                  </span>
-                </label>
-              )}
+        {isCommunity ? (
+          <div className="space-y-1 text-sm">
+            <input type="hidden" name="kind" value="internal" />
+            <div>
+              <b>Kendi aramızda</b> <span className="text-muted">· seçilenler iki dengeli tarafa bölünür</span>
             </div>
-          )}
-        </fieldset>
+            <p className="text-xs text-muted">
+              Rakip maçı mı yapacaksınız? Rakibe karşı maçlar takımdan açılır.{" "}
+              <Link href="/takim-kur" className="text-accent underline">
+                Takım kur ›
+              </Link>
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-1">
+            <input type="hidden" name="kind" value="external" />
+            <input type="hidden" name="teamId" value={groupId} />
+            <label className="block">
+              <Label hint="uygulamada olmasa da">Rakip adı</Label>
+              <Input name="opponent" maxLength={60} placeholder="Örn. Yıldızspor" />
+            </label>
+            <p className="text-xs text-muted">Takımda olmayan seçilenler maça ödünç oyuncu olarak yazılır.</p>
+          </div>
+        )}
       </Card>
 
       <SectionTitle>Kimler oynayacak? · {preselected.size} işaretli</SectionTitle>

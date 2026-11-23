@@ -28,9 +28,9 @@ export default async function NewPollPage({
 
   return (
     <main>
-      <Header title="Kimler gelir?" back={`/g/${groupId}`} />
+      <Header title="Maç ayarla" back={`/g/${groupId}`} />
       <p className="mb-4 text-sm text-muted">
-        {group.name} üyelerine sor. Sadece gün yeterli; saat, saha ve rakip netleşince düzenlersin. Kadroyu sen kesinleştirirsin.
+        {group.name} üyelerine sor. Sadece gün yeterli; saat ve saha netleşince düzenlersin. Kadroyu sen kesinleştirirsin.
       </p>
       <ErrorNote message={error} />
       <form action={createGatherPoll} className="space-y-4">
@@ -40,13 +40,17 @@ export default async function NewPollPage({
             <Label>Gün</Label>
             <Input type="date" name="day" min={today} max={max} defaultValue={today} required />
           </label>
-          <CallFields />
+          <CallFields perTeam={group.kind === "team"} />
         </Card>
         <Card className="space-y-1.5 text-xs text-muted">
           <div className="font-semibold text-white">Nasıl işler?</div>
           <p>• Üyeler &quot;Geliyorum / Belki / Gelemem&quot; der, istersen mevki ve not bırakır.</p>
           <p>• Kadroyu sen kesinleştirirsin: liste ilk gelenler işaretli gelir, değiştirebilirsin. Seçilmeyenler yedek olur.</p>
-          <p>• Kesinleştirirken &quot;kendi aramızda&quot; ya da takımınla &quot;rakibe karşı&quot; seçersin.</p>
+          <p>
+            {group.kind === "team"
+              ? "• Maç takımının adına rakibe karşı kurulur; kontenjan takımın kişi sayısı kadardır."
+              : "• Grupta maç kendi aranızda oynanır: seçilenler iki dengeli tarafa bölünür. Rakip maçı için takım kur."}
+          </p>
           <p>• Gün geçerse çağrı kendiliğinden kapanır. Aynı anda en fazla 3 açık çağrın olabilir.</p>
         </Card>
         <SubmitButton className="w-full" pendingLabel="Çağrı açılıyor…">

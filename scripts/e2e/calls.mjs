@@ -1,5 +1,5 @@
 // Birleşik çağrı (0035): toplama çağrısı (sadece gün) → yanıtlar → kadroyu kesinleştir (kendi aramızda) → yedek →
-// çekilme + yer açıldı → yedeği kadroya al → adam ara (toplulukta) → rakibe karşı kesinleştirme (takıma ödünç).
+// çekilme + yer açıldı → yedeği kadroya al → adam ara (toplulukta) → takım çağrısı (kontenjan tek taraf) ile rakibe karşı.
 // Canlı Supabase'e karşı çalışır; test kullanıcılarını ve gruplarını sonunda siler. Kullanım: node scripts/e2e/calls.mjs [ekran-klasörü]
 import { createRequire } from "module";
 import fs from "fs";
@@ -54,11 +54,11 @@ try {
 
   // 1) Üye çağrı açamaz; organizatör sadece günle açar
   await p1P.goto(`${BASE}/g/${C}`);
-  check("üye 'Kimler gelir?' düğmesini görmez", !has(await body(p1P), "Kimler gelir?"));
+  check("üye 'Maç ayarla' düğmesini görmez", !has(await body(p1P), "Maç ayarla"));
   await p1P.goto(`${BASE}/g/${C}/cagri/yeni`);
   check("üye çağrı açma sayfasından geri gönderilir", !p1P.url().includes("/cagri/yeni"));
   await oP.goto(`${BASE}/g/${C}`);
-  await oP.click('a:has-text("Kimler gelir?")');
+  await oP.click('a:has-text("Maç ayarla")');
   await oP.waitForURL(/cagri\/yeni/);
   await oP.fill('input[name="day"]', trDate(2));
   await oP.fill('input[name="venue"]', "Petroller");
@@ -163,26 +163,30 @@ try {
   const { data: fr } = await admin.from("match_polls").select("status").eq("id", fill).single();
   check("sayı dolunca adam arama 'doldu' oldu", fr.status === "filled");
 
-  // 6) Rakibe karşı: yeni çağrı → takıma ödünç
-  await oP.goto(`${BASE}/g/${C}/cagri/yeni`);
+  // 6) Grupta kesinleştirmede "rakibe karşı" yok; rakip maçı takım çağrısıyla (kontenjan tek taraf: 7v7 → 7)
+  await oP.goto(`${BASE}/g/${T}/cagri/yeni`);
+  check("takım çağrısında 7v7 = 7 kişi", has(await body(oP), "7v7 (7 kişi)"));
+  for (const u of [P1, P4]) await admin.from("group_players").insert({ group_id: T, user_id: u.id, display_name: u.name, position: "MID" });
   await oP.fill('input[name="day"]', trDate(3));
+  await oP.selectOption('select[name="size"]', "7");
   await oP.click('button:has-text("Çağrıyı aç")');
   await oP.waitForURL(/cagri\/[0-9a-f-]{36}$/, { timeout: 20000 });
   const poll2 = oP.url().split("/cagri/")[1];
-  await answer(p1P, "Geliyorum", null, poll2);
-  await answer(p4P, "Geliyorum", null, poll2);
-  await oP.goto(`${BASE}/g/${C}/cagri/${poll2}?kesinlestir=1`);
+  const { data: cap } = await admin.from("match_polls").select("capacity").eq("id", poll2).single();
+  check("takım çağrısının kontenjanı 7", cap.capacity === 7);
+  for (const p of [p1P, p4P]) {
+    await p.goto(`${BASE}/g/${T}/cagri/${poll2}`);
+    await p.click('button[name="answer"]:has-text("Geliyorum")');
+    await p.waitForLoadState("networkidle");
+  }
+  await oP.goto(`${BASE}/g/${T}/cagri/${poll2}?kesinlestir=1`);
   await oP.fill('input[name="time"]', "22:00");
-  await oP.check('input[name="kind"][value="external"]');
-  await oP.selectOption('select[name="teamId"]', T);
   await oP.fill('input[name="opponent"]', "Yıldızspor");
   await oP.click('button:has-text("Kadroyu kesinleştir ve maçı kur")');
   await oP.waitForURL(new RegExp(`/g/${T}/m/`), { timeout: 30000 });
   const MX = oP.url().split("/m/")[1].split(/[?#]/)[0];
   const { data: mx } = await admin.from("matches").select("kind, opponent_name").eq("id", MX).single();
   check("maç takımda, Yıldızspor'a karşı kuruldu", mx.kind === "external" && mx.opponent_name === "Yıldızspor");
-  const { data: loans } = await admin.from("group_players").select("user_id, is_loan").eq("group_id", T).in("user_id", [P1.id, P4.id]);
-  check("takımda olmayan iki oyuncu ödünç yazıldı", loans.length === 2 && loans.every((l) => l.is_loan));
   await oP.screenshot({ path: `${SHOTS}/c04-rakip-mac.png`, fullPage: true });
 } catch (e) {
   console.log("  ✗ ÇÖKTÜ:", e?.message ?? e);

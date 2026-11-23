@@ -5,14 +5,16 @@ const selectCls = "min-h-11 w-full rounded-xl border border-line bg-pitch-950 px
 const textareaCls =
   "w-full rounded-xl border border-line bg-pitch-950 p-3 text-sm outline-none placeholder:text-muted/60 focus:border-accent";
 
-/** Toplama çağrısının isteğe bağlı alanları (açarken ve düzenlerken aynı) */
+/** Toplama çağrısının isteğe bağlı alanları (açarken ve düzenlerken aynı). perTeam: takım çağrısı, kontenjan tek taraf */
 export function CallFields({
+  perTeam = false,
   time = "",
   size = null,
   venue = "",
   decideBy = "",
   note = "",
 }: {
+  perTeam?: boolean;
   time?: string;
   size?: number | null;
   venue?: string;
@@ -32,7 +34,7 @@ export function CallFields({
             <option value="">Belli değil</option>
             {SIZES.map((n) => (
               <option key={n} value={n}>
-                {n}v{n} ({n * 2} kişi)
+                {n}v{n} ({perTeam ? n : n * 2} kişi)
               </option>
             ))}
           </select>

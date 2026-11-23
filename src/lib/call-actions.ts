@@ -17,6 +17,15 @@ const sizeOf = (fd: FormData) => {
   const n = Number(fd.get("size"));
   return isValidSize(n) ? n : null;
 };
+/**
+ * Toplama çağrısının kontenjanı: grupta kendi aramızda oynanır (iki taraf, kişi × 2),
+ * takımda rakibe karşı (tek taraf, kişi kadar). null → RPC kişi × 2 hesaplar.
+ */
+async function gatherCapacity(supabase: Awaited<ReturnType<typeof requireUser>>["supabase"], groupId: string, size: number | null) {
+  if (size === null) return null;
+  const { data } = await supabase.from("groups").select("kind").eq("id", groupId).maybeSingle();
+  return data?.kind === "team" ? size : size * 2;
+}
 const asPosition = (v: string): Position | null => (POSITIONS.includes(v as Position) ? (v as Position) : null);
 
 function fail(path: string, message: string): never {
@@ -28,7 +37,7 @@ function rpcMessage(error: { message?: string; code?: string } | null, fallback:
 }
 const callPath = (groupId: string, pollId: string) => `/g/${groupId}/cagri/${pollId}`;
 
-/** Toplama çağrısı: "Cuma kimler gelir?" — gün zorunlu, gerisi isteğe bağlı */
+/** Toplama çağrısı ("Maç ayarla") — gün zorunlu, gerisi isteğe bağlı */
 export async function createGatherPoll(fd: FormData) {
   const { supabase, user } = await requireUser();
   const groupId = str(fd, "groupId");
@@ -46,7 +55,7 @@ export async function createGatherPoll(fd: FormData) {
     p_starts_at: startsAt,
     p_venue: venue,
     p_team_size: sizeOf(fd),
-    p_capacity: null,
+    p_capacity: await gatherCapacity(supabase, groupId, sizeOf(fd)),
     p_decide_by: decideBy ? parseLocalDateTime(decideBy) : null,
     p_note: str(fd, "note").slice(0, 300) || null,
   });
@@ -76,7 +85,7 @@ export async function updateGatherPoll(fd: FormData) {
     p_starts_at: startsAt,
     p_venue: venue,
     p_team_size: sizeOf(fd),
-    p_capacity: null,
+    p_capacity: await gatherCapacity(supabase, groupId, sizeOf(fd)),
     p_decide_by: decideBy ? parseLocalDateTime(decideBy) : null,
     p_note: str(fd, "note").slice(0, 300) || null,
   });

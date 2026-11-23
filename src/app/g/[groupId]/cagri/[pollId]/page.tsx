@@ -5,7 +5,7 @@ import { requireUser } from "@/lib/supabase/server";
 import { acceptResponder, closePoll, rejectResponder, respondPoll, updateGatherPoll } from "@/lib/call-actions";
 import { formatDate, POSITIONS, POSITION_NAME, toLocalInput } from "@/lib/data";
 import { callWhen, decisionDue, defaultSelection, isoToTime, pendingApplicants, reserveOrder, type Answer, type Responder } from "@/lib/call-rules";
-import { loadCall, myManagedTeams } from "@/lib/calls-data";
+import { loadCall } from "@/lib/calls-data";
 import { SendInviteLink } from "@/components/SendInviteLink";
 import { Badge, Card, ErrorNote, Header, Input, LinkButton, SectionTitle, cx } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -71,7 +71,6 @@ export default async function CallPage({
   const due = canManage && decisionDue(call);
 
   if (canManage && kesinlestir && call.purpose === "gather" && call.status === "open") {
-    const teams = isCommunity ? await myManagedTeams(supabase, user.id) : [];
     const candidates = [...yes, ...maybe].filter((r) => r.status !== "rejected");
     return (
       <main>
@@ -84,7 +83,6 @@ export default async function CallPage({
           candidates={candidates}
           preselected={new Set(defaultSelection(responders, call.capacity))}
           isCommunity={isCommunity}
-          teams={teams}
         />
       </main>
     );
@@ -104,7 +102,7 @@ export default async function CallPage({
           { table: "poll_responses", filter: `poll_id=eq.${pollId}` },
         ]}
       />
-      <Header title={isFill ? "Adam aranıyor" : "Kimler gelir?"} back={`/g/${groupId}`} right={statusBadge} />
+      <Header title={isFill ? "Adam aranıyor" : "Maç çağrısı"} back={`/g/${groupId}`} right={statusBadge} />
       <ErrorNote message={error} />
       {canManage && (call.status === "open" || (call.status === "converted" && matchPlanned)) && (
         <SendInviteLink tur="poll" refId={pollId} className="mb-4" />
@@ -136,8 +134,7 @@ export default async function CallPage({
           <span>
             <b className="text-accent">{yes.length}</b>
             <span className="text-muted">
-              {" "}
-              geliyor{call.capacity && !isFill ? ` / ${call.capacity}` : ""}
+              {call.capacity && !isFill ? `/${call.capacity}` : ""} geliyor
               {maybe.length > 0 && ` · ${maybe.length} belki`}
               {isFill && ` · ${selected.length}/${call.capacity} alındı`}
             </span>
@@ -215,6 +212,7 @@ export default async function CallPage({
               <Hidden groupId={groupId} pollId={pollId} />
               <input type="hidden" name="day" value={call.play_on} />
               <CallFields
+                perTeam={!isCommunity}
                 time={isoToTime(call.starts_at)}
                 size={call.team_size}
                 venue={call.venue ?? ""}

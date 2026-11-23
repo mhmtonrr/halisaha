@@ -3,13 +3,14 @@
 (CLAUDE.md'den taşındı; ilgili konuda çalışırken oku. Konu değişirse sadece bu dosyayı güncelle.)
 
 **Birleşik çağrı (0035, kullanıcı kararları)**: eski üye çağrısı (otomatik maç, %70), yetkili elle onayı ve oyuncu ilanı tek yapıda: `match_polls`.
-Açma/kesinleştirme sadece `can_create_match` (kurucu/yetkili/organizatör; arşivli takımda false); yönetim `can_manage_poll` (açan veya kurucu/yetkili; üye önerisinden açılan çağrıda öneren, 0037). Kesinleştirmede hızlı (geçici) takım: `docs/takim-grup-uyelik.md`. Kurucu/yetkili dışındakiler
+Açma/kesinleştirme sadece `can_create_match` (kurucu/yetkili/organizatör; arşivli takımda false); yönetim `can_manage_poll` (açan veya kurucu/yetkili; üye önerisinden açılan çağrıda öneren, 0037). Hızlı (geçici) takım arayüzden kaldırıldı: `docs/takim-grup-uyelik.md`. Kurucu/yetkili dışındakiler
 aynı grupta en fazla 3 açık çağrı. Tabloya doğrudan yazma yok, hepsi RPC. `group_id` = çağrının yayınlandığı yer (kim görür/yanıtlar); maçın sahibi `matches.group_id`.
 - **Toplama** (`purpose='gather'`, `create_gather_poll`): zorunlu tek şey gün (`play_on`, bugün..+30); saat (`starts_at`, o günde), saha, kişi sayısı
-  (`team_size` → kontenjan ×2), karar zamanı (`decide_by`, sadece hatırlatma), not isteğe bağlı; `update_gather_poll` ile netleşir (yanıt verenlere bildirim).
+  (`team_size` → kontenjan: grupta ×2, takımda ×1; uygulama `p_capacity` gönderir), karar zamanı (`decide_by`, sadece hatırlatma), not isteğe bağlı; `update_gather_poll` ile netleşir (yanıt verenlere bildirim).
   Yanıt `respond_poll(poll, yes|maybe|no, mevki, not)`, hesaba bağlı (`poll_responses.user_id`). Organizatör `finalize_poll` ile **toplu kesinleştirir**:
-  saat zorunlu, seçilenler "geliyorum"/"belki" demiş olmalı; **kendi aramızda** (sadece toplulukta, ≥4, taraflar `balanceTeams` ile uygulamada) veya
-  **rakibe karşı** (maç açabildiğim bir takımda, rakip adıyla, ≥2; takım üyesi olmayan `ensure_match_player` ile ödünç). Seçilen `selected`, seçilmeyen
+  saat zorunlu, seçilenler "geliyorum"/"belki" demiş olmalı. **Kullanıcı kararı (2026-11-23): grup çağrısı sadece kendi aramızda, takım çağrısı sadece rakibe karşı**
+  (RPC toplulukta başka takımla rakibe karşıyı hâlâ kabul eder, arayüz sunmaz; grupta "Takım kur" yönlendirmesi; arayüz adı "Maç ayarla" / "Maç çağrısı"). **Kendi aramızda** (≥4, taraflar `balanceTeams` ile uygulamada) veya
+  **rakibe karşı** (takımın kendi çağrısında, rakip adıyla, ≥2; takım üyesi olmayan `ensure_match_player` ile ödünç). Seçilen `selected`, seçilmeyen
   "geliyorum" `reserve`; kesinleşmiş çağrıya geç gelen "geliyorum" da yedek. Uygulamadaki takımla ortak maç (çapraz oylama) yine teklifle.
 - **Adam ara** (`purpose='fill'`, `create_fill_poll`): planlı maçın eksiği (1-10, mevkiler, not); maçın kendi grubunda veya organizatörün maç açabildiği
   bir toplulukta; maç başına yer başına 1 açık. Başvuranı organizatör **tek tek** `accept_responder`/`reject_responder` ile alır; sayı dolunca `filled`.

@@ -247,7 +247,7 @@ export default async function GroupPage({
       />
       {canCreate && (
         <div className="mb-2 grid grid-cols-2 gap-2">
-          <LinkButton href={`/g/${groupId}/cagri/yeni`}>📣 Kimler gelir?</LinkButton>
+          <LinkButton href={`/g/${groupId}/cagri/yeni`}>⚽ Maç ayarla</LinkButton>
           <LinkButton href={`/g/${groupId}/matches/new`} variant="secondary">
             {isTeam ? "+ Maç kur" : "+ Doğrudan maç"}
           </LinkButton>

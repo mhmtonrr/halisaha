@@ -1,4 +1,4 @@
-// 0037: üye maç önerisi → onay → öneren kesinleştirir (hızlı/geçici takımla rakibe karşı) → geçici takım listelerde ayrı,
+// 0037: üye maç önerisi → onay → öneren kesinleştirir (grupta arayüz sadece kendi aramızda; hızlı/geçici takım RPC ile) → geçici takım listelerde ayrı,
 // Keşfet'te yok → ödünç oyuncuya takım daveti → sessize alma (toplu duyuru gelmez). Canlı Supabase; test verisini siler.
 import { createRequire } from "module";
 import fs from "fs";
@@ -51,7 +51,7 @@ try {
 
   // 1) Üye maç önerir; başka üye görmez; organizatör görür ve onaylar
   await nP.goto(`${BASE}/g/${C}`);
-  check("üye 'Kimler gelir?' yerine 'Maç öner' görür", has(await body(nP), "Maç öner") && !has(await body(nP), "Kimler gelir?"));
+  check("üye 'Maç ayarla' yerine 'Maç öner' görür", has(await body(nP), "Maç öner") && !has(await body(nP), "Maç ayarla"));
   await nP.locator("summary:has-text('Maç öner')").click();
   await nP.fill('#oneriler input[name="day"]', trDate(2));
   await nP.fill('#oneriler input[name="venue"]', "Petroller");
@@ -73,7 +73,7 @@ try {
   const { data: pr } = await admin.from("match_polls").select("created_by, proposal_id").eq("id", poll).single();
   check("çağrı öneren adına açıldı", pr.created_by === N.id && !!pr.proposal_id);
 
-  // 2) Yanıtlar; öneren kesinleştirir: hızlı takımla rakibe karşı
+  // 2) Yanıtlar; öneren kesinleştirme ekranında sadece "kendi aramızda" görür; hızlı takımla rakibe karşı (RPC)
   for (const p of [aP, sP]) {
     await p.goto(`${BASE}/g/${C}/cagri/${poll}`);
     await p.click('button[name="answer"]:has-text("Geliyorum")');
@@ -82,15 +82,20 @@ try {
   await nP.goto(`${BASE}/g/${C}/cagri/${poll}`);
   check("öneren (rolü olmadan) 'Kadroyu kesinleştir' görür", has(await body(nP), "Kadroyu kesinleştir"));
   await nP.goto(`${BASE}/g/${C}/cagri/${poll}?kesinlestir=1`);
-  await nP.fill('input[name="time"]', "21:00");
-  await nP.check('input[name="kind"][value="external"]');
-  await nP.selectOption('select[name="teamId"]', "__new");
-  await nP.fill('input[name="newTeam"]', `Cuma Ekibi ${stamp}`);
-  await nP.fill('input[name="opponent"]', "Yıldızspor");
-  await nP.screenshot({ path: `${SHOTS}/p02-hizli-takim.png`, fullPage: true });
-  await nP.click('button:has-text("Kadroyu kesinleştir ve maçı kur")');
-  await nP.waitForURL(/\/g\/[0-9a-f-]{36}\/m\/[0-9a-f-]{36}/, { timeout: 30000 });
-  const T = nP.url().split("/g/")[1].split("/")[0];
+  check(
+    "grupta kesinleştirmede 'rakibe karşı' yok, 'Takım kur' yönlendirmesi var",
+    (await nP.locator('input[name="kind"][value="external"]').count()) === 0 && has(await body(nP), "Takım kur"),
+  );
+  await nP.screenshot({ path: `${SHOTS}/p02-kesinlestir.png`, fullPage: true });
+  // Arayüz grupta hızlı takım kurmuyor; RPC hâlâ destekliyor. Geçici takım davranışı (adım 3-4) için öneren adına RPC ile kurulur
+  const asN = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, { auth: { persistSession: false } });
+  await asN.auth.signInWithPassword({ email: N.email, password: N.password });
+  const { data: mid, error: fe } = await asN.rpc("finalize_poll", {
+    p_poll: poll, p_starts_at: `${trDate(2)}T21:00:00+03:00`, p_venue: "Petroller", p_team_size: null, p_kind: "external", p_team: null,
+    p_opponent: "Yıldızspor", p_roster: [A, S].map((u) => ({ user_id: u.id, team: "A", gk: false })), p_new_team: `Cuma Ekibi ${stamp}`,
+  });
+  if (fe) throw fe;
+  const T = (await admin.from("matches").select("group_id").eq("id", mid).single()).data.group_id;
   groupIds.push(T);
   const { data: t } = await admin.from("groups").select("name, is_temporary, city, created_by").eq("id", T).single();
   check("hızlı takım geçici kuruldu, öneren kaptan", t.is_temporary && t.created_by === N.id && t.city === "İstanbul");
