@@ -1,15 +1,21 @@
-// Bildirimler: olaylar doğru kişilere ulaşır (teklif, çağrı, oylama, sohbet, ilan), olayı yapana gitmez, tercih kapalıysa gitmez,
+// Bildirimler: olaylar doğru kişilere ulaşır (teklif, çağrı, oylama, sohbet, adam ara), olayı yapana gitmez, tercih kapalıysa gitmez,
 // sohbet 10 dakikada tek bildirime birleşir, rozet canlı güncellenir, kutu okundu işaretlenir, hatırlatma cron'u bir kez gönderir.
-// Sunucu CRON_SECRET=e2e-secret ile başlatılmalı. Canlı Supabase'e karşı çalışır; test verisini sonunda siler.
+// Cron adımı için sunucu CRON_SECRET=e2e-secret ile başlatılmalı (değilse o adım atlanır ve söylenir).
+// Canlı Supabase'e karşı çalışır; test verisini sonunda siler. Kullanım: node scripts/e2e/notifications.mjs [ekran-klasörü]
 import { createRequire } from "module";
 import fs from "fs";
+import os from "os";
+import path from "path";
 const PROJ = process.cwd();
 const require = createRequire(PROJ + "/package.json");
 const { createClient } = require("@supabase/supabase-js");
 const { chromium } = require("playwright");
-const SHOTS = process.argv[2] ?? "/tmp/halisaha-shots";
+const SHOTS = process.argv[2] ?? path.join(os.tmpdir(), "halisaha-shots");
 fs.mkdirSync(SHOTS, { recursive: true });
-const env = Object.fromEntries(fs.readFileSync(PROJ + "/.env.local", "utf8").trim().split("\n").map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
+const env = Object.fromEntries(
+  fs.readFileSync(PROJ + "/.env.local", "utf8").trim().split(/\r?\n/).filter((l) => l.includes("=")).map((l) => [l.slice(0, l.indexOf("=")).trim(), l.slice(l.indexOf("=") + 1).trim()]),
+);
+const trDate = (offsetDays) => new Date(Date.now() + 3 * 3600e3 + offsetDays * 86400e3).toISOString().slice(0, 10);
 const admin = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 const BASE = "http://localhost:3000";
 let failed = 0;
@@ -69,16 +75,16 @@ try {
   check("okununca rozet kalkar", !!(await until(async () => (await badge(rivP).count()) === 0)));
 
   // 3) Tercih: teklif bildirimini kapat → ikinci teklifte bildirim gelmez
-  await rivP.goto(`${BASE}/profil#bildirimler`);
-  const offerBox = rivP.locator('label:has-text("Teklif ve oyuncu ilanı") input[type="checkbox"]');
-  await offerBox.uncheck();
+  await rivP.goto(`${BASE}/profil?sekme=ayarlar#bildirimler`);
+  const offerBox = rivP.locator('button[role="switch"][aria-label="Maç teklifi"]');
+  await offerBox.click();
   check("tercih kapatıldı (veritabanında offers=false)", !!(await until(async () => (await admin.from("notification_prefs").select("offers").eq("user_id", riv.id).single()).data.offers === false)));
   await rivP.screenshot({ path: `${SHOTS}/91-bildirim-ayarlari.png`, fullPage: true });
   await capP.goto(`${BASE}/g/${B}/teklif`);
   await capP.click('button:has-text("Teklifi gönder")'); await capP.waitForURL(/teklifler\?sent=1/);
   await new Promise((r) => setTimeout(r, 4000));
   check("tercih kapalıyken ikinci teklif için bildirim yazılmadı", (await notifs(riv, "offer")).length === 1);
-  await offerBox.check();
+  await offerBox.click();
 
   // 4) Teklif kabulü → teklifi gönderene bildirim
   await rivP.goto(`${BASE}/g/${B}/teklifler`);
@@ -87,6 +93,7 @@ try {
 
   // 5) Çağrı: gruba yeni çağrı → üyelere (açan hariç)
   await capP.goto(`${BASE}/g/${G}/cagri/yeni`);
+  await capP.fill('input[name="day"]', trDate(2));
   await capP.fill('input[name="venue"]', "Bildirim Sahası");
   await capP.click('button:has-text("Çağrıyı aç")'); await capP.waitForURL(/cagri\/[0-9a-f-]+$/);
   check("çağrı: iki üyeye 'poll' bildirimi", !!(await until(async () => (await notifs(mem, "poll")).length === 1 && (await notifs(apl, "poll")).length === 1)));
@@ -107,10 +114,15 @@ try {
   check("hatırlatma cron'u anahtarsız 401", unauthorized.status === 401);
   const wrong = await fetch(`${BASE}/api/cron/vote-reminders`, { headers: { authorization: "Bearer yanlis" } });
   check("yanlış anahtarla da 401", wrong.status === 401);
-  const r1 = await (await fetch(`${BASE}/api/cron/vote-reminders`, { headers: { authorization: "Bearer e2e-secret" } })).json();
-  check("cron: oy vermemiş iki kişiye hatırlatma (kaptan + oyuncu)", r1.reminded >= 2 && (await notifs(mem, "vote")).length === 2);
-  const r2 = await (await fetch(`${BASE}/api/cron/vote-reminders`, { headers: { authorization: "Bearer e2e-secret" } })).json();
-  check("ikinci çalıştırmada tekrar hatırlatma yok (en fazla 1)", r2.reminded === 0 && (await notifs(mem, "vote")).length === 2);
+  const res1 = await fetch(`${BASE}/api/cron/vote-reminders`, { headers: { authorization: "Bearer e2e-secret" } });
+  if (res1.status === 401) {
+    console.log("  – ATLANDI: hatırlatma cron'u (sunucu CRON_SECRET=e2e-secret ile başlatılmamış)");
+  } else {
+    const r1 = await res1.json();
+    check("cron: oy vermemiş iki kişiye hatırlatma (kaptan + oyuncu)", r1.reminded >= 2 && (await notifs(mem, "vote")).length === 2);
+    const r2 = await (await fetch(`${BASE}/api/cron/vote-reminders`, { headers: { authorization: "Bearer e2e-secret" } })).json();
+    check("ikinci çalıştırmada tekrar hatırlatma yok (en fazla 1)", r2.reminded === 0 && (await notifs(mem, "vote")).length === 2);
+  }
 
   // 7) Sohbet: bildirim gider, 10 dakikada tek kalır
   await memP.goto(`${BASE}/g/${A}/sohbet`);
@@ -122,21 +134,28 @@ try {
   check("10 dakika içinde ikinci mesaj yeni bildirim üretmedi (birleştirme)", (await notifs(cap, "chat")).length === 1);
   check("mesajı yazana kendi mesajı için bildirim gitmedi", (await notifs(mem, "chat")).length === 0);
 
-  // 8) İlan: başvuru → takım yetkilisine; kabul → başvurana
+  // 8) Adam ara: açılınca takım üyesine; başvuru → açana; kadroya alınınca → başvurana
   const mid2 = (await admin.from("matches").insert({ group_id: A, played_at: new Date(Date.now() + 4 * 864e5).toISOString(), created_by: cap.id, kind: "external", opponent_name: "Rakip 2", team_size: 7 }).select("id").single()).data.id;
   await admin.from("match_players").insert({ match_id: mid2, player_id: await gp(A, cap), team: "A" });
-  const L = (await admin.from("player_listings").insert({ group_id: A, match_id: mid2, created_by: cap.id, needed: 1 }).select("id").single()).data.id;
-  await aplP.goto(`${BASE}/ilan/${L}`);
-  await aplP.click('button:has-text("Başvur")');
-  await aplP.locator("text=Yanıt bekliyor").first().waitFor({ timeout: 12000 });
-  check("ilan başvurusu: takım yetkilisine bildirim", !!(await until(async () => (await notifs(cap, "listing")).length === 1)));
-  check("ilan bildirimi başvuranın adını taşır", (await notifs(cap, "listing"))[0].body.includes("Ahmet Başvuran"));
   await capP.goto(`${BASE}/g/${A}/m/${mid2}`);
-  await capP.locator("summary:has-text('Oyuncu arıyoruz')").click().catch(() => {});
-  await capP.locator('button:has-text("Kadroya al")').first().waitFor({ timeout: 12000 }).catch(async () => { await capP.locator("summary:has-text('Oyuncu arıyoruz')").click(); });
-  await capP.locator('button:has-text("Kadroya al")').first().click();
-  check("başvuru kabul edilince başvurana 'kadroya alındın'", !!(await until(async () => (await notifs(apl, "listing")).some((n) => n.title.includes("Kadroya alındın")))));
-  check("kabul bildirimi maç adresine gider", (await notifs(apl, "listing")).find((n) => n.title.includes("Kadroya alındın"))?.url === `/g/${A}/m/${mid2}`);
+  await capP.locator("summary:has-text('Adam ara')").click();
+  await capP.selectOption('select[name="needed"]', "1");
+  await capP.click('button:has-text("🔎 Adam ara")');
+  await capP.waitForURL(/cagri\/[0-9a-f-]{36}$/, { timeout: 20000 });
+  const F = capP.url().split("/cagri/")[1];
+  const fillN = async () => (await notifs(mem, "poll")).filter((n) => n.url === `/g/${A}/cagri/${F}`);
+  check("adam ara: takım üyesine '1 oyuncu aranıyor' bildirimi", !!(await until(async () => (await fillN()).some((n) => n.title.includes("1 oyuncu aranıyor")))));
+  check("adam arayana kendi araması için bildirim yok", !(await notifs(cap, "poll")).some((n) => n.url === `/g/${A}/cagri/${F}`));
+  await memP.goto(`${BASE}/g/${A}/cagri/${F}`);
+  await memP.click('button[name="answer"]:has-text("Geliyorum")');
+  await memP.waitForLoadState("networkidle");
+  check("başvuru: açana 'Adam aramana başvuru' bildirimi", !!(await until(async () => (await notifs(cap, "poll")).some((n) => n.title.includes("Adam aramana başvuru")))));
+  check("başvuru bildirimi başvuranın adını taşır", (await notifs(cap, "poll")).find((n) => n.title.includes("Adam aramana başvuru"))?.body.includes("Mert Oyuncu"));
+  await capP.goto(`${BASE}/g/${A}/cagri/${F}`);
+  await capP.click('button:has-text("Kadroya al")');
+  await capP.waitForLoadState("networkidle");
+  check("kadroya alınınca başvurana '⚽ Kadrodasın'", !!(await until(async () => (await notifs(mem, "match")).some((n) => n.title.includes("Kadrodasın")))));
+  check("kabul bildirimi maç adresine gider", (await notifs(mem, "match")).find((n) => n.title.includes("Kadrodasın"))?.url === `/g/${A}/m/${mid2}`);
 } catch (e) {
   failed++;
   console.log("  ✗ ÇÖKTÜ:", e.message);
