@@ -221,7 +221,7 @@ export async function addPollGuest(fd: FormData) {
   const back = callPath(groupId, pollId);
   const name = str(fd, "name").slice(0, 60);
   if (name.length < 2) fail(back, "Misafirin ismi en az 2 karakter olmalı");
-  const { error } = await supabase.rpc("add_poll_guest", { p_poll: pollId, p_name: name, p_position: asPosition(str(fd, "position")) });
+  const { error } = await supabase.rpc("add_poll_guest", { p_poll: pollId, p_name: name, p_position: asPosition(str(fd, "guestPosition")) });
   if (error) fail(back, rpcMessage(error, "Misafir eklenemedi"));
   revalidatePath(back);
   redirect(back);

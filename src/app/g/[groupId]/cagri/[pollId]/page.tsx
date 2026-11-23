@@ -235,7 +235,7 @@ export default async function CallPage({
             <p className="text-xs text-muted">Uygulamayı kullanmayan biri gelecekse. Geliyor listesine girer; maçta oylanır ama oy veremez.</p>
             <Input name="name" placeholder="İsim" required minLength={2} maxLength={60} />
             <div className="flex gap-2">
-              <select name="position" defaultValue="" className="min-h-11 rounded-xl border border-line bg-pitch-950 px-2 text-sm" aria-label="Misafirin mevkisi">
+              <select name="guestPosition" defaultValue="" className="min-h-11 rounded-xl border border-line bg-pitch-950 px-2 text-sm" aria-label="Misafirin mevkisi">
                 <option value="">Mevki —</option>
                 {POSITIONS.map((p) => (
                   <option key={p} value={p}>

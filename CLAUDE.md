@@ -17,10 +17,14 @@ Büyük tasarım kararlarını kodlamadan önce kullanıcıyla netleştir; küç
 4. **/clear uyarısı**: konu değişince, bir parça commit+push edilince, veya bağlam şiştiğinde (çok dosya okundu / uzun build-test çıktısı gördün) "şimdi /clear at" diye açıkça söyle. Gereksiz yere clear önerme.
 5. **Kapsam**: sadece istenen değişikliği yap (etkilediği yerler dahil, bkz. kural 2); istenmemiş refactor/özellik/doküman ekleme. Ek iş gerekiyorsa önce söyle.
 6. **Keşif**: ilgili dosyaları hedefli oku (`Grep`/`Glob` ile bul, büyük dosyada sadece ilgili satır aralığı); doğru yazmak için gereken tip/fonksiyon/çağıran dosyaya bakmaktan kaçınma. Tüm dizini gezme, `Agent` başlatma, ilgisiz `docs/` dosyası okuma.
-7. **Doğrulama (kullanıcı özellikle istemedikçe)**: küçük değişiklikte sadece `npx tsc --noEmit` + etkilenen tek test dosyası. `npm run build`, tüm e2e, `npm run db:check` sadece migration/RLS/akış değiştiyse ve ilgili tek senaryoyu çalıştır. Çıktıyı her zaman kısalt (`| tail -15`, `grep`). Aynı komutu "emin olmak için" tekrarlama.
+7. **Doğrulama (kullanıcı özellikle istemedikçe)**: küçük değişiklikte sadece `npx tsc --noEmit` + etkilenen tek test dosyası. `npm run build`, tüm e2e, `npm run db:check` sadece migration/RLS/akış değiştiyse ve ilgili tek senaryoyu çalıştır. Çıktıyı her zaman kısalt (`| tail -15`, `grep`). Aynı komutu "emin olmak için" tekrarlama. Yayın öncesi test zorunluluğu için kural 11.
 8. **Commit/push** yalnızca iş bitince ve tek seferde; düzeltme için ek commit yerine mümkünse bitirmeden düzelt.
 9. **Yanıtlar kısa**: ne yapıldı + tek paragraf; kod/dosya listesini tekrar etme. Seçenek yığma, öneri ver.
 10. Bu kurallar değişecekse (kullanıcı isterse) burayı güncelle; yeni oturumda tekrar sorma.
+11. **Test edilmeden yayına yok** (kullanıcı kararı, 2026-11-23): `main`e push = canlı yayın; push etmeden önce değişikliği kendin dene, kullanıcıya "sen dene" bırakma.
+    Arayüz/akış değiştiyse ilgili e2e senaryosunu (`docs/test.md`) yerelde `npm run dev`e karşı çalıştır; senaryo değişikliği kapsamıyorsa önce adımları ekle. 390px ekran görüntülerine bak.
+    Migration/RLS → `npm run db:check` (+ yeni kontrol) canlıya uygulamadan önce. Saf mantık → Vitest. Sadece metin/doküman değişikliğinde `tsc` yeterli.
+    Test edilemiyorsa (ör. telefon bildirimi, gerçek cihaz) push etmeden önce kullanıcıya söyle ve onay al; yanıtta neyin test edildiğini/edilmediğini açıkça yaz.
 
 ## Canlı ortam
 

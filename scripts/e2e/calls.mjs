@@ -1,5 +1,5 @@
 // Birleşik çağrı (0035): toplama çağrısı (sadece gün) → yanıtlar → kadroyu kesinleştir (kendi aramızda) → yedek →
-// çekilme + yer açıldı → yedeği kadroya al → adam ara (toplulukta) → takım çağrısı (kontenjan tek taraf) ile rakibe karşı.
+// misafir ekle/çıkar (0038) → çekilme + yer açıldı → yedeği kadroya al → adam ara (toplulukta) → takım çağrısı (kontenjan tek taraf) ile rakibe karşı.
 // Canlı Supabase'e karşı çalışır; test kullanıcılarını ve gruplarını sonunda siler. Kullanım: node scripts/e2e/calls.mjs [ekran-klasörü]
 import { createRequire } from "module";
 import fs from "fs";
@@ -93,7 +93,29 @@ try {
   await p3P.goto(`${BASE}/g/${C}`);
   check("grup sayfasında çağrı listelenir", has(await body(p3P), "saat belli değil"));
 
-  // 3) Organizatör düzenler (saat) ve kesinleştirir: Yusuf işaretsiz → yedek, Batu (belki) seçilir
+  // 2b) Organizatör dışarıdan misafir ekler (biri silinir); üye ekleyemez, listede "misafir" görür
+  const addGuest = async (name, pos) => {
+    await oP.goto(`${BASE}/g/${C}/cagri/${poll}`);
+    await oP.fill('form:has(button:has-text("Misafiri ekle")) input[name="name"]', name);
+    if (pos) await oP.selectOption('select[name="guestPosition"]', pos);
+    await oP.click('button:has-text("Misafiri ekle")');
+    await oP.locator(`li:has-text("${name}")`).waitFor({ timeout: 20000 });
+  };
+  await addGuest("Misafir Mert", "FWD");
+  await addGuest("Silinecek Sami");
+  const tg = await body(oP);
+  check("misafirler Geliyor listesinde, sayıya dahil (4 + 2)", has(tg, "Geliyor · 6") && has(tg, "Misafir Mert") && has(tg, "Silinecek Sami"));
+  await oP.click('button[aria-label="Silinecek Sami çıkarılsın"]');
+  await oP.locator('li:has-text("Silinecek Sami")').waitFor({ state: "detached", timeout: 20000 });
+  check("organizatör misafiri çıkarır", !has(await body(oP), "Silinecek Sami") && has(await body(oP), "Geliyor · 5"));
+  const { data: pg } = await admin.from("poll_guests").select("id, name, position").eq("poll_id", poll);
+  check("veritabanında 1 misafir, mevkisiyle", pg.length === 1 && pg[0].name === "Misafir Mert" && pg[0].position === "FWD");
+  await oP.screenshot({ path: `${SHOTS}/c01b-misafir.png`, fullPage: true });
+  await p2P.goto(`${BASE}/g/${C}/cagri/${poll}`);
+  const tp2 = await body(p2P);
+  check("üye misafiri görür ama ekleme formu ve ✕ görmez", has(tp2, "Misafir Mert") && !has(tp2, "Misafiri ekle") && (await p2P.locator('button[aria-label$="çıkarılsın"]').count()) === 0);
+
+  // 3) Organizatör düzenler (saat) ve kesinleştirir: Yusuf işaretsiz → yedek, Batu (belki) seçilir, misafir işaretli
   await oP.goto(`${BASE}/g/${C}/cagri/${poll}?duzenle=1`);
   await oP.fill('input[name="time"]', "20:00");
   await oP.click('button:has-text("Kaydet ve yanıt verenlere haber ver")');
@@ -105,6 +127,7 @@ try {
   check("ilk geliyorumcular işaretli, belki işaretsiz gelir",
     (await oP.isChecked(`input[name="players"][value="${P4.id}"]`)) && !(await oP.isChecked(`input[name="players"][value="${P3.id}"]`)));
   check("profilde/yanıtta kaleci olan 🧤 işaretli gelir", await oP.isChecked(`input[name="gk"][value="${P1.id}"]`));
+  check("kesinleştirmede misafir listelenir ve işaretli gelir", has(t3, "Misafir Mert") && (await oP.isChecked(`input[name="guests"][value="${pg[0].id}"]`)));
   await oP.fill('input[name="time"]', "21:00");
   await oP.uncheck(`input[name="players"][value="${P4.id}"]`);
   await oP.check(`input[name="players"][value="${P3.id}"]`);
@@ -116,8 +139,12 @@ try {
   check("maç toplulukta, kendi aramızda, organizatör adına kuruldu", mrow.group_id === C && mrow.kind === "internal" && mrow.created_by === O.id);
   const { data: mp } = await admin.from("match_players").select("team, is_goalkeeper, group_players(user_id)").eq("match_id", M);
   const inM = (u) => mp.some((r) => (Array.isArray(r.group_players) ? r.group_players[0] : r.group_players)?.user_id === u.id);
-  check("kadroda 4 kişi: Kerem, Kaan, Deniz, Batu; Yusuf yok", mp.length === 4 && [K, P1, P2, P3].every(inM) && !inM(P4));
-  check("taraflar 2-2 bölündü, Kaan kaleci", mp.filter((r) => r.team === "A").length === 2 && mp.some((r) => r.is_goalkeeper));
+  check("kadroda 5 kişi: Kerem, Kaan, Deniz, Batu + misafir; Yusuf yok", mp.length === 5 && [K, P1, P2, P3].every(inM) && !inM(P4));
+  check("taraflar 3-2 bölündü, Kaan kaleci", [2, 3].includes(mp.filter((r) => r.team === "A").length) && mp.some((r) => r.is_goalkeeper));
+  const { data: gpRow } = await admin.from("poll_guests").select("player_id, group_players(user_id, display_name, group_id)").eq("id", pg[0].id).single();
+  const gpp = Array.isArray(gpRow.group_players) ? gpRow.group_players[0] : gpRow.group_players;
+  check("misafir toplulukta misafir oyuncu olarak kadroya bağlandı", !!gpRow.player_id && gpp?.user_id === null && gpp?.group_id === C && gpp?.display_name === "Misafir Mert");
+  check("maç ekranında misafir görünür", has(await body(oP), "Misafir Mert"));
   const st = async (u) => (await admin.from("poll_responses").select("status").eq("poll_id", poll).eq("user_id", u.id).single()).data?.status;
   check("Yusuf yedek, Batu kadroda", (await st(P4)) === "reserve" && (await st(P3)) === "selected");
   await oP.screenshot({ path: `${SHOTS}/c03-mac.png`, fullPage: true });
@@ -141,6 +168,7 @@ try {
   check("organizatöre 'kadroda yer açıldı' bildirimi gitti", !!spot && spot.url === `/g/${C}/cagri/${poll}`);
   check("çekilenin yanıtı 'çekildi' oldu", (await st(P2)) === "withdrawn");
   await oP.goto(`${BASE}/g/${C}/cagri/${poll}`);
+  check("kesinleşen çağrıda misafir 'Kadroda'", has(await body(oP), "Misafir Mert"));
   check("organizatör yedekler listesinde Yusuf'u görür", has(await body(oP), "Yedekler · 1") && has(await body(oP), "Yusuf Yedek"));
   await oP.click('button:has-text("Kadroya al")');
   await oP.waitForLoadState("networkidle");
