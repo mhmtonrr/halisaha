@@ -145,12 +145,18 @@ export async function finalizePoll(fd: FormData) {
   const back = `${callPath(groupId, pollId)}?kesinlestir=1`;
   const selected = [...new Set(fd.getAll("players").map(String))];
   const gk = new Set(fd.getAll("gk").map(String));
+  const guestIds = [...new Set(fd.getAll("guests").map(String))];
   const kind = str(fd, "kind") === "external" ? "external" : "internal";
   const startsAt = dayTimeToIso(str(fd, "day"), str(fd, "time"));
   if (!startsAt) fail(back, "Maç saatini seçin");
-  if (selected.length < (kind === "internal" ? 4 : 2)) fail(back, kind === "internal" ? "En az 4 oyuncu seçin" : "En az 2 oyuncu seçin");
+  if (selected.length + guestIds.length < (kind === "internal" ? 4 : 2)) fail(back, kind === "internal" ? "En az 4 oyuncu seçin" : "En az 2 oyuncu seçin");
 
-  const { data: rows } = await supabase.rpc("poll_responders", { p_poll: pollId });
+  const [{ data: rows }, { data: guestRows }] = await Promise.all([
+    supabase.rpc("poll_responders", { p_poll: pollId }),
+    guestIds.length
+      ? supabase.from("poll_guests").select("id, name, position").eq("poll_id", pollId).in("id", guestIds)
+      : Promise.resolve({ data: [] as { id: string; name: string; position: string | null }[] }),
+  ]);
   const responders = (rows ?? []) as Responder[];
   const byId = new Map(responders.map((r) => [r.user_id, r]));
   const candidates = selected.map((id) => {
@@ -158,12 +164,18 @@ export async function finalizePoll(fd: FormData) {
     const position = (r?.chosen_position ?? r?.preferred_position ?? null) as Position | null;
     return { id, name: r?.display_name, overall: r?.overall ?? 65, isGoalkeeper: gk.has(id) || position === "GK", position };
   });
-  let inA = new Set(candidates.map((c) => c.id));
+  // Misafirin puanı yok: dengelemede başlangıç puanı (65) sayılır
+  const guestCandidates = (guestRows ?? []).map((g) => {
+    const position = asPosition(g.position ?? "");
+    return { id: g.id, name: g.name, overall: 65, isGoalkeeper: gk.has(g.id) || position === "GK", position };
+  });
+  let inA = new Set([...candidates, ...guestCandidates].map((c) => c.id));
   if (kind === "internal") {
-    const [best] = balanceTeams(candidates);
+    const [best] = balanceTeams([...candidates, ...guestCandidates]);
     inA = new Set(best.teamA.map((p) => p.id));
   }
   const roster = candidates.map((c) => ({ user_id: c.id, team: inA.has(c.id) ? "A" : "B", gk: c.isGoalkeeper }));
+  const guests = guestCandidates.map((g) => ({ id: g.id, team: inA.has(g.id) ? "A" : "B", gk: g.isGoalkeeper }));
 
   const { data: matchId, error } = await supabase.rpc("finalize_poll", {
     p_poll: pollId,
@@ -176,6 +188,7 @@ export async function finalizePoll(fd: FormData) {
     p_opponent: kind === "external" ? str(fd, "opponent").slice(0, 60) : null,
     p_roster: roster,
     p_new_team: kind === "external" && str(fd, "teamId") === "__new" ? str(fd, "newTeam").slice(0, 60) : null,
+    p_guests: guests,
   });
   if (error || !matchId) fail(back, rpcMessage(error, "Kadro kesinleştirilemedi"));
   const { data: created } = await supabase.from("matches").select("group_id").eq("id", matchId as string).single();
@@ -198,6 +211,29 @@ export async function finalizePoll(fd: FormData) {
   });
   revalidatePath(callPath(groupId, pollId));
   redirect(`/g/${matchGroup}/m/${matchId}`);
+}
+
+/** Toplama çağrısına dışarıdan misafir ekle (organizatör; hesabı olmayan oyuncu) */
+export async function addPollGuest(fd: FormData) {
+  const { supabase } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const pollId = str(fd, "pollId");
+  const back = callPath(groupId, pollId);
+  const name = str(fd, "name").slice(0, 60);
+  if (name.length < 2) fail(back, "Misafirin ismi en az 2 karakter olmalı");
+  const { error } = await supabase.rpc("add_poll_guest", { p_poll: pollId, p_name: name, p_position: asPosition(str(fd, "position")) });
+  if (error) fail(back, rpcMessage(error, "Misafir eklenemedi"));
+  revalidatePath(back);
+  redirect(back);
+}
+
+export async function removePollGuest(fd: FormData) {
+  const { supabase } = await requireUser();
+  const back = callPath(str(fd, "groupId"), str(fd, "pollId"));
+  const { error } = await supabase.rpc("remove_poll_guest", { p_guest: str(fd, "guestId") });
+  if (error) fail(back, rpcMessage(error, "Misafir çıkarılamadı"));
+  revalidatePath(back);
+  redirect(back);
 }
 
 /** Adam arama başvuranını veya toplama çağrısının yedeğini kadroya al (organizatör) */

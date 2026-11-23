@@ -23,6 +23,9 @@ describe("varsayılan seçim", () => {
   it("kontenjan yoksa tüm geliyorumcular", () => {
     expect(defaultSelection(list, null)).toEqual(["a", "b", "c"]);
   });
+  it("kontenjanı misafirler doldurduysa kimse işaretlenmez", () => {
+    expect(defaultSelection(list, 0)).toEqual([]);
+  });
 });
 
 describe("yedek ve başvuru sırası", () => {

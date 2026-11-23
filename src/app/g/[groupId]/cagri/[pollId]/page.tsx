@@ -2,7 +2,7 @@ import { LiveRefresh } from "@/components/LiveRefresh";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
-import { acceptResponder, closePoll, rejectResponder, respondPoll, updateGatherPoll } from "@/lib/call-actions";
+import { acceptResponder, addPollGuest, closePoll, rejectResponder, removePollGuest, respondPoll, updateGatherPoll } from "@/lib/call-actions";
 import { formatDate, POSITIONS, POSITION_NAME, toLocalInput } from "@/lib/data";
 import { callWhen, decisionDue, defaultSelection, isoToTime, pendingApplicants, reserveOrder, type Answer, type Responder } from "@/lib/call-rules";
 import { loadCall } from "@/lib/calls-data";
@@ -12,7 +12,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { PushPrompt } from "@/components/PushControls";
 import { CallFields } from "../CallFields";
 import { FinalizeForm } from "./FinalizeForm";
-import { ResponderRow } from "./ResponderRow";
+import { GuestRow, ResponderRow } from "./ResponderRow";
 
 const ANSWERS: { value: Answer; label: string; icon: string; active: string }[] = [
   { value: "yes", label: "Geliyorum", icon: "✅", active: "bg-accent text-pitch-950 border-accent" },
@@ -55,11 +55,13 @@ export default async function CallPage({
     supabase.rpc("is_group_member", { p_group_id: groupId }),
   ]);
   if (!loaded || !group) notFound();
-  const { call, responders, canManage, match } = loaded;
+  const { call, responders, guests, canManage, match } = loaded;
   const isFill = call.purpose === "fill";
   const isCommunity = group.kind === "community";
 
   const yes = responders.filter((r) => r.answer === "yes");
+  // Geliyor sayısına organizatörün eklediği dışarıdan misafirler de girer
+  const coming = yes.length + guests.length;
   const maybe = responders.filter((r) => r.answer === "maybe");
   const no = responders.filter((r) => r.answer === "no");
   const selected = responders.filter((r) => r.status === "selected");
@@ -76,12 +78,14 @@ export default async function CallPage({
       <main>
         <Header title="Kadroyu kesinleştir" back={`/g/${groupId}/cagri/${pollId}`} />
         <ErrorNote message={error} />
-        <p className="mb-4 text-sm text-muted">{callWhen(call)} · {yes.length} geliyor, {maybe.length} belki</p>
+        <p className="mb-4 text-sm text-muted">{callWhen(call)} · {coming} geliyor, {maybe.length} belki</p>
         <FinalizeForm
           groupId={groupId}
           call={call}
           candidates={candidates}
-          preselected={new Set(defaultSelection(responders, call.capacity))}
+          guests={guests}
+          // Misafirler hep işaretli; kontenjanın kalanı ilk gelenlerden
+          preselected={new Set(defaultSelection(responders, call.capacity == null ? null : Math.max(call.capacity - guests.length, 0)))}
           isCommunity={isCommunity}
         />
       </main>
@@ -100,6 +104,7 @@ export default async function CallPage({
         watches={[
           { table: "match_polls", filter: `id=eq.${pollId}` },
           { table: "poll_responses", filter: `poll_id=eq.${pollId}` },
+          { table: "poll_guests", filter: `poll_id=eq.${pollId}` },
         ]}
       />
       <Header title={isFill ? "Adam aranıyor" : "Maç çağrısı"} back={`/g/${groupId}`} right={statusBadge} />
@@ -132,7 +137,7 @@ export default async function CallPage({
         {call.note && <p className="mt-3 whitespace-pre-line rounded-lg bg-pitch-950 p-3 text-sm">{call.note}</p>}
         <div className="mt-3 flex flex-wrap justify-between gap-1 text-sm">
           <span>
-            <b className="text-accent">{yes.length}</b>
+            <b className="text-accent">{isFill ? yes.length : coming}</b>
             <span className="text-muted">
               {call.capacity && !isFill ? `/${call.capacity}` : ""} geliyor
               {maybe.length > 0 && ` · ${maybe.length} belki`}
@@ -200,7 +205,7 @@ export default async function CallPage({
           <div className="text-sm font-semibold">Organizatör</div>
           <p className="text-xs text-muted">Bilgiler netleştikçe düzenle; hazır olunca kadroyu kesinleştir. Gün geçerse çağrı kapanır.</p>
           <div className="grid grid-cols-2 gap-2">
-            <LinkButton href={`/g/${groupId}/cagri/${pollId}?kesinlestir=1`} className={cx(yes.length + maybe.length < 2 && "pointer-events-none opacity-50")}>
+            <LinkButton href={`/g/${groupId}/cagri/${pollId}?kesinlestir=1`} className={cx(coming + maybe.length < 2 && "pointer-events-none opacity-50")}>
               Kadroyu kesinleştir ›
             </LinkButton>
             <LinkButton href={`/g/${groupId}/cagri/${pollId}?duzenle=1`} variant="secondary">
@@ -224,6 +229,25 @@ export default async function CallPage({
               </SubmitButton>
             </form>
           )}
+          <form action={addPollGuest} className="space-y-2 border-t border-line pt-3">
+            <Hidden groupId={groupId} pollId={pollId} />
+            <div className="text-xs uppercase tracking-wide text-muted">Misafir ekle</div>
+            <p className="text-xs text-muted">Uygulamayı kullanmayan biri gelecekse. Geliyor listesine girer; maçta oylanır ama oy veremez.</p>
+            <Input name="name" placeholder="İsim" required minLength={2} maxLength={60} />
+            <div className="flex gap-2">
+              <select name="position" defaultValue="" className="min-h-11 rounded-xl border border-line bg-pitch-950 px-2 text-sm" aria-label="Misafirin mevkisi">
+                <option value="">Mevki —</option>
+                {POSITIONS.map((p) => (
+                  <option key={p} value={p}>
+                    {POSITION_NAME[p]}
+                  </option>
+                ))}
+              </select>
+              <SubmitButton variant="secondary" className="flex-1" pendingLabel="Ekleniyor…">
+                Misafiri ekle
+              </SubmitButton>
+            </div>
+          </form>
           <form action={closePoll} className="text-right">
             <Hidden groupId={groupId} pollId={pollId} />
             <button className="text-xs text-muted hover:text-red-300">Çağrıyı iptal et</button>
@@ -269,8 +293,8 @@ export default async function CallPage({
         </>
       )}
 
-      <SectionTitle>Geliyor · {yes.length}</SectionTitle>
-      {yes.length === 0 ? (
+      <SectionTitle>Geliyor · {coming}</SectionTitle>
+      {coming === 0 ? (
         <Card className="text-center text-sm text-muted">Henüz kimse &quot;geliyorum&quot; demedi.</Card>
       ) : (
         <Card className="p-0">
@@ -282,6 +306,21 @@ export default async function CallPage({
                 {r.status === "rejected" && <span className="text-xs text-muted">alınmadı</span>}
                 {r.status === "withdrawn" && <span className="text-xs text-muted">çekildi</span>}
               </ResponderRow>
+            ))}
+            {guests.map((g) => (
+              <GuestRow key={g.id} g={g}>
+                {g.player_id && <Badge tone="accent">Kadroda</Badge>}
+                {!g.player_id && call.status === "converted" && <span className="text-xs text-muted">alınmadı</span>}
+                {canManage && call.status === "open" && (
+                  <form action={removePollGuest}>
+                    <Hidden groupId={groupId} pollId={pollId} />
+                    <input type="hidden" name="guestId" value={g.id} />
+                    <button className="rounded-lg px-2 py-1 text-xs text-muted hover:text-red-300" aria-label={`${g.name} çıkarılsın`}>
+                      ✕
+                    </button>
+                  </form>
+                )}
+              </GuestRow>
             ))}
           </ol>
         </Card>

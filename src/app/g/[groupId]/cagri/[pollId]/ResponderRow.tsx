@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import type { Position } from "@/lib/data";
 import type { Responder } from "@/lib/call-rules";
+import type { PollGuest } from "@/lib/calls-data";
 import { reliability } from "@/lib/reliability";
 import { OvrBadge, PositionChip } from "@/components/PlayerCard";
 import { cx } from "@/components/ui";
@@ -27,6 +28,21 @@ export function ResponderRow({ r, children }: { r: Responder; children?: ReactNo
         {children}
       </div>
       {r.note && <p className="mt-1.5 rounded-lg bg-pitch-950 px-2 py-1 text-xs text-muted">“{r.note}”</p>}
+    </li>
+  );
+}
+
+/** Organizatörün eklediği dışarıdan misafir satırı (hesabı yok; profil bağlantısı ve puanı yok) */
+export function GuestRow({ g, children }: { g: PollGuest; children?: ReactNode }) {
+  return (
+    <li className="flex items-center gap-3 px-4 py-2.5">
+      <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-line text-xs text-muted">M</span>
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <span className="truncate">{g.name}</span>
+        <PositionChip position={g.position as Position | null} />
+        <span className="text-xs text-muted">misafir</span>
+      </div>
+      {children}
     </li>
   );
 }

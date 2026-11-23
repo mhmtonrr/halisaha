@@ -34,7 +34,7 @@ const byTime = (a: Responder, b: Responder) => a.responded_at.localeCompare(b.re
 /** Kesinleştirme ekranında varsayılan seçim: "geliyorum" diyenlerden yanıt sırasıyla ilk N (N = kontenjan; yoksa hepsi) */
 export function defaultSelection(responders: Responder[], capacity: number | null): string[] {
   const yes = responders.filter((r) => r.answer === "yes" && r.status !== "rejected").sort(byTime);
-  return (capacity ? yes.slice(0, capacity) : yes).map((r) => r.user_id);
+  return (capacity != null ? yes.slice(0, capacity) : yes).map((r) => r.user_id);
 }
 
 /** Yedek sırası: kesinleşmiş çağrıda yanıt sırasıyla */

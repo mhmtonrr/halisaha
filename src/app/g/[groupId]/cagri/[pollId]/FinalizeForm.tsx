@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { finalizePoll } from "@/lib/call-actions";
 import { isoToTime, type Responder } from "@/lib/call-rules";
-import type { Call } from "@/lib/calls-data";
+import type { Call, PollGuest } from "@/lib/calls-data";
 import { SIZES } from "@/lib/formations";
 import { Card, Input, Label, SectionTitle } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
-import { ResponderRow } from "./ResponderRow";
+import { GuestRow, ResponderRow } from "./ResponderRow";
 
 const selectCls = "min-h-11 w-full rounded-xl border border-line bg-pitch-950 px-3 text-sm";
 
@@ -17,12 +17,14 @@ export function FinalizeForm({
   groupId,
   call,
   candidates,
+  guests,
   preselected,
   isCommunity,
 }: {
   groupId: string;
   call: Call;
   candidates: Responder[];
+  guests: PollGuest[];
   preselected: Set<string>;
   isCommunity: boolean;
 }) {
@@ -86,8 +88,8 @@ export function FinalizeForm({
         )}
       </Card>
 
-      <SectionTitle>Kimler oynayacak? · {preselected.size} işaretli</SectionTitle>
-      <p className="-mt-1 mb-2 text-xs text-muted">İlk gelenler işaretli geldi. İşaretlenmeyen &quot;geliyorum&quot;cular yedek olur. Kaleciyi 🧤 ile işaretle.</p>
+      <SectionTitle>Kimler oynayacak? · {preselected.size + guests.length} işaretli</SectionTitle>
+      <p className="-mt-1 mb-2 text-xs text-muted">İlk gelenler ve misafirler işaretli geldi. İşaretlenmeyen &quot;geliyorum&quot;cular yedek olur. Kaleciyi 🧤 ile işaretle.</p>
       <Card className="p-0">
         <ul className="divide-y divide-line">
           {candidates.map((r) => (
@@ -106,6 +108,15 @@ export function FinalizeForm({
                 className="h-5 w-5"
               />
             </ResponderRow>
+          ))}
+          {guests.map((g) => (
+            <GuestRow key={g.id} g={g}>
+              <label className="flex items-center gap-1 text-xs text-muted" title="Kaleci">
+                <input type="checkbox" name="gk" value={g.id} defaultChecked={g.position === "GK"} />
+                🧤
+              </label>
+              <input type="checkbox" name="guests" value={g.id} defaultChecked aria-label={`${g.name} oynasın`} className="h-5 w-5" />
+            </GuestRow>
           ))}
         </ul>
       </Card>

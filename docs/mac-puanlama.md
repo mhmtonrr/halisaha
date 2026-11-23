@@ -12,6 +12,7 @@ aynı grupta en fazla 3 açık çağrı. Tabloya doğrudan yazma yok, hepsi RPC.
   (RPC toplulukta başka takımla rakibe karşıyı hâlâ kabul eder, arayüz sunmaz; grupta "Takım kur" yönlendirmesi; arayüz adı "Maç ayarla" / "Maç çağrısı"). **Kendi aramızda** (≥4, taraflar `balanceTeams` ile uygulamada) veya
   **rakibe karşı** (takımın kendi çağrısında, rakip adıyla, ≥2; takım üyesi olmayan `ensure_match_player` ile ödünç). Seçilen `selected`, seçilmeyen
   "geliyorum" `reserve`; kesinleşmiş çağrıya geç gelen "geliyorum" da yedek. Uygulamadaki takımla ortak maç (çapraz oylama) yine teklifle.
+- **Çağrıya misafir (0038)**: organizatör açık toplama çağrısına hesabı olmayan oyuncu ekler (`poll_guests`, `add_poll_guest`/`remove_poll_guest`, en fazla 20). "Geliyor" sayısına girer; kesinleştirmede hep işaretli gelir (kontenjanın kalanı ilk gelenlerden), dengelemede 65 sayılır. `finalize_poll(p_guests)` seçileni maçın grubuna misafir `group_players` + kadroya yazar, `poll_guests.player_id` bağlanır. Test: `db-checks/poll-guests.mjs`.
 - **Adam ara** (`purpose='fill'`, `create_fill_poll`): planlı maçın eksiği (1-10, mevkiler, not); maçın kendi grubunda veya organizatörün maç açabildiği
   bir toplulukta; maç başına yer başına 1 açık. Başvuranı organizatör **tek tek** `accept_responder`/`reject_responder` ile alır; sayı dolunca `filled`.
 - **Yedek ve yer açılması (kullanıcı kararı: organizatör kontrolünde)**: kadrodan çıkan seçilmişin yanıtı `withdrawn` olur, dolu adam arama yeniden açılır

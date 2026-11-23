@@ -13,6 +13,14 @@ export interface Call extends CallShape {
   match_id: string | null;
 }
 
+/** Organizatörün çağrıya eklediği dışarıdan misafir (0038); player_id: kesinleşince kadrodaki misafir satırı */
+export interface PollGuest {
+  id: string;
+  name: string;
+  position: string | null;
+  player_id: string | null;
+}
+
 export interface CallMatch {
   id: string;
   group_id: string;
@@ -28,12 +36,13 @@ const CALL_COLS = "id, group_id, created_by, purpose, status, play_on, starts_at
 export async function loadCall(supabase: SupabaseClient, pollId: string, groupId: string) {
   const { data: call } = await supabase.from("match_polls").select(CALL_COLS).eq("id", pollId).eq("group_id", groupId).maybeSingle();
   if (!call) return null;
-  const [{ data: responders }, { data: canManage }, match] = await Promise.all([
+  const [{ data: responders }, { data: guests }, { data: canManage }, match] = await Promise.all([
     supabase.rpc("poll_responders", { p_poll: pollId }),
+    supabase.from("poll_guests").select("id, name, position, player_id").eq("poll_id", pollId).order("created_at"),
     supabase.rpc("can_manage_poll", { p_poll_id: pollId }),
     call.match_id ? loadCallMatch(supabase, call.match_id as string) : Promise.resolve(null),
   ]);
-  return { call: call as Call, responders: (responders ?? []) as Responder[], canManage: !!canManage, match };
+  return { call: call as Call, responders: (responders ?? []) as Responder[], guests: (guests ?? []) as PollGuest[], canManage: !!canManage, match };
 }
 
 async function loadCallMatch(supabase: SupabaseClient, matchId: string): Promise<CallMatch | null> {
