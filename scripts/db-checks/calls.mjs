@@ -157,6 +157,13 @@ ok("takım başka bir takımda adam arayamaz", await fails(`select create_fill_p
 const F = (await one(`select create_fill_poll($1, 2::smallint, '{DEF}', 'Defans lazım', $2) id`, [MX, C])).id;
 const fr = await one(`select purpose, group_id, match_id, capacity, positions from match_polls where id=$1`, [F]);
 ok("adam arama toplulukta, takım maçına bağlı açılır", fr.purpose === "fill" && fr.group_id === C && fr.match_id === MX && fr.capacity === 2 && fr.positions.join() === "DEF");
+await db.query(`select close_poll($1)`, [F]);
+const F1 = (await one(`select create_fill_poll($1, 1::smallint, '{}', null, $2) id`, [MX, C])).id;
+ok("1 kişilik adam arama açılır (0036)", !!F1);
+await db.query(`select close_poll($1)`, [F1]);
+await db.exec("reset role");
+await db.query(`update match_polls set status='open' where id=$1`, [F]);
+await as(2);
 ok("aynı yerde ikinci adam arama açılamaz", await fails(`select create_fill_poll($1, 1::smallint, '{}', null, $2)`, [MX, C]));
 ok("sohbete 'adam aranıyor' düşer", (await one(`select body from group_messages where poll_id=$1`, [F])).body.startsWith("🔎 Adam aranıyor: 2 kişi"));
 await as(3);
