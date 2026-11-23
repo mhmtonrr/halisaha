@@ -45,7 +45,7 @@ Spam: dakikada 20 mesaj, 1000 karakter. Silme `delete_message` RPC (yazar veya y
 konuşma yoksa istek açılır), `respond_group_invite` (kabul = `join_group` ile aynı katılma), `cancel_group_invite`.
 **İstek kuralı**: tanımadığına ilk mesaj `pending`; gönderen kabul edilene kadar en fazla 1 metin atar (davet kartı sayılmaz); alıcı yazarsa kabul sayılır,
 reddedilen konuşmada gönderen yazamaz. Davet 20/gün, aynı kişiye aynı gruptan tek bekleyen davet. `group_invites` grup adı/türünü saklar
-(özel grubu davetli göremez). Bildirim türleri `dm`, `invite` eklendi (kod henüz bildirim göndermiyor). Kontrol: `scripts/db-checks/direct-chat.mjs`.
+(özel grubu davetli göremez). Bildirim türleri `dm` (`notifyDm`, konuşma başına 10 dakikada 1) ve `invite` (davet, davet yanıtı, sohbette maç kartı) gönderilir. Kontrol: `scripts/db-checks/direct-chat.mjs`.
 
 **Genel sohbet ekranı (WhatsApp mantığı, tam ekran; popup yok — telefonda baloncuk klavye/geri tuşuyla çakışır)**: `/sohbet` takım+grup+kişi sohbetlerini tek listede
 son mesaja göre sıralar (okunmamış rozeti, "Mesaj istekleri" bölümü üstte); `/sohbet/[threadId]` birebir konuşma (`DmRoom.tsx`, kendi Realtime aboneliği, `ChatRoom`

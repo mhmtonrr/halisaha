@@ -32,9 +32,9 @@ galibiyet ±0.15; maçın önemi çarpanı (`MatchInput.importance`: takım raki
 Oylama süre dolunca **grup/maç sayfası açıldığında** veya en geç **günlük cron**da (`/api/cron/vote-reminders`, tüm gruplar, en fazla 50 maç) kapanır (`finalizeExpired`), herkes oy verince anında kapanır. Kapanınca kadroya "🏆 Sonuçlar açıklandı" bildirimi gider.
 Formül değişirse `recomputeGroup(groupId)` ile grubun tüm sonuçları yeniden yazılabilir (oylara dokunmaz).
 
-**Genel rating (migration 0010)**: hesap sahibi oyuncunun rating'i tüm grup/takım/maçlardan **tek** hesaplanır ve kişinin
-her `group_players` satırına aynen yazılır (`player_ratings` yapısı değişmedi, UI sorguları aynı). Kimlik anahtarı = `user_id`,
-misafirde `group_players.id` (misafirin rating'i kendi grubunda kalır). Bir kişinin rating'i sadece oynadığı maçlara
+**Genel rating (migration 0010; saklama 0032/0033)**: hesap sahibi oyuncunun rating'i tüm grup/takım/maçlardan **tek** hesaplanır ve
+`user_ratings`'e (anahtar `user_id`, hesap başına TEK satır) yazılır; üyelik satırı başına kopya yok. Misafirler (`user_id` boş)
+`player_ratings`'te kendi `group_players.id` satırıyla kalır (misafirin rating'i kendi grubunda kalır). Okuma: `src/lib/user-cards.ts`. Bir kişinin rating'i sadece oynadığı maçlara
 bağlı olduğundan `recomputeRatings(admin, {playerIds})` o kişilerin tüm maçlarını yükler. Yeni gruba katılana DB tetikleyicisi
 mevcut rating'i kopyalar (`copy_rating_on_join`); misafir hesaba aktarılınca `recomputePlayers`. Kart özellikleri
 (gol/asist/FRM…) hâlâ grup geçmişinden gelir; sadece rating genel.

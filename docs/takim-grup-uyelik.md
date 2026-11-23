@@ -54,7 +54,8 @@ Tuzak: canlı yenilenen sunucu bileşeninde `<details open={koşul}>` her yenile
 - `is_group_admin()` captain'ı da kapsar.
 
 **Misafir**: `group_players.user_id IS NULL`. Oylanır, oy veremez, sohbete yazamaz. `claim_guest` ile hesaba aktarılır.
-**Sadece maç ekranından eklenir** (`addGuestToMatch`: misafiri gruba + o maçın kadrosuna yazar; planlanmış maçta, kaptan/yetkili).
+**İki yerden eklenir**: maç ekranından (`addGuestToMatch`: misafiri gruba + o maçın kadrosuna yazar; planlanmış maçta, kaptan/yetkili)
+ve açık toplama çağrısından (0038, `add_poll_guest`: organizatör; kesinleştirmede kadroya girer, ayrıntı `mac-puanlama.md`).
 "Oyuncular" sayfasında ekleme formu yoktur; orada misafirin mevkisi ve geçmiş aktarımı kalır. Sonraki maçlarda
 misafir kadro listesinde (yedek seçiminde) tekrar seçilebilir.
 **Asıl kadro = hesabı olan üyeler** (davet linki/kodla katılanlar). Misafirler takım/grup sayfasında, kadro sayfasında ve Oyuncular

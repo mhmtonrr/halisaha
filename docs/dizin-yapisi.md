@@ -34,19 +34,37 @@ src/lib/team-stats.ts    Takım karnesi, form, seri, rakip bazlı geçmiş, oyun
 src/lib/player-search.ts  Oyuncu arama süzgeçleri/sıralama/URL ayrıştırma (saf, testli); veri: src/lib/players-data.ts (service role, sadece `discoverable` kişiler)
 src/lib/featured-data.ts  Ana sayfa "öne çıkanlar" (bölge başına 5 dk `unstable_cache`, etiket `featured`); src/components/FeaturedSections.tsx (Suspense ile akar)
 src/lib/challenges-data.ts  Maç teklifleri sorguları (gelen/giden, bekleyen sayısı)
+src/lib/badges.ts        Profil rozetleri: maç kayıtlarından hesaplanır, saklanmaz (saf, testli)
+src/lib/card-name.ts     Karttaki ad: kısaltma ve "kartta görünen ad" doğrulaması + küfür kontrolü (saf, testli)
+src/lib/card-photo.ts    Kart fotoğrafı saf yardımcıları: depo yolu, kırpma/boyut hesapları (testli)
 src/lib/data.ts          Ortak sorgular, mevki/ayak sabitleri, tarih yardımcıları (TR saati)
 src/lib/regions.ts       81 il + src/data/districts.json (973 ilçe, iki kaynakla doğrulandı)
 src/lib/actions.ts       Server Action'lar (çağrılar hariç: call-actions.ts) (yetkiyi RLS yapar; burada sadece çağrı + yönlendirme)
 src/lib/finalize.ts      Oylama kapanışı, hesap bazlı genel rating hesabı ve yazımı (service role)
 src/components/LiveRefresh.tsx  Canlı güncelleme: Realtime dinler, router.refresh() yapar (filtre yardımcısı src/lib/live.ts)
 src/components/SubmitButton.tsx  Form gönderilirken anında "…" durumu (useFormStatus)
+src/components/PlayerCard.tsx  Oyuncu kartları (FullCard tam kart, saha/kompakt kart); bronz/gümüş/altın eşikleri
+src/components/LineupPitch.tsx  Diziliş sahası parçaları (Pitch, SlotBox, PitchCard, EmptySlot)
+src/components/Avatar.tsx  Yuvarlak avatar: kart fotoğrafı varsa o, yoksa baş harfler
+src/components/CardPhotoUploader.tsx  Kart fotoğrafı yükleme: küçült, arka plan kaldır, önizle, kaydet/sil; PhotoCropper.tsx elle kırpma
+src/components/BottomNav.tsx  Alt gezinme çubuğu (sohbet ekranında gizlenir); NotificationBadge.tsx okunmamış bildirim rozeti (Realtime)
+src/components/Icon.tsx  Material Symbols ikonu (tasarımdaki adlarla)
+src/components/AutoOpenDetails.tsx  İlk yüklemede bir kez açılan açılır bölüm
+src/components/ProfileFields.tsx  Profil ve karşılama formlarının ortak alanları; RegionSelect.tsx bağlı il/ilçe seçimi
+src/components/TeamFields.tsx  Takım kurma/düzenleme form alanları; TeamSizeSelect.tsx kaç kişilik (5v5…11v11); TeamBadge.tsx renkli baş harf rozeti
+src/components/RosterTabs.tsx  Kadro / Misafirler sekmesi
+src/components/SendInviteLink.tsx  Maç/çağrı kartını sohbetten göndermeye götüren bağlantı (/davet/gonder)
+src/components/ShareLink.tsx  Sayfa linkini paylaş (paylaşım menüsü ya da panoya kopyala); profile/ShareButton.tsx profil için
+src/components/SkillBars.tsx  Kartın 6 yeteneği çubuk olarak; SkillQueueBanner.tsx değerlendirme bekleyen varsa /yetenek kartı
+src/components/profile/  FlipCard (kart çevirme), MatchesList (geçmiş maçlar + filtre), ProfileBars (başlık), RadarChart (yetenek altıgeni)
+src/components/settings/  blocks (Ayarlar bölüm/satır), Interactive (bildirim anahtarları, müsaitlik, paylaşım), SubScreen (alt ekran iskeleti)
 src/components/NavHistory.tsx  Gerçek tarayıcı geçmişinin aynası; BackLink history.go(-n) ile geldiği sayfaya döner, form sayfaları geri hedefi olmaz. Yeni geri oku her zaman BackLink/Header ile yap (sabit Link koyma)
 src/components/AppMenu.tsx  ☰ çekmecesi (AppMenuShell layout'ta) ve başlık düğmeleri (MenuControls: bildirim çanı + ☰); veri src/lib/menu-data.ts
 src/lib/authErrors.ts    Supabase Auth hatalarının Türkçesi
 src/lib/supabase/        server.ts (requireUser + karşılama yönlendirmesi), client.ts, admin.ts
 src/middleware.ts        Oturum yenileme, girişsiz yönlendirme, x-pathname başlığı
 src/app/                 Sayfalar (aşağıda)
-supabase/migrations/     0001..0033 SQL (sırayla; hepsi canlıya uygulandı)
+supabase/migrations/     0001..0040 SQL (sırayla; hepsi canlıya uygulandı)
 scripts/db-checks/       PGlite ile RLS/yetki kontrolleri (npm run db:check)
 scripts/e2e/             Canlı veritabanına karşı Playwright akış testleri
 scripts/perf/ttfb.mjs   Sayfa yanıt süresi ölçümü (geçici kullanıcıyla canlı site, TTFB)
@@ -55,5 +73,5 @@ scripts/recompute-all.ts Tüm ratingleri baştan hesaplar (vite-node ile, aşağ
 
 Sayfalar: `/login` (e-posta+şifre, Google, şifremi unuttum) · `/hosgeldin` (ilk giriş: ad, il/ilçe, mevki…)
 · `/` ana sayfa · `/kesfet` takım sıralaması · `/profil` · `/takim-kur` · `/grup-kur` · `/sifre-yenile`
-· `/profil/ayarlar/{kisisel,futbolcu,iletisim,guvenlik,gorunurluk,engellenenler}` · `/sohbet` (genel sohbet: takım/grup/kişi; `/sohbet/[threadId]` birebir) · `/yardim` · `/geri-bildirim` · `/yetenek` (yetenek değerlendirmesi) · `/oyuncu/[userId]` (başkasının profili) · `/katil` (davet koduyla takıma/gruba katıl; `?tur=takim|grup`) · `/join/[code]` · `/g/[id]` grup/takım · `/g/[id]/{players,kadro,sohbet,matches/new,cagri/yeni,cagri/[pollId],m/[matchId],p/[playerId]}`
+· `/profil/ayarlar/{kisisel,futbolcu,iletisim,guvenlik,gorunurluk,engellenenler}` · `/sohbet` (genel sohbet: takım/grup/kişi; `/sohbet/[threadId]` birebir) · `/sosyal` (arkadaşlar ve istekler, takımlarım, gruplarım) · `/bildirimler` (bildirim kutusu, son 50) · `/davet/gonder` (maç/çağrı kartını sohbetten gönder; `?tur=poll|match&ref=`) · `/privacy` (gizlilik) · `/yardim` · `/geri-bildirim` · `/yetenek` (yetenek değerlendirmesi) · `/oyuncu/[userId]` (başkasının profili) · `/katil` (davet koduyla takıma/gruba katıl; `?tur=takim|grup`) · `/join/[code]` · `/g/[id]` grup/takım · `/g/[id]/{players,kadro,sohbet,matches/new,cagri/yeni,cagri/[pollId],m/[matchId],p/[playerId]}`
 · takımlara özel: `/g/[id]/teklif` (bu takıma maç teklif et) · `/g/[id]/teklifler` (gelen/giden/kabul edilen) · `/g/[id]/istatistik` (herkese açık)
