@@ -1,6 +1,9 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { later, notify } from "@/lib/notify";
+import { text } from "@/lib/notify-rules";
+import { matchAccountIds } from "@/lib/recipients";
 import {
   CONFIG,
   DEFAULT_OVERALL,
@@ -392,16 +395,18 @@ export async function finalizeMatch(matchId: string): Promise<boolean> {
   }
 }
 
-/** Süresi dolmuş oylamaları kapatır (sayfa açıldığında tetiklenir, cron gerektirmez). */
-export async function finalizeExpired(groupId: string) {
+/**
+ * Süresi dolmuş oylamaları kapatır. Grup sayfaları açılınca o grup için; günlük cron grupsuz (hepsi, en fazla 50 maç)
+ * çağırır ki kimse sayfa açmasa da sonuçlar açıklansın. Kaç maç kapattığını döndürür.
+ */
+export async function finalizeExpired(groupId?: string): Promise<number> {
   const admin = createAdminClient();
-  const { data } = await admin
-    .from("matches")
-    .select("id")
-    .eq("group_id", groupId)
-    .eq("status", "voting")
-    .lt("voting_deadline", new Date().toISOString());
-  for (const m of data ?? []) await finalizeMatch(m.id);
+  let q = admin.from("matches").select("id").eq("status", "voting").lt("voting_deadline", new Date().toISOString());
+  if (groupId) q = q.eq("group_id", groupId);
+  const { data } = await q.order("voting_deadline").limit(50);
+  let closed = 0;
+  for (const m of data ?? []) if (await finalizeMatch(m.id)) closed++;
+  return closed;
 }
 
 /** Sohbete "sonuçlar açıklandı" kartı: maçın adamıyla birlikte (bağlı maçta rakip takımınsa takım adıyla) */
@@ -415,6 +420,7 @@ async function announceResults(admin: SupabaseClient, claimed: { id: string; gro
     .maybeSingle();
   type GPm = { display_name: string; group_id: string; groups: { name: string } | { name: string }[] | null };
   const gp = one(mvp?.group_players as GPm | GPm[] | null | undefined);
+  const mvpName = gp?.display_name ?? null;
   for (const m of claimed) {
     const teamName = gp && gp.group_id !== m.group_id ? one(gp.groups)?.name : null;
     const who = gp ? `${gp.display_name}${teamName ? ` (${teamName})` : ""}` : null;
@@ -425,4 +431,10 @@ async function announceResults(admin: SupabaseClient, claimed: { id: string; gro
       match_id: m.id,
     });
   }
+  // Kadroya bildirim (yanıtı/sayfayı bekletmesin)
+  later(async () => {
+    for (const m of claimed) {
+      await notify(await matchAccountIds(admin, [m.id]), "vote", text.resultsOut(m.group_id, m.id, mvpName));
+    }
+  });
 }

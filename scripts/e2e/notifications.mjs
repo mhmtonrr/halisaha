@@ -125,6 +125,20 @@ try {
     check("ikinci çalıştırmada tekrar hatırlatma yok (en fazla 1)", r2.reminded === 0 && (await notifs(mem, "vote")).length === 2);
   }
 
+  // 6b) Oylama süresi dolunca kapanır → kadroya "Sonuçlar açıklandı" (cron varsa cron kapatır, yoksa maç sayfası açılınca)
+  await admin.from("matches").update({ voting_deadline: new Date(Date.now() - 60e3).toISOString() }).eq("id", mid);
+  const cron = await fetch(`${BASE}/api/cron/vote-reminders`, { headers: { authorization: "Bearer e2e-secret" } });
+  if (cron.status === 200) {
+    check("cron süresi dolan oylamayı kapattı", (await cron.json()).finalized >= 1);
+  } else {
+    console.log("  – ATLANDI: cron ile kapatma (sunucu CRON_SECRET=e2e-secret ile başlatılmamış); maç sayfasıyla kapatılıyor");
+    await memP.goto(`${BASE}/g/${A}/m/${mid}`);
+  }
+  check("oylama kapanınca maç kapandı", !!(await until(async () => (await admin.from("matches").select("status").eq("id", mid).single()).data.status === "closed")));
+  const results = async () => (await notifs(mem, "vote")).find((n) => n.title.includes("Sonuçlar açıklandı"));
+  check("oylama kapanınca oyuncuya '🏆 Sonuçlar açıklandı'", !!(await until(results)));
+  check("sonuç bildirimi maç adresine gider", (await results())?.url === `/g/${A}/m/${mid}`);
+
   // 7) Sohbet: bildirim gider, 10 dakikada tek kalır
   await memP.goto(`${BASE}/g/${A}/sohbet`);
   await memP.fill('textarea[aria-label="Mesaj"]', "Selam kaptan, maç iyiydi!"); await memP.keyboard.press("Enter");

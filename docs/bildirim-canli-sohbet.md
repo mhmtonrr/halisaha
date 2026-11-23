@@ -15,7 +15,7 @@ eylem durum döndürür (`useActionState`, bkz. `GuestForm`); `revalidatePath` s
 
 **Bildirimler (migration 0017)**: her olay `notify()` ile önce **bildirim kutusuna** (`notifications`, `/bildirimler`, nav rozeti Realtime ile canlı)
 yazılır, sonra (VAPID anahtarı ve abonelik varsa) **web push** gönderilir; push izni olmayan/iPhone'da ana ekrana eklememiş kullanıcı da kutuda görür.
-Olaylar: oylama açıldı (`submitResult`/`settle_linked_match` sonrası, iki takım), oylama hatırlatması (günlük cron), çağrı/adam arama açıldı, çağrı güncellendi,
+Olaylar: oylama açıldı (`submitResult`/`settle_linked_match` sonrası, iki takım), oylama hatırlatması (günlük cron), sonuçlar açıklandı (oylama kapanınca kadroya, `announceResults`), çağrı/adam arama açıldı, çağrı güncellendi,
 kadrodasın/yedektesin/alınmadın (elle kadroya ekleme/çıkarmada da), adam aramaya başvuru ve yer açıldı (organizatöre; elle çıkarmada da), maç kuruldu, maç iptal edildi (kadroya; bağlı maçta iki takımın kadrosu+yetkilileri; alıcılar silmeden önce toplanır: `prepareCancelNotices`), bağlı maçta rakip skoru girdi / skorlar uyuşmuyor (yetkililere: kaptan/yönetici + maçı kuran), teklif geldi/yanıtlandı/geri çekildi, sohbet mesajı. Ayrıca maç önerisi (maç açabilenlere) ve öneri kararı (önerene). Grubu sessize alan üyeye toplu duyurular (yeni çağrı, adam arama, sohbet) gitmez (`groupMemberIds` `broadcast`, 0037). Olayı yapan kendi işlemi için bildirim almaz. Kategori tercihi
 (`notification_prefs`: votes, matches, offers, chat; satır yoksa hepsi açık) kapalıysa ne kutuya ne push'a yazılır. **Sohbet**: bir kullanıcıya aynı
 gruptan 10 dakikada en fazla 1 bildirim (etiket `chat:<grup>`; mesaj doğrudan DB'ye yazıldığından gönderenin tarayıcısı `notifyChatMessage` ile bildirir,
@@ -23,7 +23,7 @@ sunucu mesajın çağıranın ve <60 sn olduğunu doğrular). Gönderim yanıtta
 silinir. İzin kartı (`PushPrompt`) anlamlı anda çıkar: oy verince, çağrıya yanıt verince; 14 gün "şimdi değil"; iPhone'da önce ana ekrana ekleme anlatılır.
 **Ortam değişkenleri (Vercel; yoksa sadece uygulama içi kutu çalışır)**: `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` (üretmek için
 `npx web-push generate-vapid-keys`; özel anahtarı asla commit etme/yazdırma), isteğe bağlı `VAPID_SUBJECT` (varsayılan site adresi; kişisel e-posta koyma),
-`CRON_SECRET` (hatırlatma cron'u için; yoksa `/api/cron/vote-reminders` kapalıdır, Vercel Cron `vercel.json` ile günde 1 kez 18:00 TR çağırır).
+`CRON_SECRET` (hatırlatma + süresi dolan oylamaları kapatma cron'u için; yoksa `/api/cron/vote-reminders` kapalıdır, Vercel Cron `vercel.json` ile günde 1 kez 18:00 TR çağırır).
 Test: `scripts/e2e/notifications.mjs` (sunucu `CRON_SECRET=e2e-secret` ile başlatılmalı) ve gerçek kütüphane/VAPID imzalı
 `NODE_USE_ENV_PROXY=1 npx vite-node --config scripts/recompute.vite.config.mjs scripts/e2e/push-delivery.ts`. Gerçek cihaza teslim sadece elle denenebilir. **Tanılama**: profil → Ayarlar → Bildirimler'de cihaz "açık ✓" ise **"Test bildirimi gönder"** (`sendTestNotification` → `sendTestPush`) abonelik/VAPID/push servisini uçtan uca dener ve nedeni açıklar
 (`explainPushFailure`: 401/403 = VAPID çifti uyuşmuyor, 404/410 = geçersiz abonelik…); abonelik başarısızsa gerçek tarayıcı hatası gösterilir (`explainSubscribeError`: AbortError = push servisine ulaşılamadı, Brave ayarı…).

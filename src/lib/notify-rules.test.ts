@@ -82,6 +82,8 @@ describe("metinler", () => {
     text.proposalDecided("Grup", "g", true, "p"),
     text.proposalDecided("Grup", "g", false, null),
     text.matchCreated("Takım", "g", "m", "Cum 21:00", "Rakip"),
+    text.resultsOut("g", "m", "Ali"),
+    text.resultsOut("g", "m", null),
     text.matchCancelled("Takım", "g", "m", "Cum 21:00", "Rakip"),
     text.removedFromMatch("Grup", "g", "m", "Cum 21:00"),
     text.opponentScored("Kartallar", "g", "m", 3, 2),

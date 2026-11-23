@@ -19,7 +19,7 @@ export const PREF_OF: Record<NotificationType, PrefKey> = {
 };
 
 export const PREF_LABEL: Record<PrefKey, { title: string; hint: string }> = {
-  votes: { title: "Oylama", hint: "Maç bitip oylama açılınca ve oylama kapanmadan hatırlatma" },
+  votes: { title: "Oylama", hint: "Maç bitip oylama açılınca, oylama kapanmadan hatırlatma ve sonuçlar açıklanınca" },
   matches: { title: "Maç çağrısı ve maç", hint: "Yeni çağrı ve adam arama, kadroya seçilme/yedek/çıkarılma, maç kuruldu/iptal, rakibin skoru, başvuru ve yer açılması (organizatöre)" },
   offers: { title: "Maç teklifi", hint: "Takımlar arası maç teklifleri, yanıtları ve geri çekilmesi" },
   chat: { title: "Sohbet", hint: "Grup/takım ve birebir mesajlar, takıma/gruba davetler (bir sohbette 10 dakikada en fazla 1 bildirim)" },
@@ -107,6 +107,13 @@ export const text = {
     body: join(opponent ? `vs ${opponent}` : "Maç bitti", "arkadaşlarını puanla, oyunu bekliyorlar"),
     url: `/g/${groupId}/m/${matchId}`,
     tag: `vote:${matchId}`,
+  }),
+  /** Oylama kapandı: kadroya */
+  resultsOut: (groupId: string, matchId: string, mvp: string | null): Content => ({
+    title: "🏆 Sonuçlar açıklandı",
+    body: truncate(join(mvp ? `Maçın adamı: ${mvp}` : null, "puanını ve kartını gör"), 300),
+    url: `/g/${groupId}/m/${matchId}`,
+    tag: `results:${matchId}`,
   }),
   voteReminder: (groupId: string, matchId: string, hoursLeft: number): Content => ({
     title: "⏰ Oylama kapanmak üzere",
