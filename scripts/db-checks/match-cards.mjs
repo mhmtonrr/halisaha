@@ -64,3 +64,9 @@ await db.query(`delete from group_players where user_id=$1`, [U(2)]).catch(() =>
 await as(1);
 await db.query(`select share_match_card($1,'poll',$2)`, [U(2), p]);
 ok("arkadaşa kart açık sohbete düşer", (await q(`select status from dm_threads where user_a=least($1::uuid,$2::uuid) and user_b=greatest($1::uuid,$2::uuid)`, [U(1), U(2)]))[0].status === "accepted");
+
+// --- Maç kartı paylaşılmış takım silinebilir (0039) ---
+await db.exec(`reset role`);
+const silOk = await db.query(`delete from groups where id=$1`, [T]).then(() => true, (e) => (console.log(e.message), false));
+ok("maç kartı paylaşılmış takım silinebilir", silOk);
+ok("kart sohbette kalır, bağlantısı boşalır", (await q(`select count(*)::int c from dm_messages where kind='match' and poll_id is null and match_id is null`))[0].c > 0);

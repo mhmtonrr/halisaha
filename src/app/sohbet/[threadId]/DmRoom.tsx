@@ -332,7 +332,7 @@ export function DmRoom({
               {m.kind === "match" && m.card ? (
                 <MatchCardView
                   card={m.card}
-                  refId={(m.poll_id ?? m.match_id) as string}
+                  refId={m.poll_id ?? m.match_id ?? null}
                   status={refStatus[`${m.card.type}:${m.poll_id ?? m.match_id}`]}
                   isMember={memberGroupIds.includes(m.card.group_id)}
                   mine={mine}
@@ -344,7 +344,7 @@ export function DmRoom({
                     <div className="font-bold">{invite ? `${invite.group_kind === "team" ? "🛡️ Takım" : "👥 Grup"} daveti` : "Davet"}</div>
                     <div className="mt-0.5">{invite ? invite.group_name : m.body}</div>
                     <div className="mt-1 text-[11px] text-muted">
-                      {invite ? INVITE_STATUS[invite.status] : "—"} · {time(m.created_at)}
+                      {invite ? INVITE_STATUS[invite.status] : "Artık geçerli değil"} · {time(m.created_at)}
                     </div>
                     {invite?.status === "pending" && !mine && (
                       <div className="mt-2 flex gap-2">

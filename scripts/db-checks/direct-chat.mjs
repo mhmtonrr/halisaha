@@ -106,3 +106,12 @@ await as(1);
 ok("engelleyen kişiye davet gönderilemez", await fails(`select invite_to_group($1, $2)`, [G(1), U(2)]));
 await as(3);
 ok("ilgisiz üye başkasının davetlerini göremez", (await q(`select * from group_invites`)).length === 0);
+
+// --- Davet kartı olan grup silinebilir (0039) ---
+await as(1);
+const G3 = (await q(`insert into groups (name, created_by, kind, city) values ('Silinecek','${U(1)}','community','İstanbul') returning id`))[0].id;
+await db.query(`select invite_to_group($1, $2)`, [G3, U(4)]);
+const silOk = await db.query(`select delete_group($1)`, [G3]).then(() => true, (e) => (console.log(e.message), false));
+ok("davet kartı olan grup silinebilir", silOk);
+await as(4);
+ok("davet kartı sohbette kalır, bağlantısı boşalır", (await q(`select invite_id from dm_messages where kind='invite' and body like '%Silinecek'`)).every((r) => r.invite_id === null) && (await q(`select 1 from dm_messages where kind='invite' and body like '%Silinecek'`)).length === 1);

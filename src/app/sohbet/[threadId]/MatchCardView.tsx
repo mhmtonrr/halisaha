@@ -38,7 +38,8 @@ export function MatchCardView({
   time,
 }: {
   card: MatchCard;
-  refId: string;
+  /** Grup/çağrı/maç silindiyse null */
+  refId: string | null;
   /** Güncel durum (bilinmiyorsa undefined) */
   status?: string;
   isMember: boolean;
@@ -48,12 +49,14 @@ export function MatchCardView({
   const closed = status !== undefined && (card.type === "match" ? status !== "planned" : status === "closed");
   // Saati belli olmayan çağrı gün bitene kadar geçerli
   const expired = new Date(card.starts_at).getTime() + (card.time_tbd ? 24 * 3600_000 : 0) < Date.now();
-  const inactive = closed || expired;
+  const inactive = closed || expired || !refId;
 
   let href: string | null = null;
   let label = "";
   let note = "";
-  if (isMember) {
+  if (!refId) {
+    note = card.type === "poll" ? "Bu çağrı artık yok." : "Bu maç artık yok.";
+  } else if (isMember) {
     href = card.type === "poll" ? `/g/${card.group_id}/cagri/${refId}` : `/g/${card.group_id}/m/${refId}`;
     label = card.type === "poll" ? "Çağrıya yanıt ver" : "Maça bak";
   } else if (card.group_kind === "team") {

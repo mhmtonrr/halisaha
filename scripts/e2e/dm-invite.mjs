@@ -60,6 +60,16 @@ try {
   const { data: back } = await admin.from("notifications").select("title").eq("user_id", users[0].id).eq("type", "invite");
   log("kaptana kabul bildirimi:", back?.some((n) => n.title.includes("kabul")) ? "✓" : "HATA " + JSON.stringify(back));
 
+  // Davet kartı olan grup silinebilir (0039); kart sohbette "artık geçerli değil" olur
+  const { error: delErr } = await admin.from("groups").delete().eq("id", gid);
+  log("davet kartı olan grup silindi:", delErr ? "HATA " + delErr.message : "✓");
+  if (!delErr) gid = null;
+  await D.goto(`${BASE}/sohbet`);
+  await D.click("text=Kaptan Test");
+  await D.waitForSelector("text=Artık geçerli değil", { timeout: 10000 });
+  await D.screenshot({ path: `${SHOTS}/invite-card-orphan.png` });
+  log("silinen grubun davet kartı: Artık geçerli değil ✓");
+
   // Takım sayfasından kaptana yazma
   const { data: team } = await admin.from("groups").insert({ name: "E2E Takım", kind: "team", created_by: users[0].id, city: "İstanbul" }).select("id").single();
   await Y.goto(`${BASE}/g/${team.id}`);
