@@ -3,6 +3,7 @@ import { setGroupMuted, teamLifecycle } from "@/lib/actions";
 import { callWhen, istanbulDate } from "@/lib/call-rules";
 import { Card, Input, Label, SectionTitle } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
+import { Icon } from "@/components/Icon";
 
 export interface Proposal {
   id: string;
@@ -21,12 +22,12 @@ function Hidden({ groupId }: { groupId: string }) {
 export function TeamStateBanner({ groupId, archived, temporary, isCaptain }: { groupId: string; archived: boolean; temporary: boolean; isCaptain: boolean }) {
   if (!archived && !temporary) return null;
   return (
-    <Card className={archived ? "mb-4 border-line bg-pitch-900 text-sm" : "mb-4 border-amber-400/40 bg-amber-400/10 text-sm"}>
+    <Card className={archived ? "mb-4 text-sm" : "mb-4 border-amber-400/40 bg-amber-400/10 text-sm"}>
       <div className="flex items-center gap-3">
-        <span className="text-xl">{archived ? "📦" : "⏳"}</span>
+        <Icon name={archived ? "inventory_2" : "hourglass_top"} className={archived ? "text-[24px] text-on-surface-variant" : "text-[24px] text-amber-300"} />
         <div className="min-w-0 flex-1">
           <div className="font-semibold">{archived ? "Bu takım dağıtıldı" : "Geçici takım"}</div>
-          <div className="text-xs text-muted">
+          <div className="text-xs text-on-surface-variant">
             {archived
               ? "Maç geçmişi ve puanlar duruyor; yeni maç, teklif ve katılım kapalı."
               : "Keşfet'te görünmez; son maçı bitince kendiliğinden arşivlenir."}
@@ -53,10 +54,11 @@ export function MuteToggle({ groupId, muted }: { groupId: string; muted: boolean
       <Hidden groupId={groupId} />
       <input type="hidden" name="muted" value={muted ? "0" : "1"} />
       <button
-        className="text-xs text-muted hover:text-white"
+        className="inline-flex min-h-8 items-center gap-1 text-xs text-on-surface-variant hover:text-on-surface"
         title={muted ? "Yeni çağrı ve sohbet bildirimleri tekrar gelsin" : "Yeni çağrı ve sohbet bildirimleri gelmesin; sana özel bildirimler (kadro, oylama) yine gelir"}
       >
-        {muted ? "🔕 Sessizde · sesi aç" : "🔔 Sessize al"}
+        <Icon name={muted ? "notifications_off" : "notifications_active"} className="text-[16px]" />
+        {muted ? "Sessizde · sesi aç" : "Sessize al"}
       </button>
     </form>
   );
@@ -93,7 +95,7 @@ export function Proposals({
     <div id="oneriler">
       {others.length > 0 && (
         <>
-          <SectionTitle>💡 Maç önerileri · {others.length}</SectionTitle>
+          <SectionTitle>Maç önerileri · {others.length}</SectionTitle>
           <div className="space-y-2">
             {others.map((p) => (
               <Card key={p.id} className="space-y-2 p-3">
@@ -101,7 +103,7 @@ export function Proposals({
                   <b>{names.get(p.proposed_by) ?? "Bir üye"}</b> öneriyor: {callWhen(p)}
                   {p.venue ? ` · ${p.venue}` : ""}
                 </div>
-                {p.note && <p className="rounded-lg bg-pitch-950 p-2 text-xs text-muted">“{p.note}”</p>}
+                {p.note && <p className="rounded-lg bg-surface-low p-2 text-xs text-on-surface-variant">“{p.note}”</p>}
                 <div className="grid grid-cols-2 gap-2">
                   {(["1", "0"] as const).map((accept) => (
                     <form key={accept} action={decideProposal}>
@@ -114,7 +116,7 @@ export function Proposals({
                     </form>
                   ))}
                 </div>
-                <p className="text-[11px] text-muted">Onaylarsan çağrı öneren adına açılır; kadroyu o kesinleştirir.</p>
+                <p className="text-[11px] text-on-surface-variant">Onaylarsan çağrı öneren adına açılır; kadroyu o kesinleştirir.</p>
               </Card>
             ))}
           </div>
@@ -122,28 +124,29 @@ export function Proposals({
       )}
 
       {!canCreate && mine && (
-        <Card className="mb-2 flex items-center gap-3 border-accent/30 p-3 text-sm">
-          <span className="text-xl">💡</span>
+        <Card className="mb-2 flex items-center gap-3 border-primary/30 p-3 text-sm">
+          <Icon name="lightbulb" fill className="text-[22px] text-primary" />
           <div className="min-w-0 flex-1">
             <div className="font-semibold">{sent ? "Önerin gönderildi" : "Önerin onay bekliyor"}</div>
-            <div className="text-xs text-muted">{callWhen(mine)}</div>
+            <div className="text-xs text-on-surface-variant">{callWhen(mine)}</div>
           </div>
           <form action={cancelProposal}>
             <Hidden groupId={groupId} />
             <input type="hidden" name="proposalId" value={mine.id} />
-            <button className="text-xs text-muted hover:text-red-300">Geri çek</button>
+            <button className="min-h-8 text-xs text-on-surface-variant hover:text-error">Geri çek</button>
           </form>
         </Card>
       )}
 
       {!canCreate && !mine && (
         <details className="mb-2" open={openForm}>
-          <summary className="cursor-pointer rounded-xl border border-line bg-pitch-900 px-4 py-3 text-sm font-semibold hover:border-accent/50">
-            💡 Maç öner
+          <summary className="flex cursor-pointer items-center gap-2 rounded-xl border border-line bg-surface-container px-4 py-3 text-sm font-semibold hover:border-primary/50">
+            <Icon name="lightbulb" className="text-[20px] text-primary" />
+            Maç öner
           </summary>
-          <form action={proposeMatch} className="mt-2 space-y-3 rounded-xl border border-line p-3">
+          <form action={proposeMatch} className="mt-2 space-y-3 rounded-xl border border-line bg-surface-container p-3">
             <Hidden groupId={groupId} />
-            <p className="text-xs text-muted">Önerin sadece kurucu, yetkili ve organizatörlere gider. Onaylanırsa çağrı senin adına açılır ve kadroyu sen kesinleştirirsin.</p>
+            <p className="text-xs text-on-surface-variant">Önerin sadece kurucu, yetkili ve organizatörlere gider. Onaylanırsa çağrı senin adına açılır ve kadroyu sen kesinleştirirsin.</p>
             <div className="grid grid-cols-2 gap-3">
               <label className="block">
                 <Label>Gün</Label>

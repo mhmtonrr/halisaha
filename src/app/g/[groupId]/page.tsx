@@ -8,7 +8,8 @@ import { formatRegion } from "@/lib/regions";
 import { ROLE_LABEL, canCreateMatch, teamRating, type GroupKind, type Role } from "@/lib/teams-data";
 import { TeamBadge } from "@/components/TeamBadge";
 import { RosterTabs } from "@/components/RosterTabs";
-import { Badge, Card, Header, LinkButton, SectionTitle } from "@/components/ui";
+import { Badge, Button, Card, Header, LinkButton, SectionTitle, cx } from "@/components/ui";
+import { Icon } from "@/components/Icon";
 import { OvrBadge } from "@/components/PlayerCard";
 import { Avatar } from "@/components/Avatar";
 import { InviteLink } from "./InviteLink";
@@ -109,10 +110,12 @@ export default async function GroupPage({
       .filter((x) => x.v > 0)
       .sort((a, b) => b.v - a.v)[0];
   const leaders = [
-    { label: "Gol kralı", icon: "⚽", x: leader("goals") },
-    { label: "Asist kralı", icon: "🎯", x: leader("assists") },
-    { label: "En çok MVP", icon: "⭐", x: leader("mvps") },
+    { label: "Gol kralı", icon: "sports_soccer", x: leader("goals") },
+    { label: "Asist kralı", icon: "target", x: leader("assists") },
+    { label: "En çok MVP", icon: "star", x: leader("mvps") },
   ].filter((l) => l.x);
+  const accounts = players.filter((p) => p.user_id);
+  const guestCount = players.length - accounts.length;
 
   return (
     <main>
@@ -134,8 +137,9 @@ export default async function GroupPage({
         back="/"
         right={
           canManage ? (
-            <LinkButton href={`/g/${groupId}/players`} variant="ghost" aria-label="Yönet">
-              ⚙︎ Yönet
+            <LinkButton href={`/g/${groupId}/players`} variant="ghost" aria-label="Yönet" className="min-h-10 gap-1 px-3">
+              <Icon name="settings" className="text-[18px]" />
+              Yönet
             </LinkButton>
           ) : undefined
         }
@@ -144,73 +148,76 @@ export default async function GroupPage({
       {isTeam && (
         <TeamStateBanner groupId={groupId} archived={!!group.archived_at} temporary={!!group.is_temporary} isCaptain={myRole === "captain"} />
       )}
-      <div className="-mt-2 mb-5 flex items-center gap-4">
-        <TeamBadge name={group.name} color={group.color} size="lg" />
-        <div className="min-w-0 flex-1">
-          <div className="text-xs uppercase tracking-wide text-muted">{isTeam ? "🛡️ Takım" : "👥 Topluluk"}</div>
-          <h1 className="truncate text-2xl font-black">{group.name}</h1>
-          <div className="text-xs text-muted">
-            {group.city && `${formatRegion(group.city, group.district)} · `}
-            {members.length} {isTeam ? "oyuncu" : "üye"}
-            {myRole && ` · Sen: ${labels[myRole]}`}
-          </div>
-        </div>
-        {isTeam && (
-          <div className="text-center">
-            <OvrBadge overall={rating} className="h-12 w-12 text-lg" />
-            <div className="mt-1 text-[10px] text-muted">takım</div>
-          </div>
-        )}
-      </div>
-      {group.description && <p className="-mt-2 mb-4 text-sm text-muted">{group.description}</p>}
 
-      {!isTeam && (
-        <Link href={`/g/${groupId}/players`} className="mb-4 flex items-center gap-3">
-          <div className="flex -space-x-2">
-            {players
-              .filter((p) => p.user_id)
-              .slice(0, 8)
-              .map((p) => (
-                <Avatar
-                  key={p.id}
-                  name={p.display_name}
-                  photoUrl={p.photo_url}
-                  title={p.display_name}
-                  className="h-9 w-9 border-2 border-pitch-950 bg-pitch-700 text-[11px]"
-                />
-              ))}
+      {/* Üst bilgi kartı (profildeki başlık dili) */}
+      <section className="-mt-2 mb-4 overflow-hidden rounded-2xl border border-line bg-gradient-to-br from-primary/10 via-surface-container to-surface-container p-4 shadow-md">
+        <div className="flex items-center gap-4">
+          <TeamBadge name={group.name} color={group.color} size="lg" />
+          <div className="min-w-0 flex-1">
+            <div className="t-label-caps flex items-center gap-1 uppercase text-primary">
+              <Icon name={isTeam ? "shield" : "groups"} fill className="text-[14px]" />
+              {isTeam ? "Takım" : "Topluluk"}
+            </div>
+            <h1 className="line-clamp-2 break-words font-display text-2xl font-bold leading-7">{group.name}</h1>
+            <div className="flex items-start gap-1 text-xs text-on-surface-variant">
+              {group.city && <Icon name="location_on" className="text-[14px]" />}
+              <span>
+                {group.city && `${formatRegion(group.city, group.district)} · `}
+                {members.length} {isTeam ? "oyuncu" : "üye"}
+                {myRole && ` · Sen: ${labels[myRole]}`}
+              </span>
+            </div>
           </div>
-          <span className="text-sm text-muted">
-            {players.filter((p) => p.user_id).length} üye
-            {players.length - players.filter((p) => p.user_id).length > 0 &&
-              ` · ${players.length - players.filter((p) => p.user_id).length} misafir`}{" "}
-            ›
-          </span>
-        </Link>
-      )}
+          {isTeam && (
+            <div className="flex flex-col items-center rounded-xl bg-surface-high px-2.5 py-1.5">
+              <span className="font-display text-[9px] font-bold tracking-wider text-on-surface-variant">PUAN</span>
+              <span className="font-display text-2xl font-bold leading-7 tabular-nums">{rating}</span>
+            </div>
+          )}
+        </div>
+        {group.description && <p className="mt-3 text-sm text-on-surface-variant">{group.description}</p>}
+        {!isTeam && (
+          <Link href={`/g/${groupId}/players`} className="mt-3 flex items-center gap-3">
+            <div className="flex -space-x-2">
+              {accounts.slice(0, 8).map((p) => (
+                <Avatar key={p.id} name={p.display_name} photoUrl={p.photo_url} title={p.display_name} className="h-9 w-9 border-2 border-surface-container bg-surface-highest text-[11px]" />
+              ))}
+            </div>
+            <span className="flex items-center text-sm text-on-surface-variant">
+              {accounts.length} üye
+              {guestCount > 0 && ` · ${guestCount} misafir`}
+              <Icon name="chevron_right" className="text-[18px]" />
+            </span>
+          </Link>
+        )}
+      </section>
 
       {isTeam && (
         <Link href={`/g/${groupId}/istatistik`} className="mb-4 block">
-        <div className="grid grid-cols-4 gap-2 text-center">
-          {[
-            { v: record.w + record.d + record.l, l: "Maç" },
-            { v: record.w, l: "Galibiyet", c: "text-accent" },
-            { v: record.d, l: "Beraberlik" },
-            { v: record.l, l: "Mağlubiyet", c: "text-red-300" },
-          ].map((x) => (
-            <Card key={x.l} className="p-2">
-              <div className={"text-xl font-black " + (x.c ?? "")}>{x.v}</div>
-              <div className="text-[10px] text-muted">{x.l}</div>
-            </Card>
-          ))}
-        </div>
-        <div className="mt-1 text-right text-[11px] text-accent">Tüm istatistikler ›</div>
+          <div className="grid grid-cols-4 gap-2 text-center">
+            {[
+              { v: record.w + record.d + record.l, l: "Maç" },
+              { v: record.w, l: "Galibiyet", c: "text-primary" },
+              { v: record.d, l: "Beraberlik" },
+              { v: record.l, l: "Mağlubiyet", c: "text-error" },
+            ].map((x) => (
+              <div key={x.l} className="rounded-xl bg-surface-container p-2 shadow-sm">
+                <div className={cx("t-stat-md", x.c)}>{x.v}</div>
+                <div className="text-[10px] text-on-surface-variant">{x.l}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-1 flex items-center justify-end text-[11px] font-semibold text-primary">
+            Tüm istatistikler
+            <Icon name="chevron_right" className="text-[16px]" />
+          </div>
         </Link>
       )}
 
       {isTeam && !me && !group.archived_at && (
         <LinkButton href={`/g/${groupId}/teklif`} className="mb-2 w-full">
-          🤝 Maç teklif et
+          <Icon name="handshake" className="text-[20px]" />
+          Maç teklif et
         </LinkButton>
       )}
       {isTeam && !me && (() => {
@@ -218,21 +225,35 @@ export default async function GroupPage({
         return captain?.user_id ? (
           <form action={openDm} className="mb-2">
             <input type="hidden" name="userId" value={captain.user_id} />
-            <button className="w-full rounded-xl border border-accent/40 bg-pitch-900 py-3 font-bold hover:border-accent">💬 Kaptana mesaj yaz</button>
+            <Button variant="secondary" className="w-full">
+              <Icon name="chat" className="text-[20px]" />
+              Kaptana mesaj yaz
+            </Button>
           </form>
         ) : null;
       })()}
 
-      {me && (
-        <LinkButton href={`/g/${groupId}/sohbet`} variant="secondary" className="mb-2 w-full justify-between border-accent/40">
-          <span>💬 {isTeam ? "Takım sohbeti" : "Grup sohbeti"}</span>
-          {unreadHere > 0 ? (
-            <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-bold text-pitch-950">{unreadHere > 99 ? "99+" : unreadHere} yeni</span>
-          ) : (
-            <span className="text-muted">›</span>
-          )}
-        </LinkButton>
+      {canCreate && (
+        <div className="mb-2 grid grid-cols-2 gap-2">
+          <LinkButton href={`/g/${groupId}/cagri/yeni`}>
+            <Icon name="sports_soccer" className="text-[20px]" />
+            Maç ayarla
+          </LinkButton>
+          <LinkButton href={`/g/${groupId}/matches/new`} variant="secondary">
+            {isTeam ? "+ Maç kur" : "+ Doğrudan maç"}
+          </LinkButton>
+        </div>
       )}
+
+      {/* Kısayollar: sohbet, teklifler, kadro, oyuncular */}
+      <div className="mb-2 grid grid-cols-2 gap-2">
+        {me && (
+          <Tile href={`/g/${groupId}/sohbet`} icon="forum" label={isTeam ? "Takım sohbeti" : "Grup sohbeti"} badge={unreadHere > 0 ? `${unreadHere > 99 ? "99+" : unreadHere} yeni` : undefined} />
+        )}
+        {isTeam && me && <Tile href={`/g/${groupId}/teklifler`} icon="handshake" label="Maç teklifleri" badge={pendingOffers > 0 ? `${pendingOffers} yeni` : undefined} warn />}
+        <Tile href={`/g/${groupId}/kadro`} icon="style" label={isTeam ? "Kadro" : "Üye kartları"} />
+        <Tile href={`/g/${groupId}/players`} icon="group" label={isTeam ? "Oyuncular" : "Üyeler"} />
+      </div>
 
       {me && <MuteToggle groupId={groupId} muted={!!myRow?.muted} />}
       <Proposals
@@ -245,32 +266,6 @@ export default async function GroupPage({
         openForm={!!oner}
         sent={oneri === "gonderildi"}
       />
-      {canCreate && (
-        <div className="mb-2 grid grid-cols-2 gap-2">
-          <LinkButton href={`/g/${groupId}/cagri/yeni`}>⚽ Maç ayarla</LinkButton>
-          <LinkButton href={`/g/${groupId}/matches/new`} variant="secondary">
-            {isTeam ? "+ Maç kur" : "+ Doğrudan maç"}
-          </LinkButton>
-        </div>
-      )}
-      {isTeam && me && (
-        <LinkButton href={`/g/${groupId}/teklifler`} variant="secondary" className="mb-2 w-full justify-between">
-          <span>🤝 Maç teklifleri</span>
-          {pendingOffers > 0 ? (
-            <span className="rounded-full bg-amber-400 px-2 py-0.5 text-xs font-bold text-pitch-950">{pendingOffers} yeni</span>
-          ) : (
-            <span className="text-muted">›</span>
-          )}
-        </LinkButton>
-      )}
-      <div className="grid grid-cols-2 gap-2">
-        <LinkButton href={`/g/${groupId}/kadro`} variant="secondary">
-          🃏 {isTeam ? "Kadro" : "Üye kartları"}
-        </LinkButton>
-        <LinkButton href={`/g/${groupId}/players`} variant="secondary">
-          {isTeam ? "👥 Oyuncular" : "👥 Üyeler"}
-        </LinkButton>
-      </div>
 
       {(polls ?? []).length > 0 && (
         <>
@@ -281,27 +276,27 @@ export default async function GroupPage({
               const mine = poll.poll_responses.find((r) => r.user_id === user.id)?.answer;
               const fill = poll.purpose === "fill";
               return (
-                <Link key={poll.id} href={`/g/${groupId}/cagri/${poll.id}`}>
-                  <Card className="flex items-center gap-3 border-accent/30 transition hover:border-accent">
-                    <span className="text-2xl">{fill ? "🔎" : "📣"}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="font-semibold">{fill ? `${poll.capacity} oyuncu aranıyor` : callWhen(poll)}</div>
-                      <div className="truncate text-xs text-muted">
-                        {fill ? callWhen(poll) : poll.venue ?? "Saha belli değil"} · {yes}
-                        {poll.capacity && !fill ? `/${poll.capacity}` : ""} geliyor
-                        {poll.status === "filled" ? " · doldu" : ""}
-                      </div>
+                <Link key={poll.id} href={`/g/${groupId}/cagri/${poll.id}`} className="flex items-center gap-3 rounded-xl border border-primary/30 bg-surface-container p-3 transition hover:border-primary">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-primary/15 text-primary">
+                    <Icon name={fill ? "person_search" : "campaign"} fill className="text-[22px]" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold">{fill ? `${poll.capacity} oyuncu aranıyor` : callWhen(poll)}</div>
+                    <div className="truncate text-xs text-on-surface-variant">
+                      {fill ? callWhen(poll) : poll.venue ?? "Saha belli değil"} · {yes}
+                      {poll.capacity && !fill ? `/${poll.capacity}` : ""} geliyor
+                      {poll.status === "filled" ? " · doldu" : ""}
                     </div>
-                    {mine === "yes" ? (
-                      <Badge tone="accent">Geliyorsun</Badge>
-                    ) : mine === "maybe" ? (
-                      <Badge tone="warn">Belki</Badge>
-                    ) : mine === "no" ? (
-                      <Badge>Gelmiyorsun</Badge>
-                    ) : me ? (
-                      <Badge tone="warn">Yanıtla</Badge>
-                    ) : null}
-                  </Card>
+                  </div>
+                  {mine === "yes" ? (
+                    <Badge tone="accent">Geliyorsun</Badge>
+                  ) : mine === "maybe" ? (
+                    <Badge tone="warn">Belki</Badge>
+                  ) : mine === "no" ? (
+                    <Badge>Gelmiyorsun</Badge>
+                  ) : me ? (
+                    <Badge tone="warn">Yanıtla</Badge>
+                  ) : null}
                 </Link>
               );
             })}
@@ -309,12 +304,12 @@ export default async function GroupPage({
         </>
       )}
       {!me && isTeam && (
-        <p className="mt-3 text-center text-xs text-muted">
+        <p className="mt-3 text-center text-xs text-on-surface-variant">
           Bu takımın oyuncusu değilsin. Katılmak için kaptandan davet linki iste.
         </p>
       )}
       {me && !canCreate && (
-        <p className="mt-2 text-center text-xs text-muted">
+        <p className="mt-2 text-center text-xs text-on-surface-variant">
           Maçları ve maç çağrılarını {labels.captain.toLocaleLowerCase("tr")}, yetkililer ve organizatörler açar.
         </p>
       )}
@@ -324,7 +319,7 @@ export default async function GroupPage({
           {staff.map((p) => (
             <Link key={p.id} href={`/g/${groupId}/p/${p.id}`}>
               <Badge tone={p.role === "captain" ? "warn" : "default"}>
-                {p.role === "captain" ? (isTeam ? "© " : "★ ") : ""}
+                {p.role === "captain" && <Icon name={isTeam ? "military_tech" : "star"} fill className="text-[14px]" />}
                 {labels[p.role as Role]}: {p.display_name}
               </Badge>
             </Link>
@@ -338,19 +333,18 @@ export default async function GroupPage({
           <ul className="space-y-2">
             {active.map((m) => (
               <li key={m.id}>
-                <Link href={`/g/${groupId}/m/${m.id}`}>
-                  <Card className="flex items-center justify-between transition hover:border-accent/50">
-                    <div>
-                      <div className="font-semibold">
-                        {m.kind === "external" ? `vs ${m.opponent_name}` : formatDate(m.played_at)}
-                      </div>
-                      <div className="text-xs text-muted">
-                        {m.kind === "external" && `${formatDate(m.played_at)} · `}
-                        {m.venue ?? "Saha belirtilmedi"} · {m.match_players[0]?.count ?? 0} oyuncu
-                      </div>
+                <Link href={`/g/${groupId}/m/${m.id}`} className="flex items-center gap-3 rounded-xl border border-line bg-surface-container p-3 transition hover:border-primary/50">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-surface-highest text-on-surface-variant">
+                    <Icon name="sports_soccer" className="text-[22px]" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-semibold">{m.kind === "external" ? `vs ${m.opponent_name}` : formatDate(m.played_at)}</div>
+                    <div className="truncate text-xs text-on-surface-variant">
+                      {m.kind === "external" && `${formatDate(m.played_at)} · `}
+                      {m.venue ?? "Saha belirtilmedi"} · {m.match_players[0]?.count ?? 0} oyuncu
                     </div>
-                    <Badge tone={STATUS[m.status].tone}>{STATUS[m.status].label}</Badge>
-                  </Card>
+                  </div>
+                  <Badge tone={STATUS[m.status].tone}>{STATUS[m.status].label}</Badge>
                 </Link>
               </li>
             ))}
@@ -361,9 +355,10 @@ export default async function GroupPage({
       <SectionTitle
         action={
           tab === "kadro" && !isTeam && ranked.length > 5 ? (
-            <LinkButton href={`/g/${groupId}/kadro`} variant="ghost" className="min-h-8 px-2 text-accent">
-              Tümü ›
-            </LinkButton>
+            <Link href={`/g/${groupId}/kadro`} className="flex items-center text-sm font-semibold text-primary">
+              Tümü
+              <Icon name="chevron_right" className="text-[18px]" />
+            </Link>
           ) : undefined
         }
       >
@@ -376,21 +371,24 @@ export default async function GroupPage({
             const s = p.totals;
             return (
               <li key={p.id}>
-                <Link
-                  href={`/g/${groupId}/p/${p.id}`}
-                  className="flex items-center gap-3 px-4 py-3 transition hover:bg-pitch-800"
-                >
-                  <span className="w-5 text-right text-sm font-bold text-muted">{i + 1}</span>
+                <Link href={`/g/${groupId}/p/${p.id}`} className="flex items-center gap-3 px-4 py-3 transition hover:bg-surface-high">
+                  <span className={cx("w-5 text-right font-display text-sm font-bold tabular-nums", i < 3 ? "text-gold-1" : "text-on-surface-variant")}>{i + 1}</span>
                   <OvrBadge overall={p.overall} className={p.matches_played === 0 ? "opacity-50" : ""} />
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-medium">
                       {p.display_name}
-                      {!isSquadMember(p) && <span className="ml-2 text-xs text-muted">{p.is_loan ? "ödünç" : "misafir"}</span>}
+                      {!isSquadMember(p) && <span className="ml-2 text-xs text-on-surface-variant">{p.is_loan ? "ödünç" : "misafir"}</span>}
                     </div>
-                    <div className="text-xs text-muted">
+                    <div className="flex items-center text-xs text-on-surface-variant">
                       {p.position ? POSITION_LABEL[p.position] + " · " : ""}
                       {s.played} maç · {s.goals} gol · {s.assists} asist
-                      {s.mvps > 0 && ` · ${s.mvps}⭐`}
+                      {s.mvps > 0 && (
+                        <>
+                          {" · "}
+                          {s.mvps}
+                          <Icon name="star" fill className="text-[13px] text-gold-1" />
+                        </>
+                      )}
                     </div>
                   </div>
                   {p.matches_played > 0 && p.confidence < 0.6 && <Badge>geçici</Badge>}
@@ -404,13 +402,13 @@ export default async function GroupPage({
       {leaders.length > 0 && (
         <div className="mt-3 grid grid-cols-3 gap-2">
           {leaders.map((l) => (
-            <Card key={l.label} className="p-3 text-center">
-              <div className="text-xl">{l.icon}</div>
+            <div key={l.label} className="rounded-xl bg-surface-container p-3 text-center shadow-sm">
+              <Icon name={l.icon} fill className="text-[22px] text-gold-1" />
               <div className="mt-1 truncate text-sm font-semibold">{l.x!.p.display_name}</div>
-              <div className="text-xs text-muted">
+              <div className="text-xs text-on-surface-variant">
                 {l.label} · {l.x!.v}
               </div>
-            </Card>
+            </div>
           ))}
         </div>
       )}
@@ -421,41 +419,39 @@ export default async function GroupPage({
           <ul className="space-y-2">
             {recent.map((m) => (
               <li key={m.id}>
-                <Link href={`/g/${groupId}/m/${m.id}`}>
-                  <Card className="flex items-center justify-between py-3 transition hover:border-accent/50">
-                    <div className="text-sm">
-                      <div>{m.kind === "external" ? `vs ${m.opponent_name}` : "Kendi aramızda"}</div>
-                      <div className="text-xs text-muted">
-                        {formatDate(m.played_at)}
-                        {m.venue ? ` · ${m.venue}` : ""}
-                      </div>
+                <Link href={`/g/${groupId}/m/${m.id}`} className="flex items-center justify-between rounded-xl border border-line bg-surface-container px-4 py-3 transition hover:border-primary/50">
+                  <div className="min-w-0 text-sm">
+                    <div className="truncate">{m.kind === "external" ? `vs ${m.opponent_name}` : "Kendi aramızda"}</div>
+                    <div className="truncate text-xs text-on-surface-variant">
+                      {formatDate(m.played_at)}
+                      {m.venue ? ` · ${m.venue}` : ""}
                     </div>
-                    {m.kind === "external" ? (
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={
-                            "rounded-md px-1.5 py-0.5 text-xs font-bold " +
-                            ((m.score_a ?? 0) > (m.score_b ?? 0)
-                              ? "bg-accent/20 text-accent"
-                              : (m.score_a ?? 0) < (m.score_b ?? 0)
-                                ? "bg-red-400/20 text-red-300"
-                                : "bg-pitch-700 text-muted")
-                          }
-                        >
-                          {(m.score_a ?? 0) > (m.score_b ?? 0) ? "G" : (m.score_a ?? 0) < (m.score_b ?? 0) ? "M" : "B"}
-                        </span>
-                        <span className="text-lg font-black tabular-nums">
-                          {m.score_a} - {m.score_b}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="text-lg font-black tabular-nums">
-                        <span className="text-team-a">{m.score_a}</span>
-                        <span className="mx-1 text-muted">-</span>
-                        <span className="text-team-b">{m.score_b}</span>
-                      </div>
-                    )}
-                  </Card>
+                  </div>
+                  {m.kind === "external" ? (
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span
+                        className={cx(
+                          "rounded-md px-1.5 py-0.5 font-display text-xs font-bold",
+                          (m.score_a ?? 0) > (m.score_b ?? 0)
+                            ? "bg-primary/20 text-primary"
+                            : (m.score_a ?? 0) < (m.score_b ?? 0)
+                              ? "bg-error/20 text-error"
+                              : "bg-surface-highest text-on-surface-variant",
+                        )}
+                      >
+                        {(m.score_a ?? 0) > (m.score_b ?? 0) ? "G" : (m.score_a ?? 0) < (m.score_b ?? 0) ? "M" : "B"}
+                      </span>
+                      <span className="font-display text-lg font-bold tabular-nums">
+                        {m.score_a} - {m.score_b}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="shrink-0 font-display text-lg font-bold tabular-nums">
+                      <span className="text-team-a">{m.score_a}</span>
+                      <span className="mx-1 text-on-surface-variant">-</span>
+                      <span className="text-team-b">{m.score_b}</span>
+                    </div>
+                  )}
                 </Link>
               </li>
             ))}
@@ -471,7 +467,7 @@ export default async function GroupPage({
             {canManage && (
               <form action={regenerateInvite} className="text-right">
                 <input type="hidden" name="groupId" value={groupId} />
-                <button className="text-xs text-muted hover:text-white" title="Eski kod ve link çalışmaz olur">
+                <button className="text-xs text-on-surface-variant hover:text-on-surface" title="Eski kod ve link çalışmaz olur">
                   Yeni kod oluştur
                 </button>
               </form>
@@ -480,5 +476,16 @@ export default async function GroupPage({
         </>
       )}
     </main>
+  );
+}
+
+/** Grup sayfası kısayol kutucuğu: ikon, ad, varsa "n yeni" rozeti */
+function Tile({ href, icon, label, badge, warn }: { href: string; icon: string; label: string; badge?: string; warn?: boolean }) {
+  return (
+    <Link href={href} className="flex min-h-12 items-center gap-2 rounded-xl border border-line bg-surface-container px-3 py-2.5 transition hover:border-primary/50">
+      <Icon name={icon} className="shrink-0 text-[20px] text-primary" />
+      <span className="min-w-0 flex-1 text-sm font-semibold leading-tight">{label}</span>
+      {badge && <span className={cx("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold", warn ? "bg-amber-400 text-pitch-950" : "bg-primary text-on-primary")}>{badge}</span>}
+    </Link>
   );
 }
