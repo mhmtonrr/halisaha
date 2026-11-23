@@ -6,7 +6,7 @@ import { Avatar } from "@/components/Avatar";
 import { Card, ErrorNote, Header } from "@/components/ui";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-type Tur = "listing" | "poll" | "match";
+type Tur = "poll" | "match";
 
 interface Person {
   id: string;
@@ -17,26 +17,29 @@ interface Person {
 
 /** Kartın başlığı + grubu; kaynak yoksa/uygun değilse null */
 async function loadSource(supabase: Awaited<ReturnType<typeof requireUser>>["supabase"], tur: Tur, ref: string) {
-  if (tur === "listing") {
-    const { data } = await supabase.from("player_listings").select("group_id, status, matches(played_at, venue), groups(name)").eq("id", ref).maybeSingle();
-    const m = one(data?.matches as { played_at: string; venue: string | null } | { played_at: string; venue: string | null }[] | null);
-    const g = one(data?.groups as { name: string } | { name: string }[] | null);
-    return data && m && g ? { groupId: data.group_id as string, open: data.status === "open", title: `Oyuncu ilanı · ${g.name}`, when: m.played_at, venue: m.venue } : null;
-  }
   if (tur === "poll") {
-    const { data } = await supabase.from("match_polls").select("group_id, status, starts_at, venue, groups(name)").eq("id", ref).maybeSingle();
+    const { data } = await supabase.from("match_polls").select("group_id, status, purpose, play_on, starts_at, venue, groups(name)").eq("id", ref).maybeSingle();
     const g = one(data?.groups as { name: string } | { name: string }[] | null);
-    return data && g ? { groupId: data.group_id as string, open: data.status === "open", title: `Maç çağrısı · ${g.name}`, when: data.starts_at as string, venue: data.venue as string | null } : null;
+    // Kesinleşmiş toplama çağrısı da paylaşılır (geç gelen yedek olur); saat belli değilse günün öğleni gösterilir
+    return data && g
+      ? {
+          groupId: data.group_id as string,
+          open: data.status === "open" || data.status === "converted",
+          title: `${data.purpose === "fill" ? "Adam aranıyor" : "Maç çağrısı"} · ${g.name}`,
+          when: (data.starts_at as string | null) ?? new Date(`${data.play_on}T12:00:00+03:00`).toISOString(),
+          venue: data.venue as string | null,
+        }
+      : null;
   }
   const { data } = await supabase.from("matches").select("group_id, status, played_at, venue, groups!matches_group_id_fkey(name)").eq("id", ref).maybeSingle();
   const g = one(data?.groups as { name: string } | { name: string }[] | null);
   return data && g ? { groupId: data.group_id as string, open: data.status === "planned", title: `Maç · ${g.name}`, when: data.played_at as string, venue: data.venue as string | null } : null;
 }
 
-/** Maç/çağrı/ilan kartını sohbetten gönderme: arkadaşlar + oyuncu arama */
+/** Maç/çağrı kartını sohbetten gönderme: arkadaşlar + oyuncu arama */
 export default async function SendCardPage({ searchParams }: { searchParams: Promise<{ tur?: string; ref?: string; q?: string; ok?: string; error?: string }> }) {
   const { tur, ref, q = "", ok, error } = await searchParams;
-  if (!["listing", "poll", "match"].includes(tur ?? "") || !ref || !UUID.test(ref)) notFound();
+  if (!["poll", "match"].includes(tur ?? "") || !ref || !UUID.test(ref)) notFound();
   const { supabase, user } = await requireUser();
 
   const source = await loadSource(supabase, tur as Tur, ref);

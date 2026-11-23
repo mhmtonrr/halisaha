@@ -1,7 +1,7 @@
 import Link from "next/link";
 
-/** Kaptan/yetkili için: maç/çağrı/ilan kartını sohbetten bir oyuncuya/arkadaşa gönderme sayfasına götürür */
-export function SendInviteLink({ tur, refId, className = "" }: { tur: "listing" | "poll" | "match"; refId: string; className?: string }) {
+/** Kaptan/yetkili veya maçı/çağrıyı açan için: maç/çağrı kartını sohbetten bir oyuncuya/arkadaşa gönderme sayfasına götürür */
+export function SendInviteLink({ tur, refId, className = "" }: { tur: "poll" | "match"; refId: string; className?: string }) {
   return (
     <Link
       href={`/davet/gonder?tur=${tur}&ref=${refId}`}

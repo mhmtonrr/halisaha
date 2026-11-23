@@ -4,27 +4,31 @@ import { cx } from "@/components/ui";
 
 /** Paylaşım anındaki özet (dm_messages.card) */
 export interface MatchCard {
-  type: "listing" | "poll" | "match";
+  type: "poll" | "match";
   group_id: string;
   group_name: string;
   group_kind: "team" | "community";
   starts_at: string;
   venue: string | null;
-  needed?: number;
   positions?: string[];
-  min_overall?: number | null;
-  capacity?: number;
+  capacity?: number | null;
+  /** Çağrı: toplama veya adam ara */
+  purpose?: "gather" | "fill";
+  /** Çağrının saati belli değil (starts_at sadece günü gösterir) */
+  time_tbd?: boolean;
   opponent?: string | null;
   team_size?: number | null;
 }
 
-const TITLE: Record<MatchCard["type"], string> = { listing: "Oyuncu ilanı", poll: "Maç çağrısı", match: "Maç daveti" };
+const title = (card: MatchCard) => (card.type === "match" ? "Maç daveti" : card.purpose === "fill" ? "Adam aranıyor" : "Maç çağrısı");
 const POS: Record<string, string> = { GK: "Kaleci", DEF: "Defans", MID: "Orta saha", FWD: "Forvet" };
 
-const when = (iso: string) =>
-  new Date(iso).toLocaleString("tr-TR", { timeZone: "Europe/Istanbul", weekday: "short", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+const when = (iso: string, dayOnly?: boolean) =>
+  dayOnly
+    ? `${new Date(iso).toLocaleDateString("tr-TR", { timeZone: "Europe/Istanbul", weekday: "long", day: "numeric", month: "long" })} · saat belli değil`
+    : new Date(iso).toLocaleString("tr-TR", { timeZone: "Europe/Istanbul", weekday: "short", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
 
-/** Maça davet kartı: ilan / çağrı / planlı maç. Alıcı karttan ilgili sayfaya gider; özel grup içeriği üye olmayana açılmaz. */
+/** Maça davet kartı: çağrı (toplama / adam ara) veya planlı maç. Alıcı karttan ilgili sayfaya gider; özel grup içeriği üye olmayana açılmaz. */
 export function MatchCardView({
   card,
   refId,
@@ -41,17 +45,15 @@ export function MatchCardView({
   mine: boolean;
   time: string;
 }) {
-  const closed = status !== undefined && (card.type === "match" ? status !== "planned" : status !== "open");
-  const expired = new Date(card.starts_at).getTime() < Date.now();
+  const closed = status !== undefined && (card.type === "match" ? status !== "planned" : status === "closed");
+  // Saati belli olmayan çağrı gün bitene kadar geçerli
+  const expired = new Date(card.starts_at).getTime() + (card.time_tbd ? 24 * 3600_000 : 0) < Date.now();
   const inactive = closed || expired;
 
   let href: string | null = null;
   let label = "";
   let note = "";
-  if (card.type === "listing") {
-    href = `/ilan/${refId}`;
-    label = isMember ? "İlanı gör" : "İlanı aç ve başvur";
-  } else if (isMember) {
+  if (isMember) {
     href = card.type === "poll" ? `/g/${card.group_id}/cagri/${refId}` : `/g/${card.group_id}/m/${refId}`;
     label = card.type === "poll" ? "Çağrıya yanıt ver" : "Maça bak";
   } else if (card.group_kind === "team") {
@@ -63,10 +65,9 @@ export function MatchCardView({
   }
 
   const details = [
-    card.type === "listing" && card.needed ? `${card.needed} oyuncu aranıyor` : null,
-    card.type === "listing" && card.positions?.length ? card.positions.map((p) => POS[p] ?? p).join(", ") : null,
-    card.type === "listing" && card.min_overall ? `min. ${card.min_overall} rating` : null,
-    card.type === "poll" && card.capacity ? `${card.capacity} kişilik kadro` : null,
+    card.type === "poll" && card.purpose === "fill" && card.capacity ? `${card.capacity} oyuncu aranıyor` : null,
+    card.type === "poll" && card.purpose !== "fill" && card.capacity ? `${card.capacity} kişilik kadro` : null,
+    card.type === "poll" && card.positions?.length ? card.positions.map((p) => POS[p] ?? p).join(", ") : null,
     card.type === "match" && card.opponent ? `vs ${card.opponent}` : null,
     card.type === "match" && card.team_size ? `${card.team_size} kişilik` : null,
   ].filter(Boolean) as string[];
@@ -76,7 +77,7 @@ export function MatchCardView({
       <div className={cx("w-[88%] max-w-sm overflow-hidden rounded-2xl border bg-pitch-900", inactive ? "border-line opacity-80" : "border-accent/40")}>
         <div className="flex items-center gap-2 bg-accent/10 px-3 py-2">
           <span className="text-base">⚽</span>
-          <span className="flex-1 text-xs font-bold uppercase tracking-wide text-accent">{TITLE[card.type]}</span>
+          <span className="flex-1 text-xs font-bold uppercase tracking-wide text-accent">{title(card)}</span>
           {inactive && <span className="rounded-full bg-pitch-800 px-2 py-0.5 text-[10px] text-muted">{closed ? "Kapandı" : "Geçti"}</span>}
         </div>
         <div className="space-y-2 px-3 py-3">
@@ -89,7 +90,7 @@ export function MatchCardView({
           </div>
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-sm">
             <dt className="text-muted">Zaman</dt>
-            <dd>{when(card.starts_at)}</dd>
+            <dd>{when(card.starts_at, card.time_tbd)}</dd>
             <dt className="text-muted">Saha</dt>
             <dd>{card.venue ?? "Belirtilmedi"}</dd>
           </dl>

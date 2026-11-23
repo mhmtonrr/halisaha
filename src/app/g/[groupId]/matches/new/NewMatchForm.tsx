@@ -23,7 +23,6 @@ export function NewMatchForm({
   defaultWhen,
   defaultKind = "internal",
   preselected = [],
-  pollId,
   defaultVenue,
   defaultSize = 7,
 }: {
@@ -33,7 +32,6 @@ export function NewMatchForm({
   defaultKind?: "internal" | "external";
   /** Maç çağrısından gelindiyse onaylanan oyuncular */
   preselected?: string[];
-  pollId?: string;
   defaultVenue?: string;
   /** Çağrıdan geliyorsa kontenjanın yarısı */
   defaultSize?: number;
@@ -71,7 +69,6 @@ export function NewMatchForm({
     <form action={createMatch} onSubmit={() => setPending(true)} className="space-y-4">
       <input type="hidden" name="groupId" value={groupId} />
       <input type="hidden" name="kind" value={kind} />
-      {pollId && <input type="hidden" name="pollId" value={pollId} />}
       {chosen.map((p) => (
         <input key={p.id} type="hidden" name="players" value={p.id} />
       ))}

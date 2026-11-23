@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/supabase/server";
 import { finalizeExpired } from "@/lib/finalize";
-import { settleExpiredPolls } from "@/lib/polls";
+import { callWhen, decisionDue, istanbulDate } from "@/lib/call-rules";
+import { myOpenGatherCalls } from "@/lib/calls-data";
 import { formatDate } from "@/lib/data";
 import { formatRegion } from "@/lib/regions";
 import { DEFAULT_OVERALL } from "@/lib/rating";
 import { ROLE_LABEL, getMemberships, type Membership } from "@/lib/teams-data";
 import { countIncoming } from "@/lib/challenges-data";
-import { getMyApplications, getOpenListings } from "@/lib/listings-data";
 import { FeaturedSections } from "@/components/FeaturedSections";
 import { Badge, Card, ErrorNote, LinkButton, SectionTitle, cx } from "@/components/ui";
 import { LiveRefresh } from "@/components/LiveRefresh";
@@ -28,9 +28,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
 
   const groupIds = memberships.map((m) => m.group.id);
   await Promise.all(groupIds.map((id) => finalizeExpired(id)));
-  await Promise.all(groupIds.map((id) => settleExpiredPolls(id)));
+  // Günü geçen açık çağrılar kapanır (cron yok)
+  await Promise.all(groupIds.map((id) => supabase.rpc("close_stale_polls", { p_group: id })));
 
-  const [{ data: active }, { data: myVotes }, listings, { data: openPolls }, { data: unreadRows }] = await Promise.all([
+  const today = istanbulDate();
+  const [{ data: active }, { data: myVotes }, myCalls, { data: openPolls }, { data: unreadRows }, { data: myWaiting }] = await Promise.all([
     groupIds.length
       ? supabase
           .from("matches")
@@ -44,23 +46,33 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
       .from("votes")
       .select("match_id")
       .in("voter_id", memberships.map((m) => m.playerId)),
-    profile?.city ? getOpenListings(supabase, { city: profile.city, limit: 3 }) : Promise.resolve([]),
+    myOpenGatherCalls(supabase, user.id),
     groupIds.length
       ? supabase
           .from("match_polls")
-          .select("id, group_id, starts_at, venue, capacity, poll_responses(player_id, answer)")
+          .select("id, group_id, purpose, play_on, starts_at, venue, capacity, poll_responses(user_id, answer)")
           .in("group_id", groupIds)
           .eq("status", "open")
-          .gt("starts_at", new Date().toISOString())
-          .order("starts_at")
+          .gte("play_on", today)
+          .order("play_on")
           .limit(10)
       : Promise.resolve({ data: [] as never[] }),
     supabase.rpc("unread_counts"),
+    // "Geliyorum" dediğim ve organizatörün kararını beklediğim / yedekte olduğum çağrılar
+    supabase
+      .from("poll_responses")
+      .select("status, match_polls!inner(id, group_id, purpose, status, play_on, starts_at, groups(name))")
+      .eq("user_id", user.id)
+      .eq("answer", "yes")
+      .or("status.is.null,status.eq.reserve")
+      .in("match_polls.status", ["open", "filled", "converted"])
+      .gte("match_polls.play_on", today)
+      .limit(10),
   ]);
   const unread = new Map(((unreadRows ?? []) as { group_id: string; unread: number }[]).map((u) => [u.group_id, u.unread]));
 
   const adminTeamIds = memberships.filter((m) => m.group.kind === "team" && m.role !== "member").map((m) => m.group.id);
-  const [incoming, myApplications] = await Promise.all([countIncoming(supabase, adminTeamIds), getMyApplications(supabase, user.id)]);
+  const incoming = await countIncoming(supabase, adminTeamIds);
 
   // Ödünç oynadığım maçlar (takımın üyesi değilim, ama maçın kadrosundayım): oylamaya geçince oy vermem gerekir
   const { data: loanRows } = await supabase.from("group_players").select("id, group_id, groups(name)").eq("user_id", user.id).eq("is_loan", true);
@@ -96,9 +108,16 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
     inRoster: m.match_players.some((p: { player_id: string }) => myPlayerIds.has(p.player_id)),
   }));
   // Yanıt vermediğim açık çağrılar
-  const toAnswer = (openPolls ?? []).filter(
-    (p) => !p.poll_responses.some((r: { player_id: string }) => myPlayerIds.has(r.player_id)),
-  );
+  const toAnswer = (openPolls ?? []).filter((p) => !p.poll_responses.some((r: { user_id: string }) => r.user_id === user.id));
+  type WaitingCall = { id: string; group_id: string; purpose: string; status: string; play_on: string; starts_at: string | null; groups: { name: string } | { name: string }[] | null };
+  const waiting = (myWaiting ?? []).flatMap((w) => {
+    const c = (Array.isArray(w.match_polls) ? w.match_polls[0] : w.match_polls) as WaitingCall | null;
+    // Açık toplama çağrısında beklemek olağan (organizatör kesinleştirecek); sadece yedek ve adam arama başvurusu gösterilir
+    if (!c || (c.purpose === "gather" && c.status === "open")) return [];
+    const g = Array.isArray(c.groups) ? c.groups[0] : c.groups;
+    return [{ ...c, reserve: w.status === "reserve", groupName: g?.name ?? "" }];
+  });
+  const dueCalls = myCalls.filter((c) => decisionDue(c));
   const toVote = matches.filter((m) => m.status === "voting" && m.inRoster && !voted.has(m.id));
   const upcoming = matches.filter((m) => !toVote.includes(m));
 
@@ -115,7 +134,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
       </div>
       <LiveRefresh
         watches={[
-          { table: "listing_applications", filter: `user_id=eq.${user.id}` },
+          { table: "poll_responses", filter: `user_id=eq.${user.id}` },
           ...(groupIds.length
             ? [
                 { table: "matches", filter: inList("group_id", groupIds) },
@@ -186,16 +205,32 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
         </Link>
       ))}
 
-      {/* Oyuncu ilanlarına başvurularım (ödünç oyuncu olarak) */}
-      {myApplications.map((a) => (
-        <Link key={a.listingId} href={a.status === "accepted" ? `/g/${a.groupId}/m/${a.matchId}` : `/ilan/${a.listingId}`}>
-          <Card className={cx("mb-3 flex items-center gap-3", a.status === "accepted" ? "border-accent/40 bg-accent/10" : "border-line")}>
-            <span className="text-2xl">{a.status === "accepted" ? "✅" : "⏳"}</span>
+      {/* Organizatör: kadro kararı zamanı gelen çağrılarım */}
+      {dueCalls.map((c) => (
+        <Link key={c.id} href={`/g/${c.group_id}/cagri/${c.id}?kesinlestir=1`}>
+          <Card className="mb-3 flex items-center gap-3 border-amber-400/50 bg-amber-400/10">
+            <span className="text-2xl">⏰</span>
             <div className="min-w-0 flex-1">
-              <div className="font-semibold">
-                {a.status === "accepted" ? `${a.team} seni maça aldı` : `${a.team} ilanına başvurun yanıt bekliyor`}
+              <div className="font-semibold">Kadroyu kesinleştir</div>
+              <div className="truncate text-xs text-muted">
+                {c.group_name} · {callWhen(c)}
               </div>
-              <div className="truncate text-xs text-muted">{formatDate(a.playedAt)}</div>
+            </div>
+            <span className="text-amber-300">›</span>
+          </Card>
+        </Link>
+      ))}
+
+      {/* Yedekte olduğum veya adam aramaya başvurup kararı beklediğim çağrılar */}
+      {waiting.map((w) => (
+        <Link key={w.id} href={`/g/${w.group_id}/cagri/${w.id}`}>
+          <Card className="mb-3 flex items-center gap-3 border-line">
+            <span className="text-2xl">⏳</span>
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold">{w.reserve ? "Yedektesin" : "Başvurun organizatörün kararını bekliyor"}</div>
+              <div className="truncate text-xs text-muted">
+                {w.groupName} · {callWhen(w)}
+              </div>
             </div>
             <span className="text-muted">›</span>
           </Card>
@@ -206,15 +241,16 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
       {toAnswer.map((p) => {
         const g = byGroup.get(p.group_id)!.group;
         const yes = p.poll_responses.filter((r: { answer: string }) => r.answer === "yes").length;
+        const fill = p.purpose === "fill";
         return (
           <Link key={p.id} href={`/g/${p.group_id}/cagri/${p.id}`}>
             <Card className="mb-3 flex items-center gap-3 border-accent/40 bg-accent/10">
-              <span className="text-2xl">📣</span>
+              <span className="text-2xl">{fill ? "🔎" : "📣"}</span>
               <div className="min-w-0 flex-1">
-                <div className="font-semibold">Maça geliyor musun?</div>
+                <div className="font-semibold">{fill ? `${p.capacity} oyuncu aranıyor` : "Maça geliyor musun?"}</div>
                 <div className="truncate text-xs text-muted">
-                  {g.name} · {formatDate(p.starts_at)}
-                  {p.venue ? ` · ${p.venue}` : ""} · {yes}/{p.capacity}
+                  {g.name} · {callWhen(p)}
+                  {p.venue ? ` · ${p.venue}` : ""} · {yes} geliyor
                 </div>
               </div>
               <span className="text-accent">›</span>
@@ -316,33 +352,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
 
       <FeaturedSections city={profile?.city ?? null} />
 
-      {listings.length > 0 && (
-        <>
-          <SectionTitle
-            action={<LinkButton href={`/kesfet${profile?.city ? `?il=${encodeURIComponent(profile.city)}` : ""}`} variant="ghost" className="min-h-8 px-2 text-accent">Tümü ›</LinkButton>}
-          >
-            🔎 Oyuncu arayan takımlar
-          </SectionTitle>
-          <div className="space-y-2">
-            {listings.map((l) => (
-              <Link key={l.id} href={`/ilan/${l.id}`}>
-                <Card className="flex items-center gap-3 border-amber-400/30 transition hover:border-amber-400">
-                  <TeamBadge name={l.team.name} color={l.team.color} size="sm" />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-semibold">{l.team.name} · {l.needed} oyuncu</div>
-                    <div className="truncate text-xs text-muted">
-                      {formatDate(l.playedAt)}
-                      {l.positions.length ? ` · ${l.positions.join("/")}` : ""}
-                      {l.minOverall ? ` · min ${l.minOverall}` : ""}
-                    </div>
-                  </div>
-                  <span className="text-amber-300">›</span>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        </>
-      )}
     </main>
   );
 }

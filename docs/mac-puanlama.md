@@ -2,15 +2,24 @@
 
 (CLAUDE.md'den taşındı; ilgili konuda çalışırken oku. Konu değişirse sadece bu dosyayı güncelle.)
 
-**Otomatik çağrı (migration 0014; 0034'ten beri üye açamaz, sadece `can_create_match`: kurucu/yetkili/organizatör; arayüzde artık açılmıyor, birleşik çağrıyla (2. parça) kalkacak)**: eskiden grupta üyeler **çağrı** açardı (`create_member_poll` RPC: `match_polls.auto_match`,
-`team_size`; kontenjan = 2 × kişi sayısı). Sınırlar DB'de: maç en az 3 saat sonra, en fazla 14 gün içinde; son yanıt süresi (boşsa maçtan
-3 saat önce) maçtan en az 1 saat önce ve gelecekte; yetkili olmayan üye aynı anda 1 açık çağrı; açan otomatik "geliyorum". Takımda üye
-çağrı açamaz. Maça dönüşüm (`polls.ts`, `poll-rules.ts`): **kontenjan dolunca hemen** (`respondPoll` sonrası `settlePoll`); **son yanıt süresi
-bitince** "geliyorum" ≥ %70 (`MIN_FILL_RATIO`; 14 için 10) ise eksik kadroyla, değilse çağrı iptal olur ve sohbete yazılır. Sayfa açılışında
-tetiklenir (`settleExpiredPolls`, cron yok; çağrı sayfası açıkken 30 sn'de bir tazelenir). Kadro: yanıt sırasına göre ilk N kişi, fazlası yedek
-(biri vazgeçerse sıradaki girer); takımlar `balanceTeams` ile dengeli bölünür (profilinde mevkisi kaleci olan kaleci). Dönüşüm atomik talep eder
-(`status open → converted`), hata olursa maç silinir ve çağrı yeniden açılır. Çağrıyı açan veya yetkili `close_poll` ile iptal eder. Yetkililerin
-çağrısı eskisi gibi elle onaylıdır (`approve_*` RPC'leri, "Maçı oluştur"); yetkili hem maç kurar hem çağrı açar.
+**Birleşik çağrı (0035, kullanıcı kararları)**: eski üye çağrısı (otomatik maç, %70), yetkili elle onayı ve oyuncu ilanı tek yapıda: `match_polls`.
+Açma/kesinleştirme sadece `can_create_match` (kurucu/yetkili/organizatör); yönetim `can_manage_poll` (açan veya kurucu/yetkili). Kurucu/yetkili dışındakiler
+aynı grupta en fazla 3 açık çağrı. Tabloya doğrudan yazma yok, hepsi RPC. `group_id` = çağrının yayınlandığı yer (kim görür/yanıtlar); maçın sahibi `matches.group_id`.
+- **Toplama** (`purpose='gather'`, `create_gather_poll`): zorunlu tek şey gün (`play_on`, bugün..+30); saat (`starts_at`, o günde), saha, kişi sayısı
+  (`team_size` → kontenjan ×2), karar zamanı (`decide_by`, sadece hatırlatma), not isteğe bağlı; `update_gather_poll` ile netleşir (yanıt verenlere bildirim).
+  Yanıt `respond_poll(poll, yes|maybe|no, mevki, not)`, hesaba bağlı (`poll_responses.user_id`). Organizatör `finalize_poll` ile **toplu kesinleştirir**:
+  saat zorunlu, seçilenler "geliyorum"/"belki" demiş olmalı; **kendi aramızda** (sadece toplulukta, ≥4, taraflar `balanceTeams` ile uygulamada) veya
+  **rakibe karşı** (maç açabildiğim bir takımda, rakip adıyla, ≥2; takım üyesi olmayan `ensure_match_player` ile ödünç). Seçilen `selected`, seçilmeyen
+  "geliyorum" `reserve`; kesinleşmiş çağrıya geç gelen "geliyorum" da yedek. Uygulamadaki takımla ortak maç (çapraz oylama) yine teklifle.
+- **Adam ara** (`purpose='fill'`, `create_fill_poll`): planlı maçın eksiği (1-10, mevkiler, not); maçın kendi grubunda veya organizatörün maç açabildiği
+  bir toplulukta; maç başına yer başına 1 açık. Başvuranı organizatör **tek tek** `accept_responder`/`reject_responder` ile alır; sayı dolunca `filled`.
+- **Yedek ve yer açılması (kullanıcı kararı: organizatör kontrolünde)**: kadrodan çıkan seçilmişin yanıtı `withdrawn` olur, dolu adam arama yeniden açılır
+  (tetikleyici); çekilme onaylanınca yedek varsa organizatöre "yer açıldı" bildirimi (`notifySpotOpened`); yedeği `accept_responder` ile organizatör alır.
+- Maç planlıdan çıkınca açık adam arama kapanır; günü geçen açık çağrılar sayfa açılışında `close_stale_polls` ile kapanır (cron yok). Karar zamanı geçen
+  toplama çağrısı organizatöre ana sayfada ve çağrı sayfasında "Kadroyu kesinleştir" uyarısı olarak görünür (push yok). Organizatör yanıtlayanları
+  `poll_responders` ile rating ve güvenilirlikle görür (diğer üyeler güvenilirlik görmez).
+- Kod: `call-actions.ts` (eylemler + bildirimler), `calls-data.ts`, `call-rules.ts` (saf, testli), sayfa `/g/[id]/cagri/{yeni,[pollId]}` (`?kesinlestir=1`, `?duzenle=1`),
+  maç ekranında `FillSection`. Test: `db-checks/calls.mjs`, `call-rules.test.ts`.
 
 **Maç**: `kind` internal (kendi aramızda, A/B takımı) / external (rakibe karşı; tüm kadro A, score_a=biz).
 Durum: planned → voting (skor girilince, 24 saat) → closed. Takımlar arası maçta planned → played (skor onayı) → voting. Maça özel mevki `match_players.position`.
@@ -63,14 +72,10 @@ rakip girmediyse `waiting`, eşleşirse `settled` ve iki maç da `voting` (24 sa
 iki takım kartı, rakip kadro/ratingler (takımlar herkese açık olduğu için RLS değişmedi), kapanınca rakibin oyuncu puanları.
 Takım istatistikleri `finished` (voting+closed) rakip maçlarından hesaplanır (`team-stats.ts`).
 
-**Maç çağrısı** (match_polls/poll_responses): yetkili açar; üyeler `respond_poll` RPC ile yanıtlar; onay
-sadece `set_poll_approval` / `approve_first_responders` RPC ile. Kontenjan sırası `responded_at`.
-"Maçı oluştur" → `/matches/new?cagri=ID` onaylananlarla dolu gelir; maç oluşunca çağrı `converted`.
-
 **Maçtan çekilme (migration 0022, kullanıcı kararı: "her zaman onay")**: çağrı aşamasında "geliyorum"dan "gelemem"e geçmek serbest (eskisi gibi); **maç kurulup kadroya girdikten sonra** oyuncu maç ekranında
 "Maçtan çekilmek istiyorum" der (isteğe bağlı sebep ≤200), `request_withdrawal` RPC'si `match_withdrawals` satırı açar (`pending`); kaptan/yetkili `decide_withdrawal` ile onaylar (oyuncu `match_players`'tan çıkar) veya reddeder
 (oyuncu kadroda kalır, yeniden isteyebilir); oyuncu `cancel_withdrawal` ile geri çekebilir. **Onaylı çekilme `match_no_shows`'a yazılmaz** (güvenilirliği bozmaz); reddedilen yine gelmezse kaptan sonuç girerken "gelmedi" işaretler.
 Maça 3 saatten az kala istek `late` ("Son dakika") olur. Kaptan/yetkili kendi adına **doğrudan çıkar** (kayıt `approved`). Sadece `planned` maçta ve maç saatinden önce; maç planlanmış olmaktan çıkarsa veya oyuncu başka yolla
-kadrodan çıkarsa (kaptan çıkardı, "gelmedi", ayrıldı) bekleyen istek `closed` olur (tetikleyiciler). Bağlı maçta onayı oyuncunun kendi takımının kaptanı/yetkilisi verir. Bildirimler (tür `match`): istek → kaptan/yetkililer,
+kadrodan çıkarsa (kaptan çıkardı, "gelmedi", ayrıldı) bekleyen istek `closed` olur (tetikleyiciler). Bağlı maçta onayı oyuncunun kendi takımının kaptanı/yetkilisi verir. Bildirimler (tür `match`): istek → kaptan/yetkililer ve maçı kuran,
 karar → oyuncu, yetkili çıkışı → diğer yetkililer. UI: `m/[matchId]/WithdrawalSection.tsx` ("Çekilme istekleri" yetkilide, "Maça katılımım" oyuncuda). RLS: istek sahibi ve yetkililer görür; yazma sadece RPC.
-Yapılmadı: onaydan sonra çağrının yedek listesinden otomatik öneri (kaptan "Kadroya oyuncu ekle / çıkar" listesinden elle ekler). Test: `db-checks/withdrawals.mjs`, `e2e/withdrawal.mjs`.
+Onaydan sonra çağrının yedeği organizatöre bildirilir, organizatör çağrı sayfasından "Kadroya al" der (otomatik girmez). Test: `db-checks/withdrawals.mjs`, `e2e/withdrawal.mjs`.

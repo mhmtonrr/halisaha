@@ -1,4 +1,4 @@
-# Grup/takım, roller, üyelik, davet, ilan/ödünç
+# Grup/takım, roller, üyelik, davet, adam ara/ödünç
 
 (CLAUDE.md'den taşındı; ilgili konuda çalışırken oku. Konu değişirse sadece bu dosyayı güncelle.)
 
@@ -13,27 +13,17 @@
 | Rating etkisi | yarım (`CONFIG.CASUAL_IMPORTANCE = 0.5`) | rakip maçı tam; iç/antrenman maçı (eski veri) yarım |
 | Görünürlük | özel | herkese açık; teklif, istatistik, diziliş, çapraz oylama sadece takımda |
 
-**Oyuncu arama ilanı ve ödünç oyuncu (migration 0015, yapıldı)**: takımın kaptanı/yetkilisi planlanmış rakip maçı için "oyuncu arıyoruz"
-ilanı açar (`create_listing`: 1-10 oyuncu, aranan mevkiler, isteğe bağlı min. rating, not; maç başına 1, takım başına en fazla 5 açık ilan).
-İlan **herkese açıktır** (giriş yapmış herkes görür): `/ilan/[id]`, Keşfet'te bölgeye göre "Oyuncu arayan takımlar", takım sayfası, maç ekranı
-şeridi; `ShareLink` ile gruplarda paylaşılır. Hesabı olan herkes `apply_listing` ile başvurur (mevki + not; takımın oyuncusu, maçta/rakip kadroda
-olan ve min. rating altı başvuramaz; en fazla 10 bekleyen başvuru). Kaptan/yetkili başvuranları `listing_applicants` RPC'siyle **rating,
-mevki ve güvenilirlikle** görür (başvuranın rating'i kendi özel gruplarındaki satırlara bağlı olduğundan normal sorguyla okunamaz) ve
-`decide_application` ile **tek tek** kabul/ret eder (ilk gelen otomatik girmez). Kabul edilen oyuncu takıma `group_players.is_loan = true`
-olarak yazılır ve o maçın kadrosuna girer; takımın asıl kadrosunda değildir: `is_group_member` onu **saymaz** (takım sohbeti, teklifler,
-çağrılar, yetkiler kapalı), `getMemberships`/Takımlarım/profil kartlarında yoktur, takım sayfasında "Misafirler" sekmesinde "ödünç" etiketiyle
-görünür (maç ekranı ve kadro sayfası da `isSquadMember`/`isGuestLike` ayrımını kullanır). Oy verir/oylanır, genel ratingi geçerlidir.
-Gereken sayı dolunca ilan `filled` olur. Ödünç oyuncu davet koduyla katılırsa kalıcı üye olur (`join_group` upsert). Oyuncu ilan
-kabulünü/durumunu ana sayfada görür (canlı). **Güvenilirlik**: maç sonucu girerken kaptan "gelmedi" işaretler (`mark_no_shows`: kadrodan
-çıkarır, hesabı olanı `match_no_shows`'a yazar; sadece planlanmış maçta, yani skor düzeltmesinde "gelmedi" kutusu görünmez). `listing_applicants`
-oynadığı (oylama/kapanışa ulaşmış) maç ve gelmediği maç sayısını verir (kimlik doğrulamasız genel bir güvenilirlik sorgusu bilerek yok),
-`reliability()` yüzdeyi ve etiketi üretir (3 kayıttan azında "Yeni"). `submitResult` sırası: önce her şeyi doğrula (yetki, skor, "gelmedi"
-çıkınca kalan ≥2, durum), sonra istatistikleri yaz, "gelmedi"yi en son (maç durumu güncellenmeden hemen önce) işaretle; geri alınamayan işlem
-doğrulanabilir bir hatadan önce yapılmaz.
-**İlan yaşam döngüsü (0016)**: maç planlanmış olmaktan çıkınca (sonuç/oylama/iptal) açık ilan **kapanır** (tetikleyici); 5 açık ilan sınırı sadece
-planlanmış ve gelecekteki maçları sayar; bekleyen 10 başvuru sınırı yeniden başvuruda da işler; kabul edilmiş ödünç oyuncu maç kadrosundan çıkarılırsa
-(`match_players` silinmesi) başvurusu `withdrawn` olur ve dolu ilan yeniden açılır; mevkisiz başvuran da kabul edilir (kaleci sayılmaz).
-Ödünç oyuncu `getMemberships`'te yok ama oynadığı maç oylamaya geçince ana sayfada "Oyunu bekliyorlar (ödünç)" kartı görür. Tuzak: `returns table` içinde `position` sütun adı olamaz (`chosen_position`).
+**Ödünç oyuncu (0015; 0035'ten beri ilan yerine çağrı)**: takım maçına topluluktan veya dışarıdan gelen oyuncu takıma `group_players.is_loan = true` olarak yazılır
+(`ensure_match_player`: kesinleştirmede "rakibe karşı" seçilince veya "adam ara" başvurusu kabul edilince; ayrılmış eski üye de ödünç olarak yeniden açılır) ve o maçın
+kadrosuna girer; takımın asıl kadrosunda değildir: `is_group_member` onu **saymaz** (takım sohbeti, teklifler, çağrılar, yetkiler kapalı), `getMemberships`/Takımlarım/
+profil kartlarında yoktur, takım sayfasında "Misafirler" sekmesinde "ödünç" etiketiyle görünür (`isSquadMember`/`isGuestLike`). Oy verir/oylanır, genel ratingi geçerlidir.
+Davet koduyla katılırsa kalıcı üye olur (`join_group` upsert). Eski herkese açık ilan (`player_listings`, `/ilan`, Keşfet "Oyuncu arayan takımlar") kalktı; "herkese aç"
+seçeneği ikinci aşamada "Adam arayan maçlar" olarak gelecek. Kurallar: `docs/mac-puanlama.md` "Birleşik çağrı".
+**Güvenilirlik**: maç sonucu girerken kaptan "gelmedi" işaretler (`mark_no_shows`: kadrodan çıkarır, hesabı olanı `match_no_shows`'a yazar; sadece planlanmış maçta,
+yani skor düzeltmesinde "gelmedi" kutusu görünmez). `poll_responders` organizatöre oynadığı (oylama/kapanışa ulaşmış) maç ve gelmediği maç sayısını verir (kimlik
+doğrulamasız genel bir güvenilirlik sorgusu bilerek yok), `reliability()` yüzdeyi ve etiketi üretir (3 kayıttan azında "Yeni"). `submitResult` sırası: önce her şeyi
+doğrula (yetki, skor, "gelmedi" çıkınca kalan ≥2, durum), sonra istatistikleri yaz, "gelmedi"yi en son işaretle; geri alınamayan işlem doğrulanabilir bir hatadan önce yapılmaz.
+Ödünç oyuncu `getMemberships`'te yok ama oynadığı maç oylamaya geçince ana sayfada "Oyunu bekliyorlar (ödünç)" kartı görür. Tuzak: `returns table` içinde `position` sütun adı olamaz (`chosen_position`, `poll_responders`).
 Tuzak: canlı yenilenen sunucu bileşeninde `<details open={koşul}>` her yenilemede kullanıcının açtığını kapatır → `AutoOpenDetails`
 (sadece ilk yüklemede açar).
 
@@ -69,5 +59,4 @@ ayrılmışları saymaz; **geçmiş gösteren** yerler (maç ekranı, oyuncu say
 **kaptan/kurucu önce devreder** (yoksa hata), **oylaması süren (`voting`/`played`) maçı olan oylama bitince ayrılır**; ayrılırken `deactivate_member` gelecekteki planlanmış maç kadrolarından ve açık çağrı yanıtlarından çıkarır,
 kaptan/yetkililere "üye ayrıldı" bildirimi gider (`text.memberLeft`, tür `match`). Aynı davet koduyla `join_group` satırı yeniden açar (rol `member`). **Yetkili çıkarma** artık `remove_member` RPC'si: hesaplı üye aynı şekilde
 ayrılmış sayılır, misafir silinir; `group_players` DELETE politikası sadece misafir kayıtları içindir. Tek başına kalan kaptan `delete_group` ile grubu/takımı siler (adını yazarak onaylar; maçlar da gider, kişinin
-rating'i `recomputePlayers` ile yeniden hesaplanır); doğrudan `groups` silme politikası kaldırıldı. UI: `/g/[id]/players` sayfasının altında "Gruptan/Takımdan ayrıl". Bilinen küçük boşluk: ayrılan takım üyesi aynı takımın ilanına
-`apply_listing` ile ödünç başvuramaz ("bu takımın oyuncususun" kontrolü `left_at`'i saymıyor). Test: `db-checks/leave-group.mjs`, `e2e/leave.mjs`.
+rating'i `recomputePlayers` ile yeniden hesaplanır); doğrudan `groups` silme politikası kaldırıldı. UI: `/g/[id]/players` sayfasının altında "Gruptan/Takımdan ayrıl". Test: `db-checks/leave-group.mjs`, `e2e/leave.mjs`.

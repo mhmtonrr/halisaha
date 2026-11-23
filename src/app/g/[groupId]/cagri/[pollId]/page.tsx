@@ -2,24 +2,18 @@ import { LiveRefresh } from "@/components/LiveRefresh";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
-import {
-  approveFirstResponders,
-  closePoll,
-  deletePoll,
-  respondPoll,
-  setPollStatus,
-  togglePollApproval,
-} from "@/lib/actions";
-import { formatDate, getGroupPlayers, type Position } from "@/lib/data";
+import { acceptResponder, closePoll, rejectResponder, respondPoll, updateGatherPoll } from "@/lib/call-actions";
+import { formatDate, POSITIONS, POSITION_NAME, toLocalInput } from "@/lib/data";
+import { callWhen, decisionDue, defaultSelection, isoToTime, pendingApplicants, reserveOrder, type Answer, type Responder } from "@/lib/call-rules";
+import { loadCall, myManagedTeams } from "@/lib/calls-data";
 import { SendInviteLink } from "@/components/SendInviteLink";
-import { Badge, Button, Card, ErrorNote, Header, LinkButton, SectionTitle, cx } from "@/components/ui";
-import { OvrBadge, PositionChip } from "@/components/PlayerCard";
+import { Badge, Card, ErrorNote, Header, Input, LinkButton, SectionTitle, cx } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 import { PushPrompt } from "@/components/PushControls";
-import { settlePoll } from "@/lib/polls";
-import { pollProgress } from "@/lib/poll-rules";
+import { CallFields } from "../CallFields";
+import { FinalizeForm } from "./FinalizeForm";
+import { ResponderRow } from "./ResponderRow";
 
-type Answer = "yes" | "maybe" | "no";
 const ANSWERS: { value: Answer; label: string; icon: string; active: string }[] = [
   { value: "yes", label: "Geliyorum", icon: "✅", active: "bg-accent text-pitch-950 border-accent" },
   { value: "maybe", label: "Belki", icon: "🤔", active: "bg-amber-400 text-pitch-950 border-amber-400" },
@@ -35,216 +29,246 @@ function Hidden({ groupId, pollId }: { groupId: string; pollId: string }) {
   );
 }
 
-export default async function PollPage({
+function myStatusText(r: Responder | undefined, reserveNo: number) {
+  if (!r) return null;
+  if (r.status === "selected") return "✓ Kadrodasın";
+  if (r.status === "reserve") return `Yedektesin (sıran: ${reserveNo}). Yer açılırsa organizatör seni kadroya alabilir.`;
+  if (r.status === "rejected") return "Organizatör bu maç için başka oyuncu seçti.";
+  if (r.status === "withdrawn") return "Kadrodan çıktın.";
+  if (r.answer === "yes") return "Organizatörün kararını bekliyorsun.";
+  return null;
+}
+
+export default async function CallPage({
   params,
   searchParams,
 }: {
   params: Promise<{ groupId: string; pollId: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; kesinlestir?: string; duzenle?: string }>;
 }) {
   const { groupId, pollId } = await params;
-  const { error } = await searchParams;
+  const { error, kesinlestir, duzenle } = await searchParams;
   const { supabase, user } = await requireUser();
-  // Süresi dolmuşsa veya kontenjan dolduysa üye çağrısı bu ziyarette maça dönüşür / iptal olur
-  await settlePoll(pollId);
-
-  const [{ data: poll }, players, { data: canManage }] = await Promise.all([
-    supabase
-      .from("match_polls")
-      .select("id, created_by, auto_match, team_size, starts_at, venue, capacity, deadline, note, status, match_id, poll_responses(player_id, answer, approved, responded_at)")
-      .eq("id", pollId)
-      .eq("group_id", groupId)
-      .maybeSingle(),
-    getGroupPlayers(supabase, groupId),
-    supabase.rpc("can_manage_poll", { p_poll_id: pollId }),
+  const [loaded, { data: group }, { data: isMember }] = await Promise.all([
+    loadCall(supabase, pollId, groupId),
+    supabase.from("groups").select("name, kind").eq("id", groupId).maybeSingle(),
+    supabase.rpc("is_group_member", { p_group_id: groupId }),
   ]);
-  if (!poll) notFound();
+  if (!loaded || !group) notFound();
+  const { call, responders, canManage, match } = loaded;
+  const isFill = call.purpose === "fill";
+  const isCommunity = group.kind === "community";
 
-  const me = players.find((p) => p.user_id === user.id && !p.is_loan);
-  const byId = new Map(players.map((p) => [p.id, p]));
-  const responses = [...poll.poll_responses].sort((a, b) => a.responded_at.localeCompare(b.responded_at));
-  const mine = responses.find((r) => r.player_id === me?.id);
-  const yes = responses.filter((r) => r.answer === "yes");
-  const maybe = responses.filter((r) => r.answer === "maybe");
-  const no = responses.filter((r) => r.answer === "no");
-  const answered = new Set(responses.map((r) => r.player_id));
-  const silent = players.filter((p) => p.user_id && !p.is_loan && !answered.has(p.id));
-  const approvedCount = yes.filter((r) => r.approved).length;
+  const yes = responders.filter((r) => r.answer === "yes");
+  const maybe = responders.filter((r) => r.answer === "maybe");
+  const no = responders.filter((r) => r.answer === "no");
+  const selected = responders.filter((r) => r.status === "selected");
+  const reserves = reserveOrder(responders);
+  const pending = pendingApplicants(responders);
+  const mine = responders.find((r) => r.user_id === user.id);
+  const matchPlanned = match?.status === "planned";
+  const canRespond = !!isMember && (call.status === "open" || ((call.status === "converted" || call.status === "filled") && matchPlanned));
+  const due = canManage && decisionDue(call);
 
-  const deadlinePassed = poll.deadline ? new Date(poll.deadline) < new Date() : false;
-  const open = poll.status === "open" && !deadlinePassed;
-  const pct = Math.min(100, (yes.length / poll.capacity) * 100);
-  const auto = poll.auto_match;
-  const progress = pollProgress(yes.length, poll.capacity);
-  const isCreator = poll.created_by === user.id;
-
-  const Person = ({ id, children }: { id: string; children?: React.ReactNode }) => {
-    const p = byId.get(id);
-    if (!p) return null;
+  if (canManage && kesinlestir && call.purpose === "gather" && call.status === "open") {
+    const teams = isCommunity ? await myManagedTeams(supabase, user.id) : [];
+    const candidates = [...yes, ...maybe].filter((r) => r.status !== "rejected");
     return (
-      <li className="flex items-center gap-3 px-4 py-2.5">
-        <OvrBadge overall={p.overall} className="h-8 w-8 text-xs" />
-        <span className="flex min-w-0 flex-1 items-center gap-1.5">
-          <span className="truncate">{p.display_name}</span>
-          <PositionChip position={p.position as Position | null} />
-        </span>
-        {children}
-      </li>
+      <main>
+        <Header title="Kadroyu kesinleştir" back={`/g/${groupId}/cagri/${pollId}`} />
+        <ErrorNote message={error} />
+        <p className="mb-4 text-sm text-muted">{callWhen(call)} · {yes.length} geliyor, {maybe.length} belki</p>
+        <FinalizeForm
+          groupId={groupId}
+          call={call}
+          candidates={candidates}
+          preselected={new Set(defaultSelection(responders, call.capacity))}
+          isCommunity={isCommunity}
+          teams={teams}
+        />
+      </main>
     );
-  };
+  }
+
+  const statusBadge =
+    call.status === "converted" ? <Badge tone="accent">Maç kuruldu</Badge>
+    : call.status === "filled" ? <Badge tone="accent">Doldu</Badge>
+    : call.status === "open" ? <Badge tone="warn">Açık</Badge>
+    : <Badge>Kapandı</Badge>;
 
   return (
     <main>
       <LiveRefresh
-        // Üye çağrısında süre bitimini yakalamak için görünürken 30 sn'de bir tazele (sayfa açılışı çağrıyı değerlendirir)
-        pollMs={auto && open ? 30000 : undefined}
         watches={[
           { table: "match_polls", filter: `id=eq.${pollId}` },
           { table: "poll_responses", filter: `poll_id=eq.${pollId}` },
         ]}
       />
-      <Header
-        title="Maç çağrısı"
-        back={`/g/${groupId}`}
-        right={
-          poll.status === "converted" ? (
-            <Badge tone="accent">Maç oluştu</Badge>
-          ) : open ? (
-            <Badge tone="warn">Açık</Badge>
-          ) : (
-            <Badge>Kapandı</Badge>
-          )
-        }
-      />
+      <Header title={isFill ? "Adam aranıyor" : "Kimler gelir?"} back={`/g/${groupId}`} right={statusBadge} />
       <ErrorNote message={error} />
-      {canManage && open && <SendInviteLink tur="poll" refId={pollId} className="mb-4" />}
+      {canManage && (call.status === "open" || (call.status === "converted" && matchPlanned)) && (
+        <SendInviteLink tur="poll" refId={pollId} className="mb-4" />
+      )}
 
       <Card className="mb-4">
-        <div className="text-2xl font-black">{formatDate(poll.starts_at)}</div>
-        {poll.venue && <div className="mt-0.5 text-muted">📍 {poll.venue}</div>}
-        {poll.note && <p className="mt-3 rounded-lg bg-pitch-950 p-3 text-sm">{poll.note}</p>}
-        <div className="mt-4 flex justify-between text-sm">
-          <span>
-            <b className="text-accent">{yes.length}</b>
-            <span className="text-muted"> / {poll.capacity} geliyor</span>
-            {maybe.length > 0 && <span className="text-muted"> · {maybe.length} belki</span>}
-          </span>
-          {poll.deadline && (
-            <span className="text-xs text-muted">Son yanıt: {formatDate(poll.deadline)}</span>
-          )}
+        <div className="text-2xl font-black">{callWhen(call)}</div>
+        <div className="mt-0.5 text-sm text-muted">
+          {[call.venue && `📍 ${call.venue}`, call.team_size && `${call.team_size}v${call.team_size}`].filter(Boolean).join(" · ")}
         </div>
-        <div className="mt-2 h-2 overflow-hidden rounded-full bg-pitch-950">
-          <div className={cx("h-full rounded-full", yes.length >= poll.capacity ? "bg-gold-2" : "bg-accent")} style={{ width: `${pct}%` }} />
-        </div>
-        {yes.length > poll.capacity && (
-          <p className="mt-2 text-xs text-amber-300">Kontenjan aşıldı: ilk {poll.capacity} kişi öncelikli, gerisi yedek.</p>
-        )}
-        {auto && poll.status === "open" && (
-          <div className="mt-3 space-y-1 rounded-lg bg-pitch-950 p-3 text-xs text-muted">
-            <p>
-              <b className="text-white">Otomatik maç:</b> {poll.team_size ? `${poll.team_size}v${poll.team_size}. ` : ""}Kontenjan ({poll.capacity})
-              dolunca maç hemen kurulur, takımlar dengeli bölünür.
-            </p>
-            <p>
-              Son yanıt süresi bitince en az <b className="text-white">{progress.need}</b> kişi gelirse eksik kadroyla yine kurulur; gelmezse çağrı iptal olur.{" "}
-              {progress.enough ? (
-                <span className="text-accent">Kurulmak için yeterli kişi var ✓</span>
-              ) : (
-                <span className="text-amber-300">Kurulması için {progress.missingForMin} kişi daha gerekli.</span>
-              )}
-            </p>
+        {isFill && (
+          <div className="mt-2 text-sm">
+            <b className="text-accent">{call.capacity} oyuncu</b> aranıyor
+            {call.positions.length > 0 && <> · {call.positions.map((p) => POSITION_NAME[p as keyof typeof POSITION_NAME] ?? p).join(", ")}</>}
+            {match && (
+              <>
+                {" "}
+                ·{" "}
+                <Link href={`/g/${match.group_id}/m/${match.id}`} className="underline">
+                  {match.group_name}
+                  {match.opponent_name ? ` vs ${match.opponent_name}` : ""}
+                </Link>
+              </>
+            )}
           </div>
         )}
-        {auto && poll.status === "closed" && !poll.match_id && (
-          <p className="mt-3 rounded-lg bg-red-950/50 p-3 text-xs text-red-300">
-            Çağrı kapandı: maç kurulmadı{deadlinePassed && !progress.enough ? " (yeterli kişi toplanamadı)" : ""}.
-          </p>
-        )}
+        {call.note && <p className="mt-3 whitespace-pre-line rounded-lg bg-pitch-950 p-3 text-sm">{call.note}</p>}
+        <div className="mt-3 flex flex-wrap justify-between gap-1 text-sm">
+          <span>
+            <b className="text-accent">{yes.length}</b>
+            <span className="text-muted">
+              {" "}
+              geliyor{call.capacity && !isFill ? ` / ${call.capacity}` : ""}
+              {maybe.length > 0 && ` · ${maybe.length} belki`}
+              {isFill && ` · ${selected.length}/${call.capacity} alındı`}
+            </span>
+          </span>
+          {call.decide_by && call.status === "open" && !isFill && (
+            <span className="text-xs text-muted">Kadro kararı: {formatDate(call.decide_by)}</span>
+          )}
+        </div>
       </Card>
 
-      {poll.status === "converted" && poll.match_id && (
-        <LinkButton href={`/g/${groupId}/m/${poll.match_id}`} className="mb-4 w-full">
+      {due && (
+        <p className="mb-4 rounded-xl border border-amber-400/50 bg-amber-400/10 p-3 text-sm text-amber-200">
+          ⏰ Kadro kararı zamanı geldi. Kadroyu kesinleştir veya çağrıyı iptal et.
+        </p>
+      )}
+
+      {match && (call.status === "converted" || isFill) && (
+        <LinkButton href={`/g/${match.group_id}/m/${match.id}`} variant={isFill ? "secondary" : "primary"} className="mb-4 w-full">
           Maça git ›
         </LinkButton>
       )}
 
-      {me && open && (
-        <>
-          <div className="mb-1 text-center text-sm text-muted">{mine ? "Yanıtın (değiştirebilirsin)" : "Geliyor musun?"}</div>
-          <div className="grid grid-cols-3 gap-2">
-            {ANSWERS.map((a) => (
-              <form key={a.value} action={respondPoll}>
-                <Hidden groupId={groupId} pollId={pollId} />
-                <input type="hidden" name="answer" value={a.value} />
-                <button
-                  className={cx(
-                    "flex min-h-14 w-full flex-col items-center justify-center rounded-xl border text-sm font-semibold transition",
-                    mine?.answer === a.value ? a.active : "border-line bg-pitch-900 hover:bg-pitch-800",
-                  )}
-                >
-                  <span>{a.icon}</span>
-                  {a.label}
-                </button>
-              </form>
+      {canRespond && (
+        <form action={respondPoll} className="mb-2 space-y-2">
+          <Hidden groupId={groupId} pollId={pollId} />
+          <div className="text-center text-sm text-muted">{mine ? "Yanıtın (değiştirebilirsin)" : isFill ? "Gelebilir misin?" : "Geliyor musun?"}</div>
+          <div className="grid grid-cols-2 gap-2">
+            <select name="position" defaultValue={mine?.chosen_position ?? ""} className="min-h-11 rounded-xl border border-line bg-pitch-950 px-3 text-sm" aria-label="Mevki">
+              <option value="">Mevki (profilimdeki)</option>
+              {POSITIONS.map((p) => (
+                <option key={p} value={p}>
+                  {POSITION_NAME[p]}
+                </option>
+              ))}
+            </select>
+            <Input name="note" maxLength={200} defaultValue={mine?.note ?? ""} placeholder="Not (isteğe bağlı)" />
+          </div>
+          <div className={cx("grid gap-2", isFill ? "grid-cols-2" : "grid-cols-3")}>
+            {ANSWERS.filter((a) => !isFill || a.value !== "maybe").map((a) => (
+              <button
+                key={a.value}
+                name="answer"
+                value={a.value}
+                className={cx(
+                  "flex min-h-14 w-full flex-col items-center justify-center rounded-xl border text-sm font-semibold transition",
+                  mine?.answer === a.value ? a.active : "border-line bg-pitch-900 hover:bg-pitch-800",
+                )}
+              >
+                <span>{a.icon}</span>
+                {a.label}
+              </button>
             ))}
           </div>
-          {mine?.answer === "yes" && (
-            <p className="mt-2 text-center text-xs text-muted">
-              {auto
-                ? yes.findIndex((r) => r.player_id === me.id) >= poll.capacity
-                  ? "Şu an yedektesin; biri vazgeçerse sıran gelir"
-                  : "✓ Kadrodasın"
-                : mine.approved
-                  ? "✓ Kadroya onaylandın"
-                  : "Yetkilinin onayını bekliyorsun"}
-              {!auto && !mine.approved && yes.findIndex((r) => r.player_id === me.id) >= poll.capacity && " · şu an yedektesin"}
-            </p>
+          {myStatusText(mine, reserves.findIndex((r) => r.user_id === user.id) + 1) && (
+            <p className="text-center text-xs text-muted">{myStatusText(mine, reserves.findIndex((r) => r.user_id === user.id) + 1)}</p>
           )}
-        </>
-      )}
-
-      {me && mine && open && <PushPrompt reason="Maç kurulunca veya çağrı değişince haber verelim mi?" />}
-
-      {auto && poll.status === "open" && canManage && (
-        <form action={closePoll} className="mt-4 text-center">
-          <Hidden groupId={groupId} pollId={pollId} />
-          <SubmitButton variant="secondary" className="w-full" pendingLabel="İptal ediliyor…">
-            Çağrıyı iptal et
-          </SubmitButton>
         </form>
       )}
+      {canRespond && mine && <PushPrompt reason="Kadro kesinleşince veya çağrı değişince haber verelim mi?" />}
 
-      {canManage && !auto && poll.status !== "converted" && (
+      {canManage && call.purpose === "gather" && call.status === "open" && (
         <Card className="mt-4 space-y-2 border-accent/30">
-          <div className="text-sm font-semibold">Yetkili işlemleri</div>
-          <p className="text-xs text-muted">
-            {approvedCount} oyuncu onaylı. Onayladıkların maç oluştururken seçili gelir; misafir oyuncuyu maç ekranından ekleyebilirsin.
-          </p>
+          <div className="text-sm font-semibold">Organizatör</div>
+          <p className="text-xs text-muted">Bilgiler netleştikçe düzenle; hazır olunca kadroyu kesinleştir. Gün geçerse çağrı kapanır.</p>
           <div className="grid grid-cols-2 gap-2">
-            <form action={approveFirstResponders}>
-              <Hidden groupId={groupId} pollId={pollId} />
-              <Button variant="secondary" className="w-full" disabled={yes.length === 0}>
-                İlk {Math.min(poll.capacity, yes.length)} kişiyi onayla
-              </Button>
-            </form>
-            <LinkButton href={`/g/${groupId}/matches/new?cagri=${pollId}`} className={approvedCount < 2 ? "pointer-events-none opacity-50" : ""}>
-              Maçı oluştur ›
+            <LinkButton href={`/g/${groupId}/cagri/${pollId}?kesinlestir=1`} className={cx(yes.length + maybe.length < 2 && "pointer-events-none opacity-50")}>
+              Kadroyu kesinleştir ›
+            </LinkButton>
+            <LinkButton href={`/g/${groupId}/cagri/${pollId}?duzenle=1`} variant="secondary">
+              Düzenle
             </LinkButton>
           </div>
-          <div className="flex justify-between pt-1">
-            <form action={setPollStatus}>
+          {duzenle && (
+            <form action={updateGatherPoll} className="space-y-3 pt-2">
               <Hidden groupId={groupId} pollId={pollId} />
-              <input type="hidden" name="status" value={poll.status === "open" ? "closed" : "open"} />
-              <button className="text-xs text-muted hover:text-white">
-                {poll.status === "open" ? "Yanıtlara kapat" : "Yanıtlara tekrar aç"}
-              </button>
+              <input type="hidden" name="day" value={call.play_on} />
+              <CallFields
+                time={isoToTime(call.starts_at)}
+                size={call.team_size}
+                venue={call.venue ?? ""}
+                decideBy={call.decide_by ? toLocalInput(call.decide_by) : ""}
+                note={call.note ?? ""}
+              />
+              <SubmitButton className="w-full" pendingLabel="Kaydediliyor…">
+                Kaydet ve yanıt verenlere haber ver
+              </SubmitButton>
             </form>
-            <form action={deletePoll}>
-              <Hidden groupId={groupId} pollId={pollId} />
-              <button className="text-xs text-muted hover:text-red-300">Çağrıyı sil</button>
-            </form>
-          </div>
+          )}
+          <form action={closePoll} className="text-right">
+            <Hidden groupId={groupId} pollId={pollId} />
+            <button className="text-xs text-muted hover:text-red-300">Çağrıyı iptal et</button>
+          </form>
         </Card>
+      )}
+
+      {canManage && ((isFill && call.status === "open") || (call.status === "converted" && matchPlanned)) && (
+        <>
+          <SectionTitle>{isFill ? `Başvurular · ${pending.length}` : `Yedekler · ${reserves.length}`}</SectionTitle>
+          {(isFill ? pending : reserves).length === 0 ? (
+            <Card className="text-center text-sm text-muted">{isFill ? "Henüz başvuru yok." : "Yedek yok."}</Card>
+          ) : (
+            <Card className="p-0">
+              <ul className="divide-y divide-line">
+                {(isFill ? pending : reserves).map((r) => (
+                  <ResponderRow key={r.user_id} r={r}>
+                    <form action={acceptResponder}>
+                      <Hidden groupId={groupId} pollId={pollId} />
+                      <input type="hidden" name="userId" value={r.user_id} />
+                      <SubmitButton className="min-h-9 px-3 text-xs" pendingLabel="…">
+                        Kadroya al
+                      </SubmitButton>
+                    </form>
+                    <form action={rejectResponder}>
+                      <Hidden groupId={groupId} pollId={pollId} />
+                      <input type="hidden" name="userId" value={r.user_id} />
+                      <button className="rounded-lg px-2 py-1 text-xs text-muted hover:text-red-300" aria-label={`${r.display_name} alınmasın`}>
+                        ✕
+                      </button>
+                    </form>
+                  </ResponderRow>
+                ))}
+              </ul>
+            </Card>
+          )}
+          {isFill && (
+            <form action={closePoll} className="mt-2 text-right">
+              <Hidden groupId={groupId} pollId={pollId} />
+              <button className="text-xs text-muted hover:text-red-300">Aramayı durdur</button>
+            </form>
+          )}
+        </>
       )}
 
       <SectionTitle>Geliyor · {yes.length}</SectionTitle>
@@ -253,37 +277,26 @@ export default async function PollPage({
       ) : (
         <Card className="p-0">
           <ol className="divide-y divide-line">
-            {yes.map((r, i) => (
-              <Person key={r.player_id} id={r.player_id}>
-                {i >= poll.capacity && <Badge>Yedek</Badge>}
-                {canManage && !auto && poll.status !== "converted" ? (
-                  <form action={togglePollApproval}>
-                    <Hidden groupId={groupId} pollId={pollId} />
-                    <input type="hidden" name="playerId" value={r.player_id} />
-                    <input type="hidden" name="approved" value={String(!r.approved)} />
-                    <button
-                      className={cx(
-                        "rounded-lg px-2 py-1 text-xs font-semibold",
-                        r.approved ? "bg-accent/20 text-accent" : "border border-line text-muted hover:text-white",
-                      )}
-                    >
-                      {r.approved ? "✓ Onaylı" : "Onayla"}
-                    </button>
-                  </form>
-                ) : (
-                  r.approved && <Badge tone="accent">✓ Onaylı</Badge>
-                )}
-              </Person>
+            {yes.map((r) => (
+              <ResponderRow key={r.user_id} r={r}>
+                {r.status === "selected" && <Badge tone="accent">Kadroda</Badge>}
+                {r.status === "reserve" && <Badge>Yedek</Badge>}
+                {r.status === "rejected" && <span className="text-xs text-muted">alınmadı</span>}
+                {r.status === "withdrawn" && <span className="text-xs text-muted">çekildi</span>}
+              </ResponderRow>
             ))}
           </ol>
         </Card>
       )}
-
       {maybe.length > 0 && (
         <>
           <SectionTitle>Belki · {maybe.length}</SectionTitle>
           <Card className="p-0">
-            <ul className="divide-y divide-line">{maybe.map((r) => <Person key={r.player_id} id={r.player_id} />)}</ul>
+            <ul className="divide-y divide-line">
+              {maybe.map((r) => (
+                <ResponderRow key={r.user_id} r={r} />
+              ))}
+            </ul>
           </Card>
         </>
       )}
@@ -291,19 +304,17 @@ export default async function PollPage({
         <>
           <SectionTitle>Gelemiyor · {no.length}</SectionTitle>
           <Card className="p-0 opacity-70">
-            <ul className="divide-y divide-line">{no.map((r) => <Person key={r.player_id} id={r.player_id} />)}</ul>
+            <ul className="divide-y divide-line">
+              {no.map((r) => (
+                <ResponderRow key={r.user_id} r={r} />
+              ))}
+            </ul>
           </Card>
-        </>
-      )}
-      {silent.length > 0 && (
-        <>
-          <SectionTitle>Yanıt vermedi · {silent.length}</SectionTitle>
-          <p className="text-sm text-muted">{silent.map((p) => p.display_name).join(", ")}</p>
         </>
       )}
       <p className="mt-6 text-center text-xs text-muted">
         <Link href={`/g/${groupId}`} className="underline">
-          Gruba dön
+          {group.name} sayfasına dön
         </Link>
       </p>
     </main>

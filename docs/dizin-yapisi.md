@@ -8,9 +8,10 @@ src/lib/teams.ts         Dengeli takım kurma (saf, testli)
 src/lib/attributes.ts    Kart özellikleri FRM/İST/GOL|KRT/AST/GAL/MVP (saf, testli)
 src/lib/teams-data.ts    Takım rating'i (en iyi 7), rol etiketleri, takım/üyelik sorguları
 src/lib/formations.ts    Sabit dizilişler (5-11 kişilik, slot koordinatları), otomatik yerleştirme (saf, testli)
-src/lib/poll-rules.ts    Üye çağrısı kuralları: dolunca kur / süre bitince %70 / yedek sırası (saf, testli)
-src/lib/polls.ts         Çağrıyı değerlendirip maça dönüştürür veya iptal eder (service role, atomik talep)
-src/lib/listings-data.ts Oyuncu ilanı sorguları (açık ilanlar, başvuranlar, başvurularım)
+src/lib/call-rules.ts    Birleşik çağrı: varsayılan seçim, yedek/başvuru sırası, karar zamanı, gün/saat metinleri (saf, testli)
+src/lib/call-actions.ts  Çağrı Server Action'ları: aç/düzenle/yanıtla/kesinleştir/kadroya al/adam ara + bildirimler
+src/lib/calls-data.ts    Çağrı sorguları (çağrı + yanıtlayanlar, gruptaki/maçtaki çağrılar, yönettiğim takım/topluluklar)
+src/lib/calls-notify.ts  Kadroda yer açılınca organizatöre bildirim (service role)
 src/lib/reliability.ts   Güvenilirlik: oynadığı / (oynadığı + gelmediği) (saf, testli)
 src/lib/notify-rules.ts  Bildirim kuralları: kategori/tercih, alıcı planı, sohbet birleştirme, metinler, push sonucu (saf, testli)
 src/lib/notify.ts        notify(): kutuya yaz + web push gönder (service role; asla fırlatmaz); later(): yanıttan sonra çalıştır
@@ -33,7 +34,7 @@ src/lib/featured-data.ts  Ana sayfa "öne çıkanlar" (bölge başına 5 dk `uns
 src/lib/challenges-data.ts  Maç teklifleri sorguları (gelen/giden, bekleyen sayısı)
 src/lib/data.ts          Ortak sorgular, mevki/ayak sabitleri, tarih yardımcıları (TR saati)
 src/lib/regions.ts       81 il + src/data/districts.json (973 ilçe, iki kaynakla doğrulandı)
-src/lib/actions.ts       Tüm Server Action'lar (yetkiyi RLS yapar; burada sadece çağrı + yönlendirme)
+src/lib/actions.ts       Server Action'lar (çağrılar hariç: call-actions.ts) (yetkiyi RLS yapar; burada sadece çağrı + yönlendirme)
 src/lib/finalize.ts      Oylama kapanışı, hesap bazlı genel rating hesabı ve yazımı (service role)
 src/components/LiveRefresh.tsx  Canlı güncelleme: Realtime dinler, router.refresh() yapar (filtre yardımcısı src/lib/live.ts)
 src/components/SubmitButton.tsx  Form gönderilirken anında "…" durumu (useFormStatus)

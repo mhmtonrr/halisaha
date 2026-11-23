@@ -1,8 +1,10 @@
 import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
-import { createPoll } from "@/lib/actions";
-import { defaultKickoff } from "@/lib/data";
-import { Button, Card, ErrorNote, Header, Input, Label } from "@/components/ui";
+import { createGatherPoll } from "@/lib/call-actions";
+import { istanbulDate } from "@/lib/call-rules";
+import { Card, ErrorNote, Header, Input, Label } from "@/components/ui";
+import { SubmitButton } from "@/components/SubmitButton";
+import { CallFields } from "../CallFields";
 
 export default async function NewPollPage({
   params,
@@ -21,47 +23,35 @@ export default async function NewPollPage({
   if (!group) notFound();
   // Çağrıyı sadece kurucu/kaptan, yetkili ve organizatör açar (0034); üye açamaz
   if (!canCreate) redirect(`/g/${groupId}`);
+  const today = istanbulDate();
+  const max = istanbulDate(Date.now() + 30 * 86400_000);
 
   return (
     <main>
-      <Header title="Maç çağrısı aç" back={`/g/${groupId}`} />
+      <Header title="Kimler gelir?" back={`/g/${groupId}`} />
       <p className="mb-4 text-sm text-muted">
-        {group.name} üyelerine &quot;Geliyor musun?&quot; diye sor. Yanıtlara göre kadroyu onayla, tek tıkla maçı oluştur.
+        {group.name} üyelerine sor. Sadece gün yeterli; saat, saha ve rakip netleşince düzenlersin. Kadroyu sen kesinleştirirsin.
       </p>
       <ErrorNote message={error} />
-      <form action={createPoll} className="space-y-4">
+      <form action={createGatherPoll} className="space-y-4">
         <input type="hidden" name="groupId" value={groupId} />
         <Card className="space-y-4">
           <label className="block">
-            <Label>Maç zamanı</Label>
-            <Input type="datetime-local" name="startsAt" defaultValue={defaultKickoff()} required />
+            <Label>Gün</Label>
+            <Input type="date" name="day" min={today} max={max} defaultValue={today} required />
           </label>
-          <label className="block">
-            <Label>Saha</Label>
-            <Input name="venue" maxLength={80} placeholder="Örn. Petroller Halısaha" />
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <Label>Kontenjan</Label>
-              <Input type="number" name="capacity" min={2} max={40} defaultValue={14} required inputMode="numeric" />
-            </label>
-            <label className="block">
-              <Label hint="isteğe bağlı">Son yanıt</Label>
-              <Input type="datetime-local" name="deadline" />
-            </label>
-          </div>
-          <label className="block">
-            <Label hint="isteğe bağlı">Not</Label>
-            <textarea
-              name="note"
-              maxLength={300}
-              rows={2}
-              placeholder="Örn. Kişi başı 150 TL. Kaleciye ihtiyacımız var!"
-              className="w-full rounded-xl border border-line bg-pitch-950 p-3 text-sm outline-none placeholder:text-muted/60 focus:border-accent"
-            />
-          </label>
+          <CallFields />
         </Card>
-        <Button className="w-full">Çağrıyı aç</Button>
+        <Card className="space-y-1.5 text-xs text-muted">
+          <div className="font-semibold text-white">Nasıl işler?</div>
+          <p>• Üyeler &quot;Geliyorum / Belki / Gelemem&quot; der, istersen mevki ve not bırakır.</p>
+          <p>• Kadroyu sen kesinleştirirsin: liste ilk gelenler işaretli gelir, değiştirebilirsin. Seçilmeyenler yedek olur.</p>
+          <p>• Kesinleştirirken &quot;kendi aramızda&quot; ya da takımınla &quot;rakibe karşı&quot; seçersin.</p>
+          <p>• Gün geçerse çağrı kendiliğinden kapanır. Aynı anda en fazla 3 açık çağrın olabilir.</p>
+        </Card>
+        <SubmitButton className="w-full" pendingLabel="Çağrı açılıyor…">
+          Çağrıyı aç
+        </SubmitButton>
       </form>
     </main>
   );

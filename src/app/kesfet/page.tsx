@@ -3,9 +3,6 @@ import { requireUser } from "@/lib/supabase/server";
 import { canonicalDistrict, isProvince } from "@/lib/regions";
 import { RegionSelect } from "@/components/RegionSelect";
 import { findTeams } from "@/lib/teams-data";
-import { getOpenListings } from "@/lib/listings-data";
-import { formatDate } from "@/lib/data";
-import { LiveRefresh } from "@/components/LiveRefresh";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadCandidates } from "@/lib/players-data";
 import { parseFilter, searchCandidates } from "@/lib/player-search";
@@ -29,19 +26,16 @@ export default async function DiscoverPage({
   const district = canonicalDistrict(city, sp.ilce) ?? undefined;
   if (players) return <PlayersTab sp={sp} userId={user.id} city={city} district={district} />;
 
-  const [allTeams, allListings, { data: teamBlocks }] = await Promise.all([
+  const [allTeams, { data: teamBlocks }] = await Promise.all([
     findTeams(supabase, { city: city || undefined, district, q: sp.q, limit: 100 }),
-    getOpenListings(supabase, { city: city || undefined, district, limit: 20 }),
     supabase.from("user_blocks").select("blocked_group_id").not("blocked_group_id", "is", null),
   ]);
-  // Engellediğim takımlar listede ve ilanlarda görünmez
+  // Engellediğim takımlar listede görünmez
   const blockedTeams = new Set((teamBlocks ?? []).map((b) => b.blocked_group_id as string));
   const teams = allTeams.filter((t) => !blockedTeams.has(t.id));
-  const listings = allListings.filter((l) => !blockedTeams.has(l.team.id));
 
   return (
     <main>
-      <LiveRefresh watches={[{ table: "player_listings" }]} />
       <Header title="Keşfet" />
       <ErrorNote message={sp.error} />
       <Tabs active="takim" city={city} district={district} />
@@ -63,32 +57,6 @@ export default async function DiscoverPage({
           <Button variant="secondary">Ara</Button>
         </div>
       </form>
-
-      {listings.length > 0 && (
-        <>
-          <SectionTitle>🔎 Oyuncu arayan takımlar · {listings.length}</SectionTitle>
-          <div className="space-y-2">
-            {listings.map((l) => (
-              <Link key={l.id} href={`/ilan/${l.id}`}>
-                <Card className="flex items-center gap-3 border-amber-400/30 transition hover:border-amber-400">
-                  <TeamBadge name={l.team.name} color={l.team.color} size="sm" />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-semibold">
-                      {l.team.name} · {l.needed} oyuncu
-                    </div>
-                    <div className="truncate text-xs text-muted">
-                      {formatDate(l.playedAt)}
-                      {l.positions.length ? ` · ${l.positions.join("/")}` : ""}
-                      {l.minOverall ? ` · min ${l.minOverall}` : ""}
-                    </div>
-                  </div>
-                  <span className="text-amber-300">›</span>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        </>
-      )}
 
       <SectionTitle>
         {city ? `${city}${district ? ` · ${district}` : ""}` : "Türkiye"} takımları · {teams.length}

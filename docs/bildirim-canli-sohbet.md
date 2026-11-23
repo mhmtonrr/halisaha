@@ -15,12 +15,12 @@ eylem durum döndürür (`useActionState`, bkz. `GuestForm`); `revalidatePath` s
 
 **Bildirimler (migration 0017)**: her olay `notify()` ile önce **bildirim kutusuna** (`notifications`, `/bildirimler`, nav rozeti Realtime ile canlı)
 yazılır, sonra (VAPID anahtarı ve abonelik varsa) **web push** gönderilir; push izni olmayan/iPhone'da ana ekrana eklememiş kullanıcı da kutuda görür.
-Olaylar: oylama açıldı (`submitResult`/`settle_linked_match` sonrası, iki takım), oylama hatırlatması (günlük cron), çağrı açıldı/maça dönüştü/iptal,
-maç kuruldu, teklif geldi/yanıtlandı, ilana başvuru/başvuru sonucu, sohbet mesajı. Olayı yapan kendi işlemi için bildirim almaz. Kategori tercihi
+Olaylar: oylama açıldı (`submitResult`/`settle_linked_match` sonrası, iki takım), oylama hatırlatması (günlük cron), çağrı/adam arama açıldı, çağrı güncellendi,
+kadrodasın/yedektesin/alınmadın, adam aramaya başvuru ve yer açıldı (organizatöre), maç kuruldu, teklif geldi/yanıtlandı, sohbet mesajı. Olayı yapan kendi işlemi için bildirim almaz. Kategori tercihi
 (`notification_prefs`: votes, matches, offers, chat; satır yoksa hepsi açık) kapalıysa ne kutuya ne push'a yazılır. **Sohbet**: bir kullanıcıya aynı
 gruptan 10 dakikada en fazla 1 bildirim (etiket `chat:<grup>`; mesaj doğrudan DB'ye yazıldığından gönderenin tarayıcısı `notifyChatMessage` ile bildirir,
 sunucu mesajın çağıranın ve <60 sn olduğunu doğrular). Gönderim yanıttan sonra (`later` = `after`) yapılır; hata asıl işlemi bozmaz. Ölü abonelik (404/410)
-silinir. İzin kartı (`PushPrompt`) anlamlı anda çıkar: oy verince, çağrıya yanıt verince, ilana başvurunca; 14 gün "şimdi değil"; iPhone'da önce ana ekrana ekleme anlatılır.
+silinir. İzin kartı (`PushPrompt`) anlamlı anda çıkar: oy verince, çağrıya yanıt verince; 14 gün "şimdi değil"; iPhone'da önce ana ekrana ekleme anlatılır.
 **Ortam değişkenleri (Vercel; yoksa sadece uygulama içi kutu çalışır)**: `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` (üretmek için
 `npx web-push generate-vapid-keys`; özel anahtarı asla commit etme/yazdırma), isteğe bağlı `VAPID_SUBJECT` (varsayılan site adresi; kişisel e-posta koyma),
 `CRON_SECRET` (hatırlatma cron'u için; yoksa `/api/cron/vote-reminders` kapalıdır, Vercel Cron `vercel.json` ile günde 1 kez 18:00 TR çağırır).
@@ -74,8 +74,8 @@ Geçiş efekti: `app/template.tsx` (160 ms solma, **transform yok** — sabit ko
 Sosyal arkadaş satırında kaptan/yetkili isen 🛡️ kısayolu `/oyuncu/[id]#davet` (davet kutusuna) götürür. Test: `scripts/e2e/inbox.mjs`.
 
 **Maça davet kartı (migration 0031 + arayüz yapıldı)**: `dm_messages.kind='match'`, `card` (paylaşım anındaki özet: tür, grup adı/türü, tarih, saha, ihtiyaç/kapasite — özel grubun içi alıcıya açılmasın diye)
-+ `listing_id | poll_id | match_id`. Tek RPC `share_match_card(p_user_id, p_type: listing|poll|match, p_ref)`: sadece o takımın/grubun kaptanı/yetkilisi, açık ilan / açık çağrı / planlı maç; günde 20 kart, aynı kart aynı kişiye günde 1;
-engel iki yönde keser; konuşma `start_dm` ile (arkadaşa açık, tanımayana istek). Alıcı ilan kartından mevcut başvuru akışını kullanır; çağrı/maç kartında üyeyse yanıt verir, değilse sadece özet. Kontrol: `scripts/db-checks/match-cards.mjs`.
-**Davet kartı arayüzü**: kaptan/yetkiye ilan (`/ilan/[id]`), çağrı ve planlı maç sayfasında "💬 Sohbetten davet et" (`SendInviteLink`) → `/davet/gonder?tur=listing|poll|match&ref=<id>` seçici (arkadaşlar + ad araması; `shareMatchCard` eylemi sayfada kalır, `?ok=<kişi>` ile "✓ Gönderildi").
-Alıcı `DmRoom`'da `MatchCardView` görür: ilan → "İlanı aç ve başvur" (`/ilan/[id]`, mevcut başvuru akışı); çağrı/maç → grubun üyesiyse "Çağrıya yanıt ver"/"Maça bak", üye olmayan takım için "Takıma bak", özel grup için sadece özet notu.
++ `poll_id | match_id` (0035'te `listing_id` kalktı). Tek RPC `share_match_card(p_user_id, p_type: poll|match, p_ref)`: kaptan/yetkili veya çağrıyı/maçı açan (0034), açık/kesinleşmiş çağrı (kartta `purpose`, `time_tbd`) / planlı maç; günde 20 kart, aynı kart aynı kişiye günde 1;
+engel iki yönde keser; konuşma `start_dm` ile (arkadaşa açık, tanımayana istek). Çağrı/maç kartında üyeyse yanıt verir, değilse sadece özet. Kontrol: `scripts/db-checks/match-cards.mjs`.
+**Davet kartı arayüzü**: çağrı ve planlı maç sayfasında "💬 Sohbetten davet et" (`SendInviteLink`) → `/davet/gonder?tur=poll|match&ref=<id>` seçici (arkadaşlar + ad araması; `shareMatchCard` eylemi sayfada kalır, `?ok=<kişi>` ile "✓ Gönderildi").
+Alıcı `DmRoom`'da `MatchCardView` görür: çağrı ("Maç çağrısı"/"Adam aranıyor")/maç → grubun üyesiyse "Çağrıya yanıt ver"/"Maça bak", üye olmayan takım için "Takıma bak", özel grup için sadece özet notu.
 Güncel durum (açık/kapalı, tarih geçti) sunucuda sorgulanır, kapalı kartta düğme yerine "Yine de sayfayı aç". Bildirim `invite` türü ("⚽ Maç daveti"). Tuzak: `matches` → `groups` iliştirmesi `groups!matches_group_id_fkey(name)` ile yapılmalı (iki ilişki var). Test: `scripts/e2e/match-card.mjs`.

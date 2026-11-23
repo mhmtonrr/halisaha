@@ -59,7 +59,7 @@ En kritik: `src/lib/rating.ts` (puanlama), `src/lib/actions.ts` (Server Action'l
 | Konu | Dosya |
 |---|---|
 | Maç türleri, puanlama, genel rating, çapraz oylama, diziliş, teklif, çağrı, çekilme | `docs/mac-puanlama.md` |
-| Grup/takım farkı, roller, misafir, asıl kadro, davet kodu, ayrılma, oyuncu ilanı/ödünç | `docs/takim-grup-uyelik.md` |
+| Grup/takım farkı, roller, misafir, asıl kadro, davet kodu, ayrılma, ödünç oyuncu | `docs/takim-grup-uyelik.md` |
 | Bildirim/push, canlı güncelleme (Realtime), sohbet | `docs/bildirim-canli-sohbet.md` |
 | Oyuncu kartı/yetenek, profil/istatistik, Keşfet/öne çıkanlar, menü, hız, karşılama, bölge | `docs/profil-kart-kesfet-menu.md` |
 | Gerçek hosting'e geçince / sonra yapılacaklar (e-posta onayı, SMTP, hatırlatıcı, SMS, dil, tema, maç süresi…) | `docs/yayin-sonrasi.md` |
@@ -112,7 +112,7 @@ Ertelenenlerin ve sıradaki işlerin tam listesi: `docs/yayin-sonrasi.md`.
 - **Resend/SMTP**: alan adı gerekiyor (vercel.app doğrulanamaz). Kullanıcı şimdilik erteledi.
 - **Web push**: Vercel ortam değişkenleri **eklendi** (kullanıcı yaptı); iPhone'da bildirim çalışıyor. **Android'de ekran kapalıyken gelmiyordu**: gönderim `urgency: "high"` yapıldı (6f009ba), kullanıcının telefonda yeniden denemesi bekleniyor;
   gelmezse cihaz tarafı (pil "Sınırsız", bildirim önemi "Yüksek") ve telefon modeli sorulmalı.
-- **Hız**: kullanıcı konuyu "sonra döneriz" dedi. Ölçüm: ana sayfa 1512→539 ms, diğerleri 0,35-0,56 sn (kalanın çoğu ölçüm bağlantısı). Olası devam: ana sayfa her açılışta tüm grupların `finalizeExpired`/`settleExpiredPolls` kontrolünü yapıyor
+- **Hız**: kullanıcı konuyu "sonra döneriz" dedi. Ölçüm: ana sayfa 1512→539 ms, diğerleri 0,35-0,56 sn (kalanın çoğu ölçüm bağlantısı). Olası devam: ana sayfa her açılışta tüm grupların `finalizeExpired`/`close_stale_polls` kontrolünü yapıyor
   (çok grupta ilk aday); kök `loading.tsx` güvenli bir yolla (sadece `/g/[groupId]` gibi segment geçişlerinde) yeniden denenebilir; `scripts/perf/ttfb.mjs` ile önce/sonra ölç.
 - Google OAuth uygulaması yayınlandı (Publish app yapıldı); artık sadece test kullanıcıları değil herkes girebilir.
 

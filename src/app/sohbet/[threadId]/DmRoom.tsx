@@ -17,7 +17,6 @@ export interface DmMessage {
   body: string;
   invite_id: string | null;
   card?: MatchCard | null;
-  listing_id?: string | null;
   poll_id?: string | null;
   match_id?: string | null;
   deleted_at: string | null;
@@ -37,7 +36,7 @@ export interface InviteInfo {
 
 const MAX = 1000;
 const TZ = "Europe/Istanbul";
-const COLS = "id, author_id, kind, body, invite_id, card, listing_id, poll_id, match_id, deleted_at, created_at";
+const COLS = "id, author_id, kind, body, invite_id, card, poll_id, match_id, deleted_at, created_at";
 const dayKey = (iso: string) => new Date(iso).toLocaleDateString("tr-TR", { timeZone: TZ });
 const time = (iso: string) => new Date(iso).toLocaleTimeString("tr-TR", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
 
@@ -333,8 +332,8 @@ export function DmRoom({
               {m.kind === "match" && m.card ? (
                 <MatchCardView
                   card={m.card}
-                  refId={(m.listing_id ?? m.poll_id ?? m.match_id) as string}
-                  status={refStatus[`${m.card.type}:${m.listing_id ?? m.poll_id ?? m.match_id}`]}
+                  refId={(m.poll_id ?? m.match_id) as string}
+                  status={refStatus[`${m.card.type}:${m.poll_id ?? m.match_id}`]}
                   isMember={memberGroupIds.includes(m.card.group_id)}
                   mine={mine}
                   time={time(m.created_at)}

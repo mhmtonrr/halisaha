@@ -71,15 +71,17 @@ describe("metinler", () => {
     text.voteOpened("g", "m", "Rakip FK"),
     text.voteReminder("g", "m", 3.4),
     text.pollOpened("Grup", "g", "p", "Cum 21:00", "Saha"),
-    text.pollConverted("Grup", "g", "m", "Cum 21:00"),
-    text.pollCancelled("Grup", "g", "p"),
+    text.fillOpened("Grup", "g", "p", 2, "Cum 21:00", ["DEF"]),
+    text.pollUpdated("Grup", "g", "p", "Cum 21:00", "Saha"),
+    text.pollSelected("Grup", "g", "m", "Cum 21:00"),
+    text.pollReserve("Grup", "g", "p", "Cum 21:00", 2),
+    text.pollRejected("Grup", "g", "p"),
+    text.pollApplied("Ali", "g", "p"),
+    text.spotOpened("Ali", "g", "p", 3),
     text.matchCreated("Takım", "g", "m", "Cum 21:00", "Rakip"),
     text.challengeReceived("Kartallar", "g", "Cum 21:00"),
     text.challengeAnswered("Aslanlar", "g", true),
     text.challengeAnswered("Aslanlar", "g", false),
-    text.listingApplied("Ali", "Takım", "g", "m"),
-    text.applicationDecided("Takım", true, "g", "m"),
-    text.applicationDecided("Takım", false, "g", "m"),
     text.chat("Grup", "g", "Ali", "Merhaba\n\n  nasılsınız   hepiniz"),
   ];
   it("başlık ≤120, gövde ≤300, url uygulama içi yol (// ve dış adres yok)", () => {
@@ -102,9 +104,10 @@ describe("metinler", () => {
     expect(text.voteReminder("g", "m1", 2).tag).toBe("vote-reminder:m1");
     expect(text.voteOpened("g", "m1").tag).not.toBe(text.voteReminder("g", "m1", 2).tag);
   });
-  it("reddedilen başvuruda maça değil ana sayfaya gider", () => {
-    expect(text.applicationDecided("T", false, "g", "m").url).toBe("/");
-    expect(text.applicationDecided("T", true, "g", "m").url).toBe("/g/g/m/m");
+  it("kadroya seçilen maça, yedek ve reddedilen çağrıya gider", () => {
+    expect(text.pollSelected("G", "g", "m", "Cum").url).toBe("/g/g/m/m");
+    expect(text.pollReserve("G", "g", "p", "Cum", 1).url).toBe("/g/g/cagri/p");
+    expect(text.pollRejected("G", "g", "p").url).toBe("/g/g/cagri/p");
   });
   it("hatırlatma en az 1 saat gösterir", () => {
     expect(text.voteReminder("g", "m", 0.2).body).toContain("1 saat");

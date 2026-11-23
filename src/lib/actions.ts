@@ -7,7 +7,6 @@ import { cardPhotoPath, cardPhotoUrl } from "@/lib/card-photo";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { finalizeMatch, recomputePlayers } from "@/lib/finalize";
-import { settlePoll } from "@/lib/polls";
 import { later, notify, sendTestPush } from "@/lib/notify";
 import { skillSet } from "@/lib/skills";
 import { extractInviteCode, kindMatches, parseKind } from "@/lib/invite";
@@ -16,6 +15,7 @@ import { text } from "@/lib/notify-rules";
 import { loadMenuData } from "@/lib/menu-data";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { groupMemberIds, groupName, linkedMatches, matchAccountIds } from "@/lib/recipients";
+import { notifySpotOpened } from "@/lib/calls-notify";
 import { balanceTeams, pickVariant, type TeamCandidate } from "@/lib/teams";
 import { formatDate, getGroupPlayers, parseLocalDateTime, POSITIONS, type Position } from "@/lib/data";
 import { canonicalDistrict, isProvince } from "@/lib/regions";
@@ -544,7 +544,10 @@ export async function requestWithdrawal(fd: FormData) {
     const when = match ? formatDate(match.played_at) : "";
     const late = match ? new Date(match.played_at).getTime() - Date.now() < 3 * 3600_000 : false;
     if (result === "pending") await notify(ids, "match", text.withdrawalRequested(groupId, matchId, who, when, late, reason), { excludeUserId: user.id });
-    else await notify(ids, "match", text.withdrawalLeft(groupId, matchId, who, when), { excludeUserId: user.id });
+    else {
+      await notify(ids, "match", text.withdrawalLeft(groupId, matchId, who, when), { excludeUserId: user.id });
+      await notifySpotOpened(admin, matchId, who);
+    }
   });
   revalidatePath(back);
   redirect(`${back}?cekilme=${result}`);
@@ -578,6 +581,10 @@ export async function decideWithdrawal(fd: FormData) {
     const { data: gp } = await admin.from("group_players").select("user_id").eq("id", w.player_id).maybeSingle();
     const m = Array.isArray(w.matches) ? w.matches[0] : w.matches;
     if (gp?.user_id) await notify([gp.user_id], "match", text.withdrawalDecided(groupId, matchId, approve, m ? formatDate((m as { played_at: string }).played_at) : ""));
+    if (approve) {
+      const { data: who } = gp?.user_id ? await admin.from("profiles").select("display_name").eq("id", gp.user_id).maybeSingle() : { data: null };
+      await notifySpotOpened(admin, matchId, who?.display_name ?? "Bir oyuncu");
+    }
   });
   revalidatePath(back);
   redirect(`${back}?cekilme=${approve ? "approved-by-admin" : "denied-by-admin"}`);
@@ -715,11 +722,6 @@ export async function createMatch(fd: FormData) {
   if (rosterError) {
     await supabase.from("matches").delete().eq("id", match.id);
     fail(back, "Kadro kaydedilemedi");
-  }
-  // Maç çağrısından oluşturulduysa çağrıyı maça bağla
-  const pollId = str(fd, "pollId");
-  if (pollId) {
-    await supabase.from("match_polls").update({ status: "converted", match_id: match.id }).eq("id", pollId);
   }
   // Kadrodaki hesap sahiplerine "maç kuruldu"
   later(async () => {
@@ -1044,143 +1046,6 @@ export async function deleteMatch(fd: FormData) {
 }
 
 // ---------------------------------------------------------------------------
-// Maç çağrısı (anket)
-// ---------------------------------------------------------------------------
-
-export async function createPoll(fd: FormData) {
-  const { supabase, user } = await requireUser();
-  const groupId = str(fd, "groupId");
-  const back = `/g/${groupId}/cagri/yeni`;
-  const when = str(fd, "startsAt");
-  if (!when) fail(back, "Maç tarihini seçin");
-  const capacity = Number(str(fd, "capacity"));
-  if (!Number.isInteger(capacity) || capacity < 2 || capacity > 40) fail(back, "Kontenjan 2-40 arası olmalı");
-  const deadline = str(fd, "deadline");
-  const { data, error } = await supabase
-    .from("match_polls")
-    .insert({
-      group_id: groupId,
-      created_by: user.id,
-      starts_at: parseLocalDateTime(when),
-      venue: str(fd, "venue").slice(0, 80) || null,
-      capacity,
-      deadline: deadline ? parseLocalDateTime(deadline) : null,
-      note: str(fd, "note").slice(0, 300) || null,
-    })
-    .select("id")
-    .single();
-  if (error) fail(back, "Çağrıyı sadece kurucu, yetkili ve organizatörler açabilir");
-  announcePoll(groupId, data.id, user.id, parseLocalDateTime(when), str(fd, "venue").slice(0, 80) || null);
-  redirect(`/g/${groupId}/cagri/${data.id}`);
-}
-
-export async function respondPoll(fd: FormData) {
-  const { supabase } = await requireUser();
-  const groupId = str(fd, "groupId");
-  const pollId = str(fd, "pollId");
-  const back = `/g/${groupId}/cagri/${pollId}`;
-  const { error } = await supabase.rpc("respond_poll", { p_poll_id: pollId, p_answer: str(fd, "answer") });
-  if (error) fail(back, error.message);
-  // Üye çağrısı kontenjanı dolduysa maç hemen kurulur (elle onaylı çağrıya dokunmaz)
-  await settlePoll(pollId);
-  revalidatePath(back);
-  revalidatePath("/");
-}
-
-/** Yeni çağrı: grubun üyelerine haber ver */
-function announcePoll(groupId: string, pollId: string, actorId: string, startsAt: string, venue: string | null) {
-  later(async () => {
-    const admin = createAdminClient();
-    const [ids, name] = await Promise.all([groupMemberIds(admin, groupId), groupName(admin, groupId)]);
-    await notify(ids, "poll", text.pollOpened(name, groupId, pollId, formatDate(startsAt), venue), { excludeUserId: actorId });
-  });
-}
-
-/** Üye çağrısı: otomatik maça dönüşen çağrı (kurallar ve sınırlar veritabanında zorunlu) */
-export async function createMemberPoll(fd: FormData) {
-  const { supabase, user } = await requireUser();
-  const groupId = str(fd, "groupId");
-  const back = `/g/${groupId}/cagri/yeni`;
-  const when = str(fd, "startsAt");
-  if (!when) fail(back, "Maç zamanını seçin");
-  const size = sizeOf(fd);
-  if (!size) fail(back, "Kaç kişilik oynanacağını seçin (5-11)");
-  const deadline = str(fd, "deadline");
-  const { data, error } = await supabase.rpc("create_member_poll", {
-    p_group: groupId,
-    p_starts_at: parseLocalDateTime(when),
-    p_venue: str(fd, "venue").slice(0, 80),
-    p_size: size,
-    p_deadline: deadline ? parseLocalDateTime(deadline) : null,
-    p_note: str(fd, "note").slice(0, 300),
-  });
-  if (error || !data) fail(back, rpcMessage(error ?? {}, "Çağrı açılamadı"));
-  announcePoll(groupId, data as string, user.id, parseLocalDateTime(when), str(fd, "venue").slice(0, 80) || null);
-  redirect(`/g/${groupId}/cagri/${data}`);
-}
-
-/** Çağrıyı iptal et: açan kişi veya yetkili */
-export async function closePoll(fd: FormData) {
-  const { supabase } = await requireUser();
-  const groupId = str(fd, "groupId");
-  const pollId = str(fd, "pollId");
-  const back = `/g/${groupId}/cagri/${pollId}`;
-  const { error } = await supabase.rpc("close_poll", { p_poll_id: pollId });
-  if (error) fail(back, rpcMessage(error, "Çağrı iptal edilemedi"));
-  revalidatePath(back);
-  revalidatePath("/");
-}
-
-export async function togglePollApproval(fd: FormData) {
-  const { supabase } = await requireUser();
-  const groupId = str(fd, "groupId");
-  const pollId = str(fd, "pollId");
-  const back = `/g/${groupId}/cagri/${pollId}`;
-  const { error } = await supabase.rpc("set_poll_approval", {
-    p_poll_id: pollId,
-    p_player_id: str(fd, "playerId"),
-    p_approved: str(fd, "approved") === "true",
-  });
-  if (error) fail(back, error.message);
-  revalidatePath(back);
-}
-
-export async function approveFirstResponders(fd: FormData) {
-  const { supabase } = await requireUser();
-  const groupId = str(fd, "groupId");
-  const pollId = str(fd, "pollId");
-  const back = `/g/${groupId}/cagri/${pollId}`;
-  const { error } = await supabase.rpc("approve_first_responders", { p_poll_id: pollId });
-  if (error) fail(back, error.message);
-  revalidatePath(back);
-}
-
-export async function setPollStatus(fd: FormData) {
-  const { supabase } = await requireUser();
-  const groupId = str(fd, "groupId");
-  const pollId = str(fd, "pollId");
-  const back = `/g/${groupId}/cagri/${pollId}`;
-  const status = str(fd, "status") === "open" ? "open" : "closed";
-  const { data, error } = await supabase
-    .from("match_polls")
-    .update({ status })
-    .eq("id", pollId)
-    .neq("status", "converted")
-    .select("id");
-  if (error || !data?.length) fail(back, "Çağrı güncellenemedi");
-  revalidatePath(back);
-}
-
-export async function deletePoll(fd: FormData) {
-  const { supabase } = await requireUser();
-  const groupId = str(fd, "groupId");
-  const pollId = str(fd, "pollId");
-  const { data, error } = await supabase.from("match_polls").delete().eq("id", pollId).select("id");
-  if (error || !data?.length) fail(`/g/${groupId}/cagri/${pollId}`, "Çağrı silinemedi");
-  redirect(`/g/${groupId}`);
-}
-
-// ---------------------------------------------------------------------------
 // Takımlar arası maç teklifi
 // ---------------------------------------------------------------------------
 
@@ -1322,100 +1187,6 @@ export async function setLineup(fd: FormData) {
   if (error) fail(back, "Diziliş kaydedilemedi");
   revalidatePath(back);
   redirect(`${back}?dizilis=1`);
-}
-
-// ---------------------------------------------------------------------------
-// Oyuncu arama ilanı ve ödünç oyuncu
-// ---------------------------------------------------------------------------
-
-/** Takımın planlanmış maçı için "oyuncu arıyoruz" ilanı aç (kaptan/yetkili) */
-export async function createListing(fd: FormData) {
-  const { supabase } = await requireUser();
-  const groupId = str(fd, "groupId");
-  const matchId = str(fd, "matchId");
-  const back = `/g/${groupId}/m/${matchId}`;
-  const needed = Number(str(fd, "needed"));
-  if (!Number.isInteger(needed) || needed < 1 || needed > 10) fail(back, "Kaç oyuncu arandığını seçin (1-10)");
-  const positions = fd.getAll("positions").map(String).filter((p) => asPosition(p));
-  const minRaw = str(fd, "minOverall");
-  const minOverall = minRaw ? Number(minRaw) : null;
-  if (minOverall !== null && (!Number.isInteger(minOverall) || minOverall < 40 || minOverall > 99)) fail(back, "Minimum rating 40-99 arası olmalı");
-  const { error } = await supabase.rpc("create_listing", {
-    p_match: matchId,
-    p_needed: needed,
-    p_positions: positions,
-    p_min_overall: minOverall,
-    p_note: str(fd, "note").slice(0, 300),
-  });
-  if (error) fail(back, rpcMessage(error, "İlan açılamadı"));
-  revalidatePath(back);
-}
-
-export async function closeListing(fd: FormData) {
-  const { supabase } = await requireUser();
-  const groupId = str(fd, "groupId");
-  const matchId = str(fd, "matchId");
-  const back = `/g/${groupId}/m/${matchId}`;
-  const { error } = await supabase.rpc("close_listing", { p_listing: str(fd, "listingId") });
-  if (error) fail(back, rpcMessage(error, "İlan kapatılamadı"));
-  revalidatePath(back);
-}
-
-/** Kaptan/yetkili başvuruyu kabul eder (oyuncu ödünç olarak maç kadrosuna girer) veya reddeder */
-export async function decideApplication(fd: FormData) {
-  const { supabase, user } = await requireUser();
-  const groupId = str(fd, "groupId");
-  const matchId = str(fd, "matchId");
-  const back = `/g/${groupId}/m/${matchId}`;
-  const { error } = await supabase.rpc("decide_application", {
-    p_listing: str(fd, "listingId"),
-    p_user: str(fd, "userId"),
-    p_accept: str(fd, "answer") === "accept",
-  });
-  if (error) fail(back, rpcMessage(error, "Başvuru yanıtlanamadı"));
-  // Başvurana sonuç
-  later(async () => {
-    const admin = createAdminClient();
-    await notify([str(fd, "userId")], "listing", text.applicationDecided(await groupName(admin, groupId), str(fd, "answer") === "accept", groupId, matchId), { excludeUserId: user.id });
-  });
-  revalidatePath(back);
-}
-
-/** Herkese açık ilana başvur (hesabı olan herkes) */
-export async function applyListing(fd: FormData) {
-  const { supabase, user } = await requireUser();
-  const listingId = str(fd, "listingId");
-  const back = `/ilan/${listingId}`;
-  const { error } = await supabase.rpc("apply_listing", {
-    p_listing: listingId,
-    p_position: asPosition(str(fd, "position")),
-    p_note: str(fd, "note").slice(0, 200),
-  });
-  if (error) fail(back, rpcMessage(error, "Başvuru gönderilemedi"));
-  // Takımın kaptan/yetkililerine "yeni başvuru"
-  later(async () => {
-    const admin = createAdminClient();
-    const { data: l } = await admin.from("player_listings").select("group_id, match_id").eq("id", listingId).maybeSingle();
-    if (!l) return;
-    const [ids, team, { data: p }] = await Promise.all([
-      groupMemberIds(admin, l.group_id, { adminsOnly: true }),
-      groupName(admin, l.group_id),
-      admin.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
-    ]);
-    await notify(ids, "listing", text.listingApplied(p?.display_name ?? "Bir oyuncu", team, l.group_id, l.match_id), { excludeUserId: user.id });
-  });
-  revalidatePath(back);
-  revalidatePath("/");
-}
-
-export async function withdrawApplication(fd: FormData) {
-  const { supabase } = await requireUser();
-  const listingId = str(fd, "listingId");
-  const back = `/ilan/${listingId}`;
-  const { error } = await supabase.rpc("withdraw_application", { p_listing: listingId });
-  if (error) fail(back, rpcMessage(error, "Başvuru geri çekilemedi"));
-  revalidatePath(back);
-  revalidatePath("/");
 }
 
 // ---------------------------------------------------------------------------
@@ -1562,7 +1333,7 @@ export async function friendAction(fd: FormData) {
   redirect(back);
 }
 
-/** Maç/çağrı/ilan kartını bir kişiye sohbetten gönder (sadece kaptan/yetkili; RPC denetler). Seçici sayfada kalır. */
+/** Maç/çağrı kartını bir kişiye sohbetten gönder (kaptan/yetkili veya maçı/çağrıyı açan; RPC denetler). Seçici sayfada kalır. */
 export async function shareMatchCard(fd: FormData) {
   const { supabase, user } = await requireUser();
   const type = str(fd, "tur");
@@ -1570,7 +1341,7 @@ export async function shareMatchCard(fd: FormData) {
   const userId = str(fd, "userId");
   const q = str(fd, "q");
   const page = `/davet/gonder?tur=${encodeURIComponent(type)}&ref=${encodeURIComponent(ref)}${q ? `&q=${encodeURIComponent(q)}` : ""}`;
-  if (!["listing", "poll", "match"].includes(type) || !UUID_RE.test(ref) || !UUID_RE.test(userId)) fail("/", "Geçersiz istek");
+  if (!["poll", "match"].includes(type) || !UUID_RE.test(ref) || !UUID_RE.test(userId)) fail("/", "Geçersiz istek");
   const { data: messageId, error } = await supabase.rpc("share_match_card", { p_user_id: userId, p_type: type, p_ref: ref });
   if (error || messageId == null) fail(page, rpcMessage(error ?? {}, "Davet gönderilemedi"));
   later(async () => {
@@ -1579,11 +1350,16 @@ export async function shareMatchCard(fd: FormData) {
       admin.from("dm_messages").select("thread_id, card").eq("id", messageId as number).maybeSingle(),
       admin.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
     ]);
-    const card = msg?.card as { group_name?: string; starts_at?: string } | null;
+    const card = msg?.card as { group_name?: string; starts_at?: string; purpose?: string; time_tbd?: boolean } | null;
     if (!msg || !card?.group_name) return;
-    const label = type === "listing" ? "Oyuncu ilanı" : type === "poll" ? "Maç çağrısı" : "Maç";
+    const label = type === "poll" ? (card.purpose === "fill" ? "Adam aranıyor" : "Maç çağrısı") : "Maç";
     const whenText = card.starts_at
-      ? new Date(card.starts_at).toLocaleString("tr-TR", { timeZone: "Europe/Istanbul", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
+      ? new Date(card.starts_at).toLocaleString("tr-TR", {
+          timeZone: "Europe/Istanbul",
+          day: "numeric",
+          month: "short",
+          ...(card.time_tbd ? { weekday: "long" } : { hour: "2-digit", minute: "2-digit" }),
+        })
       : "";
     await notify([userId], "invite", text.matchCard(me?.display_name ?? "Bir oyuncu", card.group_name, label, whenText, msg.thread_id as string, ref), { excludeUserId: user.id });
   });

@@ -1,5 +1,6 @@
 // Bildirim kuralları ve metinleri. Saf fonksiyonlar (veritabanı/ağ yok) — notify-rules.test.ts ile test edilir.
 
+// "listing": eski oyuncu ilanı bildirimleri (kutudaki eski kayıtlar için); yeni bildirim üretilmez
 export type NotificationType = "vote" | "poll" | "match" | "offer" | "listing" | "chat" | "dm" | "invite" | "friend";
 export type PrefKey = "votes" | "matches" | "offers" | "chat";
 export type Prefs = Record<PrefKey, boolean>;
@@ -19,8 +20,8 @@ export const PREF_OF: Record<NotificationType, PrefKey> = {
 
 export const PREF_LABEL: Record<PrefKey, { title: string; hint: string }> = {
   votes: { title: "Oylama", hint: "Maç bitip oylama açılınca ve oylama kapanmadan hatırlatma" },
-  matches: { title: "Maç çağrısı ve maç", hint: "Yeni çağrı, maç kuruldu, çağrı iptal oldu" },
-  offers: { title: "Teklif ve oyuncu ilanı", hint: "Maç teklifleri, ilana başvuru ve başvuru sonucu" },
+  matches: { title: "Maç çağrısı ve maç", hint: "Yeni çağrı ve adam arama, kadroya seçilme/yedek, maç kuruldu, başvuru ve yer açılması (organizatöre)" },
+  offers: { title: "Maç teklifi", hint: "Takımlar arası maç teklifleri ve yanıtları" },
   chat: { title: "Sohbet", hint: "Grup/takım ve birebir mesajlar, takıma/gruba davetler (bir sohbette 10 dakikada en fazla 1 bildirim)" },
 };
 
@@ -119,17 +120,50 @@ export const text = {
     url: `/g/${groupId}/cagri/${pollId}`,
     tag: `poll:${pollId}`,
   }),
-  pollConverted: (groupName: string, groupId: string, matchId: string, when: string): Content => ({
-    title: "⚽ Maç kuruldu",
-    body: truncate(join(groupName, when, "kadrodasın"), 300),
+  fillOpened: (groupName: string, groupId: string, pollId: string, needed: number, when: string, positions: string[]): Content => ({
+    title: `🔎 ${needed} oyuncu aranıyor`,
+    body: truncate(join(groupName, when, positions.length ? positions.join("/") : null), 300),
+    url: `/g/${groupId}/cagri/${pollId}`,
+    tag: `poll:${pollId}`,
+  }),
+  pollUpdated: (groupName: string, groupId: string, pollId: string, when: string, venue?: string | null): Content => ({
+    title: "📣 Çağrı güncellendi",
+    body: truncate(join(groupName, when, venue), 300),
+    url: `/g/${groupId}/cagri/${pollId}`,
+    tag: `poll:${pollId}`,
+  }),
+  /** Kesinleştirme sonucu: kadroda veya yedekte (sıra no ile) */
+  pollSelected: (groupName: string, groupId: string, matchId: string, when: string): Content => ({
+    title: "⚽ Kadrodasın",
+    body: truncate(join(groupName, when), 300),
     url: `/g/${groupId}/m/${matchId}`,
     tag: `match:${matchId}`,
   }),
-  pollCancelled: (groupName: string, groupId: string, pollId: string): Content => ({
-    title: "❌ Çağrı iptal oldu",
-    body: truncate(`${groupName}: yeterli kişi toplanamadı.`, 300),
+  pollReserve: (groupName: string, groupId: string, pollId: string, when: string, order: number): Content => ({
+    title: "⏳ Yedektesin",
+    body: truncate(join(groupName, when, `sıran: ${order}`, "yer açılırsa organizatör seni kadroya alabilir"), 300),
     url: `/g/${groupId}/cagri/${pollId}`,
     tag: `poll:${pollId}`,
+  }),
+  pollRejected: (groupName: string, groupId: string, pollId: string): Content => ({
+    title: "Bu maç için başka oyuncu seçildi",
+    body: truncate(groupName, 300),
+    url: `/g/${groupId}/cagri/${pollId}`,
+    tag: `poll:${pollId}`,
+  }),
+  /** Organizatöre: adam aramaya başvuru geldi */
+  pollApplied: (who: string, groupId: string, pollId: string): Content => ({
+    title: "🔎 Adam aramana başvuru",
+    body: truncate(`${who} geliyor; kadroya almak için çağrıya bak`, 300),
+    url: `/g/${groupId}/cagri/${pollId}`,
+    tag: `poll-apply:${pollId}`,
+  }),
+  /** Organizatöre: kadroda yer açıldı, yedek var */
+  spotOpened: (who: string, groupId: string, pollId: string, reserves: number): Content => ({
+    title: "🔄 Kadroda yer açıldı",
+    body: truncate(`${who} çekildi. ${reserves} yedek var; çağrıdan kadroya alabilirsin.`, 300),
+    url: `/g/${groupId}/cagri/${pollId}`,
+    tag: `spot:${pollId}`,
   }),
   matchCreated: (groupName: string, groupId: string, matchId: string, when: string, opponent?: string | null): Content => ({
     title: "⚽ Maç kuruldu",
@@ -148,18 +182,6 @@ export const text = {
     body: truncate(toTeam, 300),
     url: `/g/${fromGroupId}/teklifler`,
     tag: `offer:${fromGroupId}`,
-  }),
-  listingApplied: (applicant: string, teamName: string, groupId: string, matchId: string): Content => ({
-    title: "🔎 Oyuncu ilanına başvuru",
-    body: truncate(join(applicant, teamName), 300),
-    url: `/g/${groupId}/m/${matchId}`,
-    tag: `listing-apply:${matchId}`,
-  }),
-  applicationDecided: (teamName: string, accepted: boolean, groupId: string, matchId: string): Content => ({
-    title: accepted ? "✅ Kadroya alındın" : "❌ Başvurun reddedildi",
-    body: truncate(teamName, 300),
-    url: accepted ? `/g/${groupId}/m/${matchId}` : "/",
-    tag: `listing-decision:${matchId}`,
   }),
   chat: (groupName: string, groupId: string, author: string, message: string): Content => ({
     title: truncate(groupName, 120),

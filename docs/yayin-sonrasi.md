@@ -11,7 +11,7 @@
 - **İkinci tema ("Klasik Gece")**: tasarımı yok; seçici "yakında" gösteriyor.
 - **Hukuki**: KVKK aydınlatma metni, 18 yaş altı kuralı (yol haritası madde 6).
 - **Web push (Android)**: ekran kapalıyken gelmiyordu; `urgency: "high"` yapıldı, telefonda yeniden denenmeli (pil "Sınırsız", bildirim önemi "Yüksek").
-- **Hız**: ana sayfa her açılışta tüm grupların `finalizeExpired`/`settleExpiredPolls` kontrolünü yapıyor; kök `loading.tsx` güvenli yolla denenebilir; `scripts/perf/ttfb.mjs` ile önce/sonra ölç.
+- **Hız**: ana sayfa her açılışta tüm grupların `finalizeExpired`/`close_stale_polls` kontrolünü yapıyor; kök `loading.tsx` güvenli yolla denenebilir; `scripts/perf/ttfb.mjs` ile önce/sonra ölç.
 
 ## Sırada (hosting'e bağlı değil, sonra yapılacak)
 - **Maç süresi (60 / 90 dk)**: maç kurarken süre seçilecek (`matches`'e süre alanı, eski maçlar 60 dk varsayılan); İstatistik'teki "dk saha" şimdiki tahminin (maç × 60) yerine bundan hesaplanacak. Parçalar: 1) DB + maç kurma formu, 2) hesap + ekran.

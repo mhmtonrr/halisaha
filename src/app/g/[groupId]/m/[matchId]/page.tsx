@@ -22,9 +22,9 @@ import { LineupPitch, type PitchPlayer } from "@/components/LineupPitch";
 import { LineupEditor } from "./LineupEditor";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { GuestForm } from "./GuestForm";
-import { ListingSection } from "./ListingSection";
+import { FillSection } from "./FillSection";
 import { AutoOpenDetails } from "@/components/AutoOpenDetails";
-import { getApplicants, getListingForMatch, type Applicant, type Listing } from "@/lib/listings-data";
+import { fillCallsOfMatch, gatherCallOfMatch, myManagedCommunities, type Call } from "@/lib/calls-data";
 import { SubmitButton } from "@/components/SubmitButton";
 import { PushPrompt } from "@/components/PushControls";
 import { TeamBadge } from "@/components/TeamBadge";
@@ -216,10 +216,15 @@ export default async function MatchPage({
   ]);
   if (!match) notFound();
   const myTeamName = myTeam?.name ?? "Biz";
-  // Takımın planlanmış maçında oyuncu arama ilanı (herkese açık); başvuranları sadece yetkililer görür
-  const isTeamMatch = myTeam?.kind === "team";
-  const listing: Listing | null = isTeamMatch && match.status === "planned" ? await getListingForMatch(supabase, matchId) : null;
-  const applicants: Applicant[] = listing && canManage ? await getApplicants(supabase, listing.id) : [];
+  // Planlı maçın açık "adam ara" çağrıları (görebildiğim gruplardakiler) ve maçı kuran toplama çağrısı (yedekler)
+  const planned = match.status === "planned";
+  const [fills, gatherCall, communities] = planned
+    ? await Promise.all([
+        fillCallsOfMatch(supabase, matchId),
+        canManage ? gatherCallOfMatch(supabase, matchId) : Promise.resolve(null),
+        canManage ? myManagedCommunities(supabase, user.id) : Promise.resolve([]),
+      ])
+    : [[], null, []];
   const myTeamColor = myTeam?.color ?? null;
   const opp = match.challenge_id
     ? await loadOpponent(supabase, match.challenge_id, matchId, match.opponent_group_id)
@@ -274,8 +279,7 @@ export default async function MatchPage({
           { table: "match_players", filter: `match_id=eq.${matchId}` },
           { table: "match_results", filter: `match_id=eq.${matchId}` },
           { table: "match_withdrawals", filter: `match_id=eq.${matchId}` },
-          ...(isTeamMatch ? [{ table: "player_listings", filter: `match_id=eq.${matchId}` }] : []),
-          ...(listing ? [{ table: "listing_applications", filter: `listing_id=eq.${listing.id}` }] : []),
+          ...(planned ? [{ table: "match_polls", filter: `match_id=eq.${matchId}` }] : []),
           ...(match.challenge_id
             ? [
                 // Karşı takımın maçı, kadrosu ve sonuçları; teklif iptali (maçlar silinir, teklifin durumu güncellenir)
@@ -303,21 +307,24 @@ export default async function MatchPage({
       </p>
       <ErrorNote message={error} />
       {canManage && match.status === "planned" && <SendInviteLink tur="match" refId={matchId} className="mb-4" />}
-      {listing && listing.status === "open" && (
-        <Link href={`/ilan/${listing.id}`} className="mb-4 block">
-          <Card className="flex items-center gap-3 border-amber-400/40 bg-amber-400/10 transition hover:border-amber-400">
-            <span className="text-2xl">🔎</span>
-            <div className="min-w-0 flex-1">
-              <div className="font-semibold">{listing.needed} oyuncu aranıyor</div>
-              <div className="truncate text-xs text-muted">
-                {listing.positions.length ? listing.positions.map((p) => POSITION_NAME[p]).join(", ") + " · " : ""}
-                {listing.minOverall ? `en az ${listing.minOverall} rating · ` : ""}ilanı gör ve başvur
-              </div>
-            </div>
-            <span className="text-amber-300">›</span>
-          </Card>
-        </Link>
-      )}
+      {!canManage &&
+        fills
+          .filter((f) => f.status === "open")
+          .map((f) => (
+            <Link key={f.id} href={`/g/${f.group_id}/cagri/${f.id}`} className="mb-4 block">
+              <Card className="flex items-center gap-3 border-amber-400/40 bg-amber-400/10 transition hover:border-amber-400">
+                <span className="text-2xl">🔎</span>
+                <div className="min-w-0 flex-1">
+                  <div className="font-semibold">{f.capacity} oyuncu aranıyor</div>
+                  <div className="truncate text-xs text-muted">
+                    {f.positions.length ? f.positions.map((p) => POSITION_NAME[p as Position]).join(", ") + " · " : ""}
+                    {f.group_name} · çağrıyı gör ve başvur
+                  </div>
+                </div>
+                <span className="text-amber-300">›</span>
+              </Card>
+            </Link>
+          ))}
       {kabul && (
         <p className="mb-4 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">
           Teklif kabul edildi ✓ Şimdi kadronu belirle. Rakip takım da kendi kadrosunu belirliyor.
@@ -391,9 +398,10 @@ export default async function MatchPage({
           linked={linked}
           teamSize={match.team_size}
           formations={{ A: match.formation_a, B: match.formation_b }}
-          isTeamMatch={isTeamMatch}
-          listing={listing}
-          applicants={applicants}
+          groupLabel={myTeam?.name ?? ""}
+          fills={fills}
+          gatherCall={gatherCall}
+          communities={communities}
           bench={players
             .filter((p) => !roster.some((r) => r.id === p.id))
             .sort((a, b) => a.display_name.localeCompare(b.display_name, "tr"))}
@@ -447,9 +455,10 @@ async function PlannedView({
   linked,
   teamSize,
   formations,
-  isTeamMatch,
-  listing,
-  applicants,
+  groupLabel,
+  fills,
+  gatherCall,
+  communities,
   bench,
 }: {
   groupId: string;
@@ -462,9 +471,10 @@ async function PlannedView({
   linked: boolean;
   teamSize: number | null;
   formations: Record<Team, string | null>;
-  isTeamMatch: boolean;
-  listing: Listing | null;
-  applicants: Applicant[];
+  groupLabel: string;
+  fills: (Call & { group_name: string })[];
+  gatherCall: { id: string; group_id: string } | null;
+  communities: { id: string; name: string }[];
   bench: { id: string; display_name: string }[];
 }) {
   const all = [...teams.A, ...teams.B];
@@ -578,22 +588,20 @@ async function PlannedView({
             </form>
           </details>
 
-          {isTeamMatch && (
-            <AutoOpenDetails
-              className="mt-1"
-              openInitially={!!listing && listing.status === "open" && applicants.some((a) => a.status === "pending")}
-              summary={
-                <>
-                  🔎 Oyuncu arıyoruz (ilan)
-                  {listing && listing.status === "open" && ` · ${applicants.filter((a) => a.status === "pending").length} başvuru bekliyor`}
-                </>
-              }
-            >
-              <Card className="mt-2">
-                <ListingSection groupId={groupId} matchId={matchId} listing={listing} applicants={applicants} />
-              </Card>
-            </AutoOpenDetails>
-          )}
+          <AutoOpenDetails
+            className="mt-1"
+            openInitially={false}
+            summary={
+              <>
+                🔎 Adam ara
+                {fills.length > 0 && ` · ${fills.filter((f) => f.status === "open").length} açık`}
+              </>
+            }
+          >
+            <Card className="mt-2">
+              <FillSection groupId={groupId} matchId={matchId} groupLabel={groupLabel} fills={fills} communities={communities} gatherCall={gatherCall} />
+            </Card>
+          </AutoOpenDetails>
 
           <details className="mt-1">
             <summary className="cursor-pointer py-2 text-sm text-muted">🧩 Diziliş (sürükle-bırak)</summary>

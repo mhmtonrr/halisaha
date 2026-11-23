@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { finalizeExpired } from "@/lib/finalize";
-import { settleExpiredPolls } from "@/lib/polls";
+import { callWhen } from "@/lib/call-rules";
 import { byRanking, formatDate, getGroupSummaries, isGuestLike, isSquadMember, POSITION_LABEL } from "@/lib/data";
 import { formatRegion } from "@/lib/regions";
 import { ROLE_LABEL, canCreateMatch, teamRating, type GroupKind, type Role } from "@/lib/teams-data";
@@ -14,7 +14,6 @@ import { Avatar } from "@/components/Avatar";
 import { InviteLink } from "./InviteLink";
 import { openDm, regenerateInvite } from "@/lib/actions";
 import { countIncoming } from "@/lib/challenges-data";
-import { getOpenListings } from "@/lib/listings-data";
 import { LiveRefresh } from "@/components/LiveRefresh";
 
 const STATUS: Record<string, { label: string; tone: "default" | "accent" | "warn" }> = {
@@ -45,8 +44,8 @@ export default async function GroupPage({
   const labels = ROLE_LABEL[group.kind as GroupKind];
 
   await finalizeExpired(groupId);
-  // Süresi dolan üye çağrıları maça dönüşür veya iptal olur
-  await settleExpiredPolls(groupId);
+  // Günü geçen açık çağrılar kapanır (cron yok; sayfa açılışında)
+  await supabase.rpc("close_stale_polls", { p_group: groupId });
 
   const [players, { data: matches }, { data: inviteCode }, { data: polls }, { data: unread }] = await Promise.all([
     getGroupSummaries(supabase, groupId),
@@ -59,17 +58,16 @@ export default async function GroupPage({
     supabase.rpc("group_invite_code", { p_group_id: groupId }),
     supabase
       .from("match_polls")
-      .select("id, starts_at, venue, capacity, status, deadline, poll_responses(player_id, answer)")
+      .select("id, purpose, play_on, starts_at, venue, capacity, status, positions, poll_responses(user_id, answer)")
       .eq("group_id", groupId)
-      .eq("status", "open")
-      .order("starts_at")
+      .in("status", ["open", "filled"])
+      .order("play_on")
       .limit(10),
     supabase.rpc("unread_counts"),
   ]);
   const pendingOffers = isTeam && (await supabase.rpc("is_group_member", { p_group_id: groupId })).data
     ? ((await countIncoming(supabase, [groupId])).get(groupId) ?? 0)
     : 0;
-  const openListings = isTeam ? await getOpenListings(supabase, { groupId, limit: 3 }) : [];
   const unreadHere = ((unread ?? []) as { group_id: string; unread: number }[]).find((u) => u.group_id === groupId)?.unread ?? 0;
 
   const me = players.find((p) => p.user_id === user.id && !p.is_loan);
@@ -113,7 +111,6 @@ export default async function GroupPage({
           { table: "matches", filter: `group_id=eq.${groupId}` },
           { table: "match_polls", filter: `group_id=eq.${groupId}` },
           { table: "group_players", filter: `group_id=eq.${groupId}` },
-          ...(isTeam ? [{ table: "player_listings", filter: `group_id=eq.${groupId}` }] : []),
           ...(isTeam
             ? [
                 { table: "match_challenges", filter: `to_group_id=eq.${groupId}` },
@@ -226,27 +223,12 @@ export default async function GroupPage({
 
       {canCreate && (
         <div className="mb-2 grid grid-cols-2 gap-2">
-          <LinkButton href={`/g/${groupId}/cagri/yeni`}>📣 Maç çağrısı</LinkButton>
+          <LinkButton href={`/g/${groupId}/cagri/yeni`}>📣 Kimler gelir?</LinkButton>
           <LinkButton href={`/g/${groupId}/matches/new`} variant="secondary">
             {isTeam ? "+ Maç kur" : "+ Doğrudan maç"}
           </LinkButton>
         </div>
       )}
-      {openListings.map((l) => (
-        <Link key={l.id} href={`/ilan/${l.id}`} className="mb-2 block">
-          <Card className="flex items-center gap-3 border-amber-400/40 bg-amber-400/10 transition hover:border-amber-400">
-            <span className="text-2xl">🔎</span>
-            <div className="min-w-0 flex-1">
-              <div className="font-semibold">{l.needed} oyuncu aranıyor</div>
-              <div className="truncate text-xs text-muted">
-                {formatDate(l.playedAt)}
-                {l.positions.length ? ` · ${l.positions.join("/")}` : ""} · {me ? "ilanı gör" : "başvur"}
-              </div>
-            </div>
-            <span className="text-amber-300">›</span>
-          </Card>
-        </Link>
-      ))}
       {isTeam && me && (
         <LinkButton href={`/g/${groupId}/teklifler`} variant="secondary" className="mb-2 w-full justify-between">
           <span>🤝 Maç teklifleri</span>
@@ -268,19 +250,22 @@ export default async function GroupPage({
 
       {(polls ?? []).length > 0 && (
         <>
-          <SectionTitle>{isTeam ? "Maç çağrıları" : "Yaklaşan etkinlikler"}</SectionTitle>
+          <SectionTitle>{isTeam ? "Maç çağrıları" : "Çağrılar"}</SectionTitle>
           <div className="space-y-2">
             {(polls ?? []).map((poll) => {
               const yes = poll.poll_responses.filter((r) => r.answer === "yes").length;
-              const mine = poll.poll_responses.find((r) => r.player_id === me?.id)?.answer;
+              const mine = poll.poll_responses.find((r) => r.user_id === user.id)?.answer;
+              const fill = poll.purpose === "fill";
               return (
                 <Link key={poll.id} href={`/g/${groupId}/cagri/${poll.id}`}>
                   <Card className="flex items-center gap-3 border-accent/30 transition hover:border-accent">
-                    <span className="text-2xl">📣</span>
+                    <span className="text-2xl">{fill ? "🔎" : "📣"}</span>
                     <div className="min-w-0 flex-1">
-                      <div className="font-semibold">{formatDate(poll.starts_at)}</div>
+                      <div className="font-semibold">{fill ? `${poll.capacity} oyuncu aranıyor` : callWhen(poll)}</div>
                       <div className="truncate text-xs text-muted">
-                        {poll.venue ?? "Saha belirtilmedi"} · {yes}/{poll.capacity} geliyor
+                        {fill ? callWhen(poll) : poll.venue ?? "Saha belli değil"} · {yes}
+                        {poll.capacity && !fill ? `/${poll.capacity}` : ""} geliyor
+                        {poll.status === "filled" ? " · doldu" : ""}
                       </div>
                     </div>
                     {mine === "yes" ? (
