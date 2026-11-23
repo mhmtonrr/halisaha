@@ -108,7 +108,8 @@ export async function respondPoll(fd: FormData) {
   const { supabase, user } = await requireUser();
   const groupId = str(fd, "groupId");
   const pollId = str(fd, "pollId");
-  const back = callPath(groupId, pollId);
+  // Ana sayfadan hızlı yanıtta oraya dönülür (sadece "/" kabul: açık yönlendirme olmasın)
+  const back = str(fd, "returnTo") === "/" ? "/" : callPath(groupId, pollId);
   const answer = str(fd, "answer");
   const { error } = await supabase.rpc("respond_poll", {
     p_poll: pollId,
@@ -129,7 +130,7 @@ export async function respondPoll(fd: FormData) {
       await notify([poll.created_by as string], "poll", text.pollApplied(me?.display_name ?? "Bir oyuncu", groupId, pollId), { excludeUserId: user.id });
     });
   }
-  revalidatePath(back);
+  revalidatePath(callPath(groupId, pollId));
   revalidatePath("/");
   redirect(back);
 }

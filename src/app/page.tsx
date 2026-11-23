@@ -1,21 +1,31 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { requireUser } from "@/lib/supabase/server";
 import { finalizeExpired } from "@/lib/finalize";
 import { callWhen, decisionDue, istanbulDate } from "@/lib/call-rules";
 import { myOpenGatherCalls } from "@/lib/calls-data";
+import { respondPoll } from "@/lib/call-actions";
 import { formatDate } from "@/lib/data";
 import { formatRegion } from "@/lib/regions";
 import { DEFAULT_OVERALL } from "@/lib/rating";
-import { ROLE_LABEL, getMemberships, type Membership } from "@/lib/teams-data";
+import { daysLeftLabel, rosterCapacity, tierProgress } from "@/lib/home";
+import { ROLE_LABEL, canCreateMatch, getMemberships, type Membership } from "@/lib/teams-data";
 import { countIncoming } from "@/lib/challenges-data";
 import { FeaturedSections } from "@/components/FeaturedSections";
-import { Badge, Card, ErrorNote, LinkButton, SectionTitle, cx } from "@/components/ui";
+import { ErrorNote, LinkButton, SectionTitle, cx } from "@/components/ui";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { inList } from "@/lib/live";
 import { OvrBadge, initials, tierOf } from "@/components/PlayerCard";
 import { TeamBadge } from "@/components/TeamBadge";
 import { SkillQueueBanner } from "@/components/SkillQueueBanner";
 import { MenuControls } from "@/components/AppMenu";
+import { Icon } from "@/components/Icon";
+import { SubmitButton } from "@/components/SubmitButton";
+import { ActionItem } from "@/components/home/ActionItem";
+import { HomeTabs } from "@/components/home/HomeTabs";
+
+/** Yapılacaklar kutusunda açık görünen satır sayısı; gerisi "+n daha" altında */
+const VISIBLE_ACTIONS = 3;
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ error?: string; left?: string; deleted?: string }> }) {
   const { error, left, deleted } = await searchParams;
@@ -36,7 +46,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
     groupIds.length
       ? supabase
           .from("matches")
-          .select("id, group_id, played_at, status, kind, opponent_name, voting_deadline, match_players(player_id)")
+          .select("id, group_id, played_at, status, kind, opponent_name, venue, team_size, voting_deadline, match_players(player_id)")
           .in("group_id", groupIds)
           .in("status", ["planned", "played", "voting"])
           .order("played_at")
@@ -96,7 +106,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
     if (!m || loanVoted.has(m.id)) return [];
     const loan = loans.find((l) => l.id === r.player_id);
     const g = Array.isArray(loan?.groups) ? loan?.groups[0] : loan?.groups;
-    return [{ ...m, teamName: (g as { name: string } | null | undefined)?.name ?? "Takım" }];
+    return [{ ...m, teamName: `${(g as { name: string } | null | undefined)?.name ?? "Takım"} (ödünç)` }];
   });
 
   const voted = new Set((myVotes ?? []).map((v) => v.match_id));
@@ -120,14 +130,69 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
   const dueCalls = myCalls.filter((c) => decisionDue(c));
   const toVote = matches.filter((m) => m.status === "voting" && m.inRoster && !voted.has(m.id));
   const upcoming = matches.filter((m) => !toVote.includes(m));
+  // Grup satırında "sıradaki maç": grubun ilk planlı maçı
+  const nextByGroup = new Map<string, string>();
+  for (const m of upcoming) if (m.status === "planned" && !nextByGroup.has(m.group_id)) nextByGroup.set(m.group_id, m.played_at);
 
   // Geçici ve dağıtılmış takımlar ayrı, kapalı bölümde (Takımlarım kalabalıklaşmasın)
   const teams = memberships.filter((m) => m.group.kind === "team" && !m.group.temporary && !m.group.archived);
   const tempTeams = memberships.filter((m) => m.group.kind === "team" && (m.group.temporary || m.group.archived));
   const groups = memberships.filter((m) => m.group.kind === "community");
+  const managed = memberships.filter((m) => canCreateMatch(m.role) && !m.group.archived);
   const best = memberships.reduce<number>((a, m) => Math.max(a, m.overall), DEFAULT_OVERALL);
+  const tier = tierProgress(best);
   const totalMatches = memberships.reduce((a, m) => a + m.matchesPlayed, 0);
   const firstName = (profile?.display_name ?? "").split(" ")[0];
+  const vsText = (m: { kind: string; opponent_name: string | null }) => (m.kind === "external" ? `vs ${m.opponent_name}` : "kendi aramızda");
+
+  // Yapılacaklar: önem sırasıyla (oy > kadro kararı > teklif > çağrı > bekleyiş)
+  const actions: { key: string; node: ReactNode }[] = [
+    ...[...loanToVote.map((m) => ({ ...m, groupName: m.teamName })), ...toVote.map((m) => ({ ...m, groupName: m.group.name }))].map((m) => ({
+      key: `v${m.id}`,
+      node: (
+        <ActionItem href={`/g/${m.group_id}/m/${m.id}`} icon="how_to_vote" tone="amber" cta="Oy ver" title="Oyunu bekliyorlar!" sub={`${m.groupName} · ${vsText(m)} · ${formatDate(m.played_at)}`} />
+      ),
+    })),
+    ...dueCalls.map((c) => ({
+      key: `d${c.id}`,
+      node: <ActionItem href={`/g/${c.group_id}/cagri/${c.id}?kesinlestir=1`} icon="alarm" tone="amber" title="Kadroyu kesinleştir" sub={`${c.group_name} · ${callWhen(c)}`} />,
+    })),
+    ...[...incoming].map(([groupId, count]) => ({
+      key: `t${groupId}`,
+      node: <ActionItem href={`/g/${groupId}/teklifler`} icon="handshake" tone="blue" title={`${count} maç teklifi yanıtını bekliyor`} sub={byGroup.get(groupId)?.group.name} />,
+    })),
+    ...toAnswer.map((p) => {
+      const g = byGroup.get(p.group_id)!.group;
+      const yes = p.poll_responses.filter((r: { answer: string }) => r.answer === "yes").length;
+      const fill = p.purpose === "fill";
+      const sub = `${g.name} · ${callWhen(p)}${p.venue ? ` · ${p.venue}` : ""} · ${yes} geliyor`;
+      return {
+        key: `p${p.id}`,
+        node: fill ? (
+          <ActionItem href={`/g/${p.group_id}/cagri/${p.id}`} icon="person_search" tone="green" cta="Başvur" title={`${p.capacity} oyuncu aranıyor`} sub={sub} />
+        ) : (
+          <ActionItem href={`/g/${p.group_id}/cagri/${p.id}`} icon="campaign" tone="green" title="Maça geliyor musun?" sub={sub}>
+            {/* Ana sayfadan hızlı yanıt; mevki/not için çağrı sayfası */}
+            <form action={respondPoll} className="flex gap-2">
+              <input type="hidden" name="groupId" value={p.group_id} />
+              <input type="hidden" name="pollId" value={p.id} />
+              <input type="hidden" name="returnTo" value="/" />
+              <SubmitButton name="answer" value="yes" pendingLabel="…" className="min-h-10 flex-1">Geliyorum</SubmitButton>
+              <SubmitButton name="answer" value="no" variant="secondary" pendingLabel="…" className="min-h-10 flex-1">Gelemem</SubmitButton>
+            </form>
+          </ActionItem>
+        ),
+      };
+    }),
+    ...waiting.map((w) => ({
+      key: `w${w.id}`,
+      node: (
+        <ActionItem href={`/g/${w.group_id}/cagri/${w.id}`} icon="hourglass_top" tone="neutral" title={w.reserve ? "Yedektesin" : "Başvurun organizatörün kararını bekliyor"} sub={`${w.groupName} · ${callWhen(w)}`} />
+      ),
+    })),
+  ];
+  const shown = actions.slice(0, VISIBLE_ACTIONS);
+  const more = actions.slice(VISIBLE_ACTIONS);
 
   return (
     <main className="pt-1">
@@ -152,11 +217,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
         ]}
       />
       <ErrorNote message={error} />
-      {left && <p className="mb-4 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">Gruptan ayrıldın. Geçmişin korunuyor; davet koduyla istediğin zaman geri dönebilirsin.</p>}
-      {deleted && <p className="mb-4 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">Silindi.</p>}
+      {left && <p className="mb-4 rounded-xl bg-primary/10 p-3 text-center text-sm text-primary">Gruptan ayrıldın. Geçmişin korunuyor; davet koduyla istediğin zaman geri dönebilirsin.</p>}
+      {deleted && <p className="mb-4 rounded-xl bg-primary/10 p-3 text-center text-sm text-primary">Silindi.</p>}
 
       {/* Karşılama + kişisel kart */}
-      <Link href="/profil" className="mb-6 flex items-center gap-4">
+      <Link href="/profil" className="mb-3 flex items-center gap-4">
         <div
           className={cx(
             "flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-2xl font-black",
@@ -177,227 +242,281 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
             </div>
           ) : (
             <>
-              <span className="text-2xl leading-none">{best}</span>
+              <span className="font-display text-2xl leading-none">{best}</span>
               <span className="text-[9px] uppercase opacity-70">{initials(profile?.display_name ?? "")}</span>
             </>
           )}
         </div>
         <div className="min-w-0">
-          <div className="text-sm text-muted">Merhaba</div>
-          <div className="truncate text-2xl font-black">{firstName} 👋</div>
-          <div className="text-xs text-muted">
-            {formatRegion(profile?.city ?? null, profile?.district ?? null)} · {totalMatches} maç
+          <div className="text-xs text-on-surface-variant">Merhaba</div>
+          <div className="truncate font-display text-2xl font-bold">{firstName}</div>
+          <div className="flex items-center gap-1 text-xs text-on-surface-variant">
+            <Icon name="location_on" className="text-[14px] text-primary" />
+            <span className="truncate">
+              {formatRegion(profile?.city ?? null, profile?.district ?? null)} · {totalMatches} maç
+            </span>
           </div>
         </div>
       </Link>
 
-      <SkillQueueBanner supabase={supabase} className="mb-3 block" />
+      {/* Seviye şeridi */}
+      <Link href="/profil" className="mb-6 block rounded-xl border border-line bg-surface-low px-3.5 py-3">
+        <div className="flex items-center justify-between">
+          <span className="flex items-center gap-1.5 font-display text-sm font-bold">
+            <Icon name="workspace_premium" fill className={cx("text-[18px]", tier.name === "Altın" ? "text-gold-1" : tier.name === "Gümüş" ? "text-silver-1" : "text-bronze-1")} />
+            {tier.name} seviye
+          </span>
+          <span className="text-xs text-on-surface-variant">
+            {tier.next ? (
+              <>
+                {tier.next === "Altın" ? "Altına" : "Gümüşe"} <strong className="font-display text-gold-1 tabular-nums">{tier.left} puan</strong>
+              </>
+            ) : (
+              "En üst seviye"
+            )}
+          </span>
+        </div>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-highest">
+          <div className="h-full rounded-full bg-gradient-to-r from-silver-2 to-gold-1" style={{ width: `${tier.pct}%` }} />
+        </div>
+      </Link>
 
-      {/* Takımıma gelen maç teklifleri (kaptan/yetkili) */}
-      {[...incoming].map(([groupId, count]) => (
-        <Link key={groupId} href={`/g/${groupId}/teklifler`}>
-          <Card className="mb-3 flex items-center gap-3 border-amber-400/40 bg-amber-400/10">
-            <span className="text-2xl">🤝</span>
-            <div className="min-w-0 flex-1">
-              <div className="font-semibold">{count} maç teklifi yanıtını bekliyor</div>
-              <div className="truncate text-xs text-muted">{byGroup.get(groupId)?.group.name}</div>
-            </div>
-            <span className="text-amber-300">›</span>
-          </Card>
-        </Link>
-      ))}
+      <SkillQueueBanner supabase={supabase} className="mb-3" />
 
-      {/* Organizatör: kadro kararı zamanı gelen çağrılarım */}
-      {dueCalls.map((c) => (
-        <Link key={c.id} href={`/g/${c.group_id}/cagri/${c.id}?kesinlestir=1`}>
-          <Card className="mb-3 flex items-center gap-3 border-amber-400/50 bg-amber-400/10">
-            <span className="text-2xl">⏰</span>
-            <div className="min-w-0 flex-1">
-              <div className="font-semibold">Kadroyu kesinleştir</div>
-              <div className="truncate text-xs text-muted">
-                {c.group_name} · {callWhen(c)}
+      {/* Yapılacaklar */}
+      {actions.length > 0 && (
+        <section className="mb-2">
+          <div className="mb-3 flex items-center gap-2">
+            <span className="h-4 w-1.5 shrink-0 rounded-full bg-amber-400" aria-hidden />
+            <h2 className="font-display text-base font-bold uppercase tracking-wider">Yapılacaklar</h2>
+            <span className="rounded-full bg-amber-400/15 px-2 font-display text-xs font-bold text-amber-300 tabular-nums">{actions.length}</span>
+          </div>
+          <div className="space-y-2">
+            {shown.map((a) => (
+              <div key={a.key}>{a.node}</div>
+            ))}
+          </div>
+          {more.length > 0 && (
+            <details className="group mt-2">
+              <summary className="flex cursor-pointer list-none items-center justify-center gap-1 py-2 text-sm font-semibold text-primary">
+                +{more.length} daha
+                <Icon name="expand_more" className="text-[18px] transition group-open:rotate-180" />
+              </summary>
+              <div className="space-y-2">
+                {more.map((a) => (
+                  <div key={a.key}>{a.node}</div>
+                ))}
               </div>
-            </div>
-            <span className="text-amber-300">›</span>
-          </Card>
-        </Link>
-      ))}
-
-      {/* Yedekte olduğum veya adam aramaya başvurup kararı beklediğim çağrılar */}
-      {waiting.map((w) => (
-        <Link key={w.id} href={`/g/${w.group_id}/cagri/${w.id}`}>
-          <Card className="mb-3 flex items-center gap-3 border-line">
-            <span className="text-2xl">⏳</span>
-            <div className="min-w-0 flex-1">
-              <div className="font-semibold">{w.reserve ? "Yedektesin" : "Başvurun organizatörün kararını bekliyor"}</div>
-              <div className="truncate text-xs text-muted">
-                {w.groupName} · {callWhen(w)}
-              </div>
-            </div>
-            <span className="text-muted">›</span>
-          </Card>
-        </Link>
-      ))}
-
-      {/* Yanıt bekleyen maç çağrıları */}
-      {toAnswer.map((p) => {
-        const g = byGroup.get(p.group_id)!.group;
-        const yes = p.poll_responses.filter((r: { answer: string }) => r.answer === "yes").length;
-        const fill = p.purpose === "fill";
-        return (
-          <Link key={p.id} href={`/g/${p.group_id}/cagri/${p.id}`}>
-            <Card className="mb-3 flex items-center gap-3 border-accent/40 bg-accent/10">
-              <span className="text-2xl">{fill ? "🔎" : "📣"}</span>
-              <div className="min-w-0 flex-1">
-                <div className="font-semibold">{fill ? `${p.capacity} oyuncu aranıyor` : "Maça geliyor musun?"}</div>
-                <div className="truncate text-xs text-muted">
-                  {g.name} · {callWhen(p)}
-                  {p.venue ? ` · ${p.venue}` : ""} · {yes} geliyor
-                </div>
-              </div>
-              <span className="text-accent">›</span>
-            </Card>
-          </Link>
-        );
-      })}
-
-      {/* Ödünç oynadığım ve oylamaya geçen maçlar */}
-      {loanToVote.map((m) => (
-        <Link key={m.id} href={`/g/${m.group_id}/m/${m.id}`}>
-          <Card className="mb-3 flex items-center gap-3 border-amber-400/40 bg-amber-400/10">
-            <span className="text-2xl">🗳️</span>
-            <div className="min-w-0 flex-1">
-              <div className="font-semibold">Oyunu bekliyorlar!</div>
-              <div className="truncate text-xs text-muted">
-                {m.teamName} (ödünç) · {m.kind === "external" ? `vs ${m.opponent_name}` : "kendi aramızda"} · {formatDate(m.played_at)}
-              </div>
-            </div>
-            <span className="text-amber-300">›</span>
-          </Card>
-        </Link>
-      ))}
-
-      {/* Oy bekleyen maçlar: en önemli eylem */}
-      {toVote.map((m) => (
-        <Link key={m.id} href={`/g/${m.group_id}/m/${m.id}`}>
-          <Card className="mb-3 flex items-center gap-3 border-amber-400/40 bg-amber-400/10">
-            <span className="text-2xl">🗳️</span>
-            <div className="min-w-0 flex-1">
-              <div className="font-semibold">Oyunu bekliyorlar!</div>
-              <div className="truncate text-xs text-muted">
-                {m.group.name} · {m.kind === "external" ? `vs ${m.opponent_name}` : "kendi aramızda"} · {formatDate(m.played_at)}
-              </div>
-            </div>
-            <span className="text-amber-300">›</span>
-          </Card>
-        </Link>
-      ))}
+            </details>
+          )}
+        </section>
+      )}
 
       {upcoming.length > 0 && (
         <>
           <SectionTitle>Yaklaşan maçlar</SectionTitle>
-          <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1">
-            {upcoming.map((m) => (
-              <Link key={m.id} href={`/g/${m.group_id}/m/${m.id}`} className="w-56 shrink-0">
-                <Card className="h-full p-3 transition hover:border-accent/50">
+          <div className="no-scrollbar -mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1">
+            {upcoming.map((m) => {
+              const days = daysLeftLabel(m.played_at);
+              const cap = rosterCapacity(m.team_size, m.kind);
+              const count = m.match_players.length;
+              const status =
+                m.status === "voting"
+                  ? { label: "Oylama", icon: "how_to_vote", warn: true }
+                  : m.status === "played"
+                    ? { label: "Skor onayı", icon: "scoreboard", warn: true }
+                    : m.inRoster
+                      ? { label: "Kadrodasın", icon: "check_circle", warn: false, on: true }
+                      : { label: "Planlandı", icon: "event", warn: false };
+              return (
+                <Link
+                  key={m.id}
+                  href={`/g/${m.group_id}/m/${m.id}`}
+                  className={cx(
+                    "flex w-[17.5rem] shrink-0 snap-start flex-col gap-3 rounded-2xl border bg-gradient-to-br from-primary/10 via-surface-container to-surface-container p-3.5 transition",
+                    "on" in status ? "border-primary/35 shadow-[0_0_24px_-6px_rgba(34,197,94,0.3)]" : "border-line hover:border-primary/40",
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span
+                      className={cx(
+                        "inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 font-display text-[11px] font-bold tracking-wide",
+                        status.warn ? "bg-amber-400/15 text-amber-300" : "on" in status ? "bg-primary/15 text-primary" : "bg-surface-highest text-on-surface",
+                      )}
+                    >
+                      <Icon name={status.icon} fill className="text-[14px]" />
+                      {status.label}
+                    </span>
+                    {days && m.status === "planned" && <span className="whitespace-nowrap font-display text-xs font-bold text-primary">{days}</span>}
+                  </div>
                   <div className="flex items-center gap-2">
                     <TeamBadge name={m.group.name} color={m.group.color} size="sm" />
-                    <span className="truncate text-sm font-semibold">{m.group.name}</span>
+                    <span className="min-w-0 truncate font-display text-[17px] font-bold leading-snug">
+                      {m.kind === "external" ? `${m.group.name} vs ${m.opponent_name}` : m.group.name}
+                    </span>
                   </div>
-                  <div className="mt-2 text-sm">{m.kind === "external" ? `vs ${m.opponent_name}` : "Kendi aramızda"}</div>
-                  <div className="text-xs text-muted">{formatDate(m.played_at)}</div>
-                  <div className="mt-2">
-                    {m.status === "voting" ? <Badge tone="warn">Oylama</Badge> : m.status === "played" ? <Badge tone="warn">Skor onayı</Badge> : m.inRoster ? <Badge tone="accent">Kadrodasın</Badge> : <Badge>Planlandı</Badge>}
+                  <div className="space-y-1 text-[13px] text-on-surface-variant">
+                    <div className="flex items-center gap-1.5">
+                      <Icon name="calendar_today" className="text-[16px]" />
+                      {formatDate(m.played_at)}
+                      {m.kind !== "external" && " · kendi aramızda"}
+                    </div>
+                    {m.venue && (
+                      <div className="flex items-center gap-1.5">
+                        <Icon name="stadium" className="text-[16px]" />
+                        <span className="truncate">{m.venue}</span>
+                      </div>
+                    )}
                   </div>
-                </Card>
-              </Link>
-            ))}
+                  <div className="mt-auto">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-on-surface-variant">Kadro</span>
+                      <span className="font-display font-bold tabular-nums">{cap ? `${count}/${cap}` : `${count} oyuncu`}</span>
+                    </div>
+                    {cap && (
+                      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-surface-highest">
+                        <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, Math.round((count / cap) * 100))}%` }} />
+                      </div>
+                    )}
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         </>
       )}
 
-      <SectionTitle
-        action={
-          <span className="flex items-center">
-            <LinkButton href="/katil?tur=takim" variant="ghost" className="min-h-8 px-2 text-accent">Takıma katıl</LinkButton>
-            <LinkButton href="/takim-kur" variant="ghost" className="min-h-8 px-2 text-accent">+ Kur</LinkButton>
-          </span>
-        }
-      >
-        Takımlarım
-      </SectionTitle>
-      {teams.length === 0 ? (
-        <Card className="text-center text-sm text-muted">
-          Henüz bir takımda değilsin. Takımını kur ya da kaptanından davet kodunu iste ve &quot;Takıma katıl&quot; ile gir.
-        </Card>
-      ) : (
-        <div className="space-y-2">{teams.map((m) => <MembershipRow key={m.playerId} m={m} unread={unread.get(m.group.id) ?? 0} />)}</div>
-      )}
-      {tempTeams.length > 0 && (
-        <details className="mt-2">
-          <summary className="cursor-pointer py-2 text-sm text-muted">⏳ Geçici ve dağıtılmış takımlarım · {tempTeams.length}</summary>
-          <div className="space-y-2">{tempTeams.map((m) => <MembershipRow key={m.playerId} m={m} unread={unread.get(m.group.id) ?? 0} />)}</div>
-        </details>
-      )}
+      {/* Takımlarım / Gruplarım */}
+      <SectionTitle>Takımlarım ve gruplarım</SectionTitle>
+      <HomeTabs
+        initial={teams.length || tempTeams.length || !groups.length ? "takim" : "grup"}
+        tabs={[
+          {
+            key: "takim",
+            label: `Takımlar · ${teams.length}`,
+            content: (
+              <>
+                <JoinLinks kind="takim" />
+                {teams.length === 0 ? (
+                  <EmptyNote>Henüz bir takımda değilsin. Takımını kur ya da kaptanından davet kodunu iste ve &quot;Takıma katıl&quot; ile gir.</EmptyNote>
+                ) : (
+                  <div className="space-y-2">{teams.map((m) => <MembershipRow key={m.playerId} m={m} unread={unread.get(m.group.id) ?? 0} next={nextByGroup.get(m.group.id)} />)}</div>
+                )}
+                {tempTeams.length > 0 && (
+                  <details className="mt-2">
+                    <summary className="flex cursor-pointer items-center gap-1.5 py-2 text-sm text-on-surface-variant">
+                      <Icon name="hourglass_top" className="text-[16px]" />
+                      Geçici ve dağıtılmış takımlarım · {tempTeams.length}
+                    </summary>
+                    <div className="space-y-2">{tempTeams.map((m) => <MembershipRow key={m.playerId} m={m} unread={unread.get(m.group.id) ?? 0} next={nextByGroup.get(m.group.id)} />)}</div>
+                  </details>
+                )}
+              </>
+            ),
+          },
+          {
+            key: "grup",
+            label: `Gruplar · ${groups.length}`,
+            content: (
+              <>
+                <JoinLinks kind="grup" />
+                {groups.length === 0 ? (
+                  <EmptyNote>Gruplar arkadaş toplulukların içindir: kendi aranızda maç kurup puanlaşırsınız. Kurucudan davet kodunu iste ve &quot;Gruba katıl&quot; ile gir.</EmptyNote>
+                ) : (
+                  <div className="space-y-2">{groups.map((m) => <MembershipRow key={m.playerId} m={m} unread={unread.get(m.group.id) ?? 0} next={nextByGroup.get(m.group.id)} />)}</div>
+                )}
+              </>
+            ),
+          },
+        ]}
+      />
 
-      <SectionTitle
-        action={
-          <span className="flex items-center">
-            <LinkButton href="/katil?tur=grup" variant="ghost" className="min-h-8 px-2 text-accent">Gruba katıl</LinkButton>
-            <LinkButton href="/grup-kur" variant="ghost" className="min-h-8 px-2 text-accent">+ Kur</LinkButton>
-          </span>
-        }
-      >
-        Gruplarım
-      </SectionTitle>
-      {groups.length === 0 ? (
-        <Card className="text-center text-sm text-muted">
-          Gruplar arkadaş toplulukların içindir: kendi aranızda maç kurup puanlaşırsınız. Kurucudan davet kodunu iste ve &quot;Gruba katıl&quot; ile gir.
-        </Card>
-      ) : (
-        <div className="space-y-2">{groups.map((m) => <MembershipRow key={m.playerId} m={m} unread={unread.get(m.group.id) ?? 0} />)}</div>
-      )}
+      {/* Duruma göre eylem şeridi: yönettiğin yer varsa maç ayarla, hiçbir yerde değilsen kur/katıl */}
+      {managed.length > 0 ? (
+        <section className="mt-6 rounded-2xl bg-gradient-to-br from-primary-container to-[#00a572] p-4 text-on-primary">
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-on-primary/15">
+              <Icon name="sports_soccer" fill className="text-[24px]" />
+            </span>
+            <div className="min-w-0">
+              <div className="font-display text-base font-bold">Maç ayarla</div>
+              <div className="text-xs font-medium">Çağrıyı aç, üyeler &quot;geliyorum&quot; desin, kadroyu sen kesinleştir.</div>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {managed.slice(0, 4).map((m) => (
+              <Link key={m.playerId} href={`/g/${m.group.id}/cagri/yeni`} className="inline-flex min-h-9 max-w-full items-center gap-1 rounded-full bg-pitch-950 px-3.5 font-display text-[13px] font-bold text-primary">
+                <Icon name="add" className="text-[16px]" />
+                <span className="truncate">{m.group.name}</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : memberships.length === 0 ? (
+        <section className="mt-6 flex items-center gap-3 rounded-2xl bg-gradient-to-br from-primary-container to-[#00a572] p-4 text-on-primary">
+          <div className="min-w-0 flex-1">
+            <div className="font-display text-base font-bold">Sahaya çık</div>
+            <div className="text-xs font-medium">Takımını kur ya da davet koduyla bir takıma katıl.</div>
+          </div>
+          <Link href="/takim-kur" className="shrink-0 rounded-full bg-pitch-950 px-4 py-2.5 font-display text-[13px] font-bold text-primary">
+            Takım kur
+          </Link>
+        </section>
+      ) : null}
 
       <FeaturedSections city={profile?.city ?? null} />
-
     </main>
   );
 }
 
-function MembershipRow({ m, unread }: { m: Membership; unread: number }) {
+function JoinLinks({ kind }: { kind: "takim" | "grup" }) {
+  return (
+    <div className="-mt-1 mb-2 flex justify-end">
+      <LinkButton href={`/katil?tur=${kind}`} variant="ghost" className="min-h-8 px-2 text-primary">
+        {kind === "takim" ? "Takıma katıl" : "Gruba katıl"}
+      </LinkButton>
+      <LinkButton href={kind === "takim" ? "/takim-kur" : "/grup-kur"} variant="ghost" className="min-h-8 px-2 text-primary">
+        + Kur
+      </LinkButton>
+    </div>
+  );
+}
+
+function EmptyNote({ children }: { children: ReactNode }) {
+  return <p className="rounded-xl border border-line bg-surface-container p-4 text-center text-sm text-on-surface-variant">{children}</p>;
+}
+
+function MembershipRow({ m, unread, next }: { m: Membership; unread: number; next?: string }) {
   const g = m.group;
   const role = ROLE_LABEL[g.kind][m.role];
   return (
-    <Link href={`/g/${g.id}`}>
-      <Card className="flex items-center gap-3 p-3 transition hover:border-accent/50">
-        <span className="relative">
-          <TeamBadge name={g.name} color={g.color} />
-          {unread > 0 && (
-            <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-pitch-900 bg-accent px-1 text-[10px] font-bold text-pitch-950" title={`${unread} okunmamış mesaj`}>
-              {unread > 99 ? "99+" : unread}
-            </span>
-          )}
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="truncate font-semibold">{g.name}</div>
-          <div className="text-xs text-muted">
-            {g.kind === "team" ? `${formatRegion(g.city, g.district)} · ` : ""}
-            {g.members} {g.kind === "team" ? "oyuncu" : "üye"}
-            {m.role !== "member" && ` · ${role}`}
-          </div>
+    <Link href={`/g/${g.id}`} className="flex items-center gap-3 rounded-xl border border-line bg-surface-container p-3 transition hover:border-primary/50">
+      <span className="relative">
+        <TeamBadge name={g.name} color={g.color} />
+        {unread > 0 && (
+          <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-surface-container bg-primary px-1 text-[10px] font-bold text-on-primary" title={`${unread} okunmamış mesaj`}>
+            {unread > 99 ? "99+" : unread}
+          </span>
+        )}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="truncate font-semibold">{g.name}</div>
+        <div className="truncate text-xs text-on-surface-variant">
+          {g.kind === "team" ? `${formatRegion(g.city, g.district)} · ` : ""}
+          {g.members} {g.kind === "team" ? "oyuncu" : "üye"}
+          {m.role !== "member" && ` · ${role}`}
         </div>
-        {g.kind === "team" ? (
-          <div className="text-right">
-            <OvrBadge overall={g.rating} />
-            <div className="mt-0.5 text-[10px] text-muted">takım</div>
-          </div>
-        ) : (
-          <div className="text-right">
-            <OvrBadge overall={m.overall} />
-            <div className="mt-0.5 text-[10px] text-muted">senin</div>
+        {next && (
+          <div className="flex items-center gap-1 text-xs text-tertiary">
+            <Icon name="schedule" className="text-[14px]" />
+            Sıradaki maç: {formatDate(next)}
           </div>
         )}
-      </Card>
+      </div>
+      <div className="text-right">
+        <OvrBadge overall={g.kind === "team" ? g.rating : m.overall} />
+        <div className="mt-0.5 text-[10px] text-on-surface-variant">{g.kind === "team" ? "takım" : "senin"}</div>
+      </div>
     </Link>
   );
 }

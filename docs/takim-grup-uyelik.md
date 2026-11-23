@@ -21,7 +21,7 @@ Davet koduyla katılırsa kalıcı üye olur (`join_group` upsert). Eski herkese
 seçeneği ikinci aşamada "Adam arayan maçlar" olarak gelecek. Kurallar: `docs/mac-puanlama.md` "Birleşik çağrı".
 **Geçici (hızlı) takım ve dağıtma (0037, kullanıcı kararları)**: **Arayüzde artık kurulmuyor** (kullanıcı kararı 2026-11-23: grupta sadece kendi aramızda maç; mevcut geçici takımlar ve RPC duruyor, e2e RPC ile kurar). Eskiden kesinleştirmede "Rakibe karşı" + "+ Hızlı takım kur" (`finalize_poll` `p_new_team`) geçici takım
 kurar (`groups.is_temporary`; il/ilçe çağrının topluluğundan, yoksa profilden; kişi başı en fazla 5 açık geçici). Geçici takım Keşfet'te, öne çıkanlarda, menüde ve
-ana sayfa "Takımlarım"da görünmez; ana sayfada kapalı "Geçici ve dağıtılmış takımlarım" bölümünde durur. **Son maçı kapanınca** ve planlı/oylamada maçı
+ana sayfadaki Takımlar sekmesinin listesinde görünmez; aynı sekmede kapalı "Geçici ve dağıtılmış takımlarım" bölümünde durur. **Son maçı kapanınca** ve planlı/oylamada maçı
 kalmayınca kendiliğinden arşivlenir (`groups.archived_at`, tetikleyici); maçı iptal olup hiç maçı kalmayan geçici takım silinir (`deleteMatch` sonrası
 `cleanup_temp_team`; tetikleyici değil, grup silinirken basamaklı silmeyle çakışmasın diye). Kesinleştirmede arşivdeki geçici takımı (kaptanıysan) seçmek onu
 yeniden açar; listede geçiciler önce. Kaptan "Kalıcı yap" (`make_team_permanent`) ile normal takıma çevirir. **Takımı dağıt** (`disband_team`, kaptan, oyuncular
@@ -68,7 +68,7 @@ sütunları açıkça yaz, `select *` ve `invite_code` kullanma** — yetki hata
 **Katılma (migration 0023, kullanıcı isteği)**: link (`/join/KOD`) yanında **elle yazılan kod**: yeni kodlar 10 karakter, karışan O/0/I/1/L yok (`new_invite_code()`, sütun varsayılanı), ekranda `XXXXX-XXXXX`;
 eski 12 karakterli kodlar geçerli. `join_group` büyük/küçük harf, boşluk ve tireyi yok sayar (`norm_invite`). Grup/takım sayfasında kod büyük gösterilir + "Kopyala" + link "Paylaş" + yetkiliye "Yeni kod oluştur"
 (`regenerate_invite`, eski kod/link ölür). **`/katil?tur=takim|grup`**: kod yazılır (tam link de olur) → `invite_preview` RPC'siyle önizleme (ad, tür, bölge, oyuncu sayısı, zaten üye mi) → "Takıma/Gruba katıl" (`joinGroup`).
-Seçilen tür kodla uyuşmazsa doğru bölüme yönlendirilir. Giriş noktaları: ana sayfada Takımlarım/Gruplarım başlıklarında "Takıma/Gruba katıl", menüde ayrı Takımlarım ve Gruplarım bölümleri (her birinde katıl/kur), Keşfet.
+Seçilen tür kodla uyuşmazsa doğru bölüme yönlendirilir. Giriş noktaları: ana sayfada "Takımlarım ve gruplarım" bölümünün Takımlar/Gruplar sekmelerinde "Takıma/Gruba katıl", menüde ayrı Takımlarım ve Gruplarım bölümleri (her birinde katıl/kur), Keşfet.
 Bilinen: kod tahmini için oran sınırı yok (31^10 ≈ 8e14 olasılık; oturum açmak gerekir).
 
 **Gruptan/takımdan ayrılma (migration 0021)**: kayıt **silinmez**; `group_players.left_at` dolar (maç kadroları, oylar, sonuçlar ve kişinin genel rating'i `group_players`'a bağlı, silmek geçmişi götürürdü).

@@ -50,6 +50,8 @@ src/components/CardPhotoUploader.tsx  Kart fotoğrafı yükleme: küçült, arka
 src/components/BottomNav.tsx  Alt gezinme çubuğu (sohbet ekranında gizlenir); NotificationBadge.tsx okunmamış bildirim rozeti (Realtime)
 src/components/ui.tsx  Ortak parçalar (Card, Button/LinkButton, Input, Label, SectionTitle, Header, Badge, ErrorNote) Obsidian Pitch/profil stilinde; `cx` = tailwind-merge (sonradan verilen sınıf kazanır)
 src/components/Icon.tsx  Material Symbols ikonu (tasarımdaki adlarla)
+src/components/home/  Ana sayfa parçaları: ActionItem (Yapılacaklar satırı, aciliyet rengi), HomeTabs (Takımlar/Gruplar hap sekmesi, istemci)
+src/lib/home.ts  Ana sayfa yardımcıları: seviye ilerlemesi, maça kalan gün, kadro kapasitesi (saf, testli)
 src/components/AutoOpenDetails.tsx  İlk yüklemede bir kez açılan açılır bölüm
 src/components/ProfileFields.tsx  Profil ve karşılama formlarının ortak alanları; RegionSelect.tsx bağlı il/ilçe seçimi
 src/components/TeamFields.tsx  Takım kurma ve takım/grup bilgileri düzenleme form alanları; TeamSizeSelect.tsx kaç kişilik (5v5…11v11); TeamBadge.tsx renkli baş harf rozeti

@@ -95,6 +95,9 @@ try {
   check("iki takımda da external maç oluştu", ms.length === 2 && ms.every((m) => m.kind === "external" && m.status === "planned"));
   const mA = ms.find((m) => m.group_id === teamA).id;
   await shot(B1, "34-mac-bos-kadro");
+  await B1.goto(`${BASE}/`);
+  check("ana sayfada yaklaşan maç kartı (rakibe karşı, kadro 0/5)", (await B1.locator("body").innerText()).includes("0/5"));
+  await shot(B1, "34b-ana-sayfa-yaklasan");
 
   // 5) Kadrolar (her takım kendininkini seçer)
   for (const [page, gid, mid] of [[B1, teamB, mB], [A1, teamA, mA]]) {

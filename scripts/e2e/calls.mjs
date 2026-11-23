@@ -81,7 +81,13 @@ try {
   await answer(p1P, "Geliyorum", "GK");
   await answer(p2P, "Geliyorum");
   await answer(p3P, "Belki");
-  await answer(kP, "Geliyorum");
+  // Kurucu (kP) ana sayfadaki Yapılacaklar kutusundan hızlı yanıt verir, ana sayfada kalır
+  await kP.goto(`${BASE}/`);
+  check("ana sayfada 'Maça geliyor musun?' hızlı yanıt kartı", has(await body(kP), "Maça geliyor musun?"));
+  await kP.screenshot({ path: `${SHOTS}/c00-ana-sayfa.png`, fullPage: true });
+  await kP.click('form:has(input[name="returnTo"]) button[name="answer"]:has-text("Geliyorum")');
+  await kP.waitForFunction(() => !document.body.innerText.includes("Maça geliyor musun?"), null, { timeout: 20000 }).catch(() => {});
+  check("hızlı yanıttan sonra ana sayfada kalır, kart kalkar", new URL(kP.url()).pathname === "/" && !has(await body(kP), "Maça geliyor musun?"));
   await answer(p4P, "Geliyorum");
   check("yanıt veren 'kararını bekliyorsun' görür", has(await body(p1P), "kararını bekliyorsun"));
   const { data: resp } = await admin.from("poll_responses").select("user_id, answer, position").eq("poll_id", poll);
