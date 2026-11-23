@@ -15,6 +15,7 @@ import { InviteLink } from "./InviteLink";
 import { openDm, regenerateInvite } from "@/lib/actions";
 import { countIncoming } from "@/lib/challenges-data";
 import { LiveRefresh } from "@/components/LiveRefresh";
+import { MuteToggle, Proposals, TeamStateBanner, type Proposal } from "./GroupExtras";
 
 const STATUS: Record<string, { label: string; tone: "default" | "accent" | "warn" }> = {
   planned: { label: "Planlandı", tone: "default" },
@@ -28,15 +29,15 @@ export default async function GroupPage({
   searchParams,
 }: {
   params: Promise<{ groupId: string }>;
-  searchParams: Promise<{ sekme?: string }>;
+  searchParams: Promise<{ sekme?: string; oner?: string; oneri?: string }>;
 }) {
   const { groupId } = await params;
-  const { sekme } = await searchParams;
+  const { sekme, oner, oneri } = await searchParams;
   const { supabase, user } = await requireUser();
 
   const { data: group } = await supabase
     .from("groups")
-    .select("id, name, kind, city, district, color, description")
+    .select("id, name, kind, city, district, color, description, is_temporary, archived_at")
     .eq("id", groupId)
     .maybeSingle();
   if (!group) notFound();
@@ -73,7 +74,16 @@ export default async function GroupPage({
   const me = players.find((p) => p.user_id === user.id && !p.is_loan);
   const myRole = (me?.role ?? null) as Role | null;
   const canManage = myRole === "captain" || myRole === "admin";
-  const canCreate = canCreateMatch(myRole);
+  const canCreate = canCreateMatch(myRole) && !group.archived_at;
+  // Öneriler (RLS: kendi önerim veya maç açabiliyorsam hepsi) ve sessize alma durumu
+  const [{ data: proposalRows }, { data: myRow }] = me
+    ? await Promise.all([
+        supabase.from("match_proposals").select("id, proposed_by, play_on, starts_at, venue, note").eq("group_id", groupId).eq("status", "pending").order("created_at"),
+        supabase.from("group_players").select("muted").eq("group_id", groupId).eq("user_id", user.id).is("left_at", null).maybeSingle(),
+      ])
+    : [{ data: [] }, { data: null }];
+  const proposals = (proposalRows ?? []) as Proposal[];
+  const nameOf = new Map(players.filter((p) => p.user_id).map((p) => [p.user_id as string, p.display_name]));
   // Asıl kadro hesabı olan üyelerdir; misafirler ayrı sekmede (istatistikleri orada görünür)
   const members = players.filter(isSquadMember);
   const guests = players.filter(isGuestLike);
@@ -131,6 +141,9 @@ export default async function GroupPage({
         }
       />
 
+      {isTeam && (
+        <TeamStateBanner groupId={groupId} archived={!!group.archived_at} temporary={!!group.is_temporary} isCaptain={myRole === "captain"} />
+      )}
       <div className="-mt-2 mb-5 flex items-center gap-4">
         <TeamBadge name={group.name} color={group.color} size="lg" />
         <div className="min-w-0 flex-1">
@@ -195,7 +208,7 @@ export default async function GroupPage({
         </Link>
       )}
 
-      {isTeam && !me && (
+      {isTeam && !me && !group.archived_at && (
         <LinkButton href={`/g/${groupId}/teklif`} className="mb-2 w-full">
           🤝 Maç teklif et
         </LinkButton>
@@ -221,6 +234,17 @@ export default async function GroupPage({
         </LinkButton>
       )}
 
+      {me && <MuteToggle groupId={groupId} muted={!!myRow?.muted} />}
+      <Proposals
+        groupId={groupId}
+        canCreate={canCreate}
+        isMember={!!me && !group.archived_at}
+        proposals={proposals}
+        names={nameOf}
+        userId={user.id}
+        openForm={!!oner}
+        sent={oneri === "gonderildi"}
+      />
       {canCreate && (
         <div className="mb-2 grid grid-cols-2 gap-2">
           <LinkButton href={`/g/${groupId}/cagri/yeni`}>📣 Kimler gelir?</LinkButton>

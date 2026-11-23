@@ -28,7 +28,7 @@ export default async function PlayerProfilePage({
 
   // Davet edebileceğim takım/gruplar: kaptanı/yetkilisi olduklarım; kişi zaten üye veya bekleyen davet varsa çıkar
   const admin = createAdminClient();
-  const mine = (await getMemberships(supabase, user.id)).filter((m) => m.role === "captain" || m.role === "admin");
+  const mine = (await getMemberships(supabase, user.id)).filter((m) => (m.role === "captain" || m.role === "admin") && !m.group.archived);
   let invitable: { id: string; name: string; kind: string }[] = [];
   if (mine.length) {
     const ids = mine.map((m) => m.group.id);

@@ -94,19 +94,34 @@ export async function myOpenGatherCalls(supabase: SupabaseClient, userId: string
   return (data ?? []).map((c) => ({ ...(c as unknown as Call), group_name: one(c.groups as { name: string } | { name: string }[] | null)?.name ?? "" }));
 }
 
-/** Kesinleştirmede seçilebilecek takımlar: maç açabildiğim takımlar */
-export async function myManagedTeams(supabase: SupabaseClient, userId: string) {
+export interface ManagedTeam {
+  id: string;
+  name: string;
+  temporary: boolean;
+  archived: boolean;
+}
+
+/**
+ * Kesinleştirmede seçilebilecek takımlar: maç açabildiğim açık takımlar + kaptanı olduğum dağıtılmış geçici takımlar
+ * (seçilince yeniden açılır; yeni takım kurmak yerine eskisi kullanılsın diye). Geçiciler önce.
+ */
+export async function myManagedTeams(supabase: SupabaseClient, userId: string): Promise<ManagedTeam[]> {
+  type G = { id: string; name: string; kind: string; is_temporary: boolean; archived_at: string | null };
   const { data } = await supabase
     .from("group_players")
-    .select("groups(id, name, kind)")
+    .select("role, groups(id, name, kind, is_temporary, archived_at)")
     .eq("user_id", userId)
     .eq("is_loan", false)
     .is("left_at", null)
     .in("role", ["captain", "admin", "organizer"]);
   return (data ?? [])
-    .map((r) => one(r.groups as { id: string; name: string; kind: string } | { id: string; name: string; kind: string }[] | null))
-    .filter((g): g is { id: string; name: string; kind: string } => !!g && g.kind === "team")
-    .sort((a, b) => a.name.localeCompare(b.name, "tr"));
+    .flatMap((r) => {
+      const g = one(r.groups as G | G[] | null);
+      if (!g || g.kind !== "team") return [];
+      if (g.archived_at && !(g.is_temporary && r.role === "captain")) return [];
+      return [{ id: g.id, name: g.name, temporary: g.is_temporary, archived: !!g.archived_at }];
+    })
+    .sort((a, b) => Number(b.temporary) - Number(a.temporary) || Number(a.archived) - Number(b.archived) || a.name.localeCompare(b.name, "tr"));
 }
 
 /** Adam aramayı açabileceğim topluluklar (organizatör/yetkili/kurucu olduğum) */

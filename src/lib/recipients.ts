@@ -1,10 +1,19 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-/** Grubun/takımın hesabı olan asıl üyeleri (misafir ve ödünç oyuncu hariç); `adminsOnly` ile sadece kaptan/yetkililer */
-export async function groupMemberIds(admin: SupabaseClient, groupId: string, opts: { adminsOnly?: boolean } = {}): Promise<string[]> {
+/**
+ * Grubun/takımın hesabı olan asıl üyeleri (misafir ve ödünç oyuncu hariç); `adminsOnly` ile sadece kaptan/yetkililer,
+ * `canCreate` ile maç açabilenler (kurucu/yetkili/organizatör). `broadcast`: toplu duyuru (yeni çağrı, sohbet…) — grubu sessize alanlar hariç.
+ */
+export async function groupMemberIds(
+  admin: SupabaseClient,
+  groupId: string,
+  opts: { adminsOnly?: boolean; canCreate?: boolean; broadcast?: boolean } = {},
+): Promise<string[]> {
   let q = admin.from("group_players").select("user_id").eq("group_id", groupId).eq("is_loan", false).is("left_at", null).not("user_id", "is", null);
   if (opts.adminsOnly) q = q.in("role", ["captain", "admin"]);
+  if (opts.canCreate) q = q.in("role", ["captain", "admin", "organizer"]);
+  if (opts.broadcast) q = q.eq("muted", false);
   const { data } = await q.limit(2000);
   return [...new Set((data ?? []).map((r) => r.user_id as string))];
 }

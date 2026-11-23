@@ -19,6 +19,23 @@ kadrosuna girer; takımın asıl kadrosunda değildir: `is_group_member` onu **s
 profil kartlarında yoktur, takım sayfasında "Misafirler" sekmesinde "ödünç" etiketiyle görünür (`isSquadMember`/`isGuestLike`). Oy verir/oylanır, genel ratingi geçerlidir.
 Davet koduyla katılırsa kalıcı üye olur (`join_group` upsert). Eski herkese açık ilan (`player_listings`, `/ilan`, Keşfet "Oyuncu arayan takımlar") kalktı; "herkese aç"
 seçeneği ikinci aşamada "Adam arayan maçlar" olarak gelecek. Kurallar: `docs/mac-puanlama.md` "Birleşik çağrı".
+**Geçici (hızlı) takım ve dağıtma (0037, kullanıcı kararları)**: kesinleştirmede "Rakibe karşı" + "+ Hızlı takım kur" (`finalize_poll` `p_new_team`) geçici takım
+kurar (`groups.is_temporary`; il/ilçe çağrının topluluğundan, yoksa profilden; kişi başı en fazla 5 açık geçici). Geçici takım Keşfet'te, öne çıkanlarda, menüde ve
+ana sayfa "Takımlarım"da görünmez; ana sayfada kapalı "Geçici ve dağıtılmış takımlarım" bölümünde durur. **Son maçı kapanınca** ve planlı/oylamada maçı
+kalmayınca kendiliğinden arşivlenir (`groups.archived_at`, tetikleyici); maçı iptal olup hiç maçı kalmayan geçici takım silinir (`deleteMatch` sonrası
+`cleanup_temp_team`; tetikleyici değil, grup silinirken basamaklı silmeyle çakışmasın diye). Kesinleştirmede arşivdeki geçici takımı (kaptanıysan) seçmek onu
+yeniden açar; listede geçiciler önce. Kaptan "Kalıcı yap" (`make_team_permanent`) ile normal takıma çevirir. **Takımı dağıt** (`disband_team`, kaptan, oyuncular
+sayfası): planlı/oylamada maç varsa önce o bitmeli; oynanmış maç varsa arşiv (geçmiş ve puanlar kalır; açık çağrılar, bekleyen teklif ve davetler kapanır), yoksa
+silme. **Arşivli takım** yeni maç, çağrı, teklif, davet ve katılım almaz (`guard_archived_group` tetikleyicileri; `can_create_match` da false); sayfasında
+"Bu takım dağıtıldı" şeridi, kaptan "Yeniden aç" (`reopen_team`). `groups` sütun yetkisine `is_temporary`, `archived_at` eklendi.
+**Takıma davet**: mevcut `invite_to_group` (kaptan/yetkili); takımın oyuncular sayfasında ödünç oyuncunun yanında "Takıma davet et" (kabul edince asıl kadroya geçer).
+**Üye maç önerisi (0037)**: üye grup/takım sayfasında "💡 Maç öner" (`propose_match`: gün, isteğe bağlı saat/saha/not; grupta kişi başı 1 bekleyen; maç açabilen
+öneremez, doğrudan çağrı açar). Öneriyi sadece öneren ve maç açabilenler görür (RLS), topluluğa/sohbete düşmez; maç açabilenlere bildirim. `decide_proposal`:
+onayda öneren adına toplama çağrısı açılır (`match_polls.proposal_id`) ve öneren **rolü olmasa da** o çağrıyı yönetir (`can_manage_poll`), kurduğu maçı da
+(`created_by`); gruba normal çağrı duyurusu gider. Öneren `cancel_proposal` ile geri çeker. UI: `g/[groupId]/GroupExtras.tsx` (`Proposals`, `#oneriler`).
+**Sessize alma (0037)**: üye grubu kendi için sessize alır (`group_players.muted`, `set_group_muted`; grup sayfasında "🔔 Sessize al"). Toplu duyurular
+(`groupMemberIds(..., { broadcast: true })`: yeni çağrı, adam arama, sohbet, öneriden açılan çağrı) gitmez; kişiye özel olanlar (kadrodasın, yedek, oylama,
+çekilme, öneri kararı) gider. Test: `db-checks/proposals-temp-teams.mjs`, `e2e/proposals-teams.mjs`.
 **Güvenilirlik**: maç sonucu girerken kaptan "gelmedi" işaretler (`mark_no_shows`: kadrodan çıkarır, hesabı olanı `match_no_shows`'a yazar; sadece planlanmış maçta,
 yani skor düzeltmesinde "gelmedi" kutusu görünmez). `poll_responders` organizatöre oynadığı (oylama/kapanışa ulaşmış) maç ve gelmediği maç sayısını verir (kimlik
 doğrulamasız genel bir güvenilirlik sorgusu bilerek yok), `reliability()` yüzdeyi ve etiketi üretir (3 kayıttan azında "Yeni"). `submitResult` sırası: önce her şeyi

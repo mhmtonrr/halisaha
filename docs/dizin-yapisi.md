@@ -12,6 +12,7 @@ src/lib/call-rules.ts    Birleşik çağrı: varsayılan seçim, yedek/başvuru 
 src/lib/call-actions.ts  Çağrı Server Action'ları: aç/düzenle/yanıtla/kesinleştir/kadroya al/adam ara + bildirimler
 src/lib/calls-data.ts    Çağrı sorguları (çağrı + yanıtlayanlar, gruptaki/maçtaki çağrılar, yönettiğim takım/topluluklar)
 src/lib/calls-notify.ts  Kadroda yer açılınca organizatöre bildirim (service role)
+src/app/g/[groupId]/GroupExtras.tsx  Grup sayfası ekleri: geçici/dağıtılmış takım şeridi, sessize al, maç önerileri
 src/lib/reliability.ts   Güvenilirlik: oynadığı / (oynadığı + gelmediği) (saf, testli)
 src/lib/notify-rules.ts  Bildirim kuralları: kategori/tercih, alıcı planı, sohbet birleştirme, metinler, push sonucu (saf, testli)
 src/lib/notify.ts        notify(): kutuya yaz + web push gönder (service role; asla fırlatmaz); later(): yanıttan sonra çalıştır

@@ -54,7 +54,7 @@ export async function createGatherPoll(fd: FormData) {
   const pollId = data as string;
   later(async () => {
     const admin = createAdminClient();
-    const [ids, name] = await Promise.all([groupMemberIds(admin, groupId), groupName(admin, groupId)]);
+    const [ids, name] = await Promise.all([groupMemberIds(admin, groupId, { broadcast: true }), groupName(admin, groupId)]);
     await notify(ids, "poll", text.pollOpened(name, groupId, pollId, callWhen({ play_on: day, starts_at: startsAt }), venue), { excludeUserId: user.id });
   });
   redirect(callPath(groupId, pollId));
@@ -162,12 +162,15 @@ export async function finalizePoll(fd: FormData) {
     p_venue: str(fd, "venue").slice(0, 80) || null,
     p_team_size: sizeOf(fd),
     p_kind: kind,
-    p_team: kind === "external" ? str(fd, "teamId") || null : null,
+    // "__new": hızlı (geçici) takım kurulur; adı newTeam
+    p_team: kind === "external" && str(fd, "teamId") !== "__new" ? str(fd, "teamId") || null : null,
     p_opponent: kind === "external" ? str(fd, "opponent").slice(0, 60) : null,
     p_roster: roster,
+    p_new_team: kind === "external" && str(fd, "teamId") === "__new" ? str(fd, "newTeam").slice(0, 60) : null,
   });
   if (error || !matchId) fail(back, rpcMessage(error, "Kadro kesinleştirilemedi"));
-  const matchGroup = kind === "external" ? str(fd, "teamId") : groupId;
+  const { data: created } = await supabase.from("matches").select("group_id").eq("id", matchId as string).single();
+  const matchGroup = (created?.group_id as string | undefined) ?? groupId;
 
   later(async () => {
     const admin = createAdminClient();
@@ -257,7 +260,7 @@ export async function createFillPoll(fd: FormData) {
   later(async () => {
     const admin = createAdminClient();
     const [ids, name, { data: m }] = await Promise.all([
-      groupMemberIds(admin, target),
+      groupMemberIds(admin, target, { broadcast: true }),
       groupName(admin, target),
       admin.from("matches").select("played_at").eq("id", matchId).maybeSingle(),
     ]);
@@ -265,4 +268,71 @@ export async function createFillPoll(fd: FormData) {
   });
   revalidatePath(back);
   redirect(callPath(target, pollId));
+}
+
+// ---------------------------------------------------------------------------
+// Üye maç önerisi (0037): sadece öneren ve maç açabilenler görür; onaylanınca öneren adına çağrı açılır
+// ---------------------------------------------------------------------------
+
+export async function proposeMatch(fd: FormData) {
+  const { supabase, user } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const back = `/g/${groupId}`;
+  const day = str(fd, "day");
+  const time = str(fd, "time");
+  const startsAt = time ? dayTimeToIso(day, time) : null;
+  const { error } = await supabase.rpc("propose_match", {
+    p_group: groupId,
+    p_play_on: day || null,
+    p_starts_at: startsAt,
+    p_venue: str(fd, "venue").slice(0, 80) || null,
+    p_note: str(fd, "note").slice(0, 300) || null,
+  });
+  if (error) fail(`${back}?oner=1`, rpcMessage(error, "Öneri gönderilemedi"));
+  later(async () => {
+    const admin = createAdminClient();
+    const [ids, name, { data: me }] = await Promise.all([
+      groupMemberIds(admin, groupId, { canCreate: true }),
+      groupName(admin, groupId),
+      admin.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
+    ]);
+    await notify(ids, "poll", text.proposalReceived(me?.display_name ?? "Bir üye", name, groupId, callWhen({ play_on: day, starts_at: startsAt })), { excludeUserId: user.id });
+  });
+  revalidatePath(back);
+  redirect(`${back}?oneri=gonderildi#oneriler`);
+}
+
+export async function decideProposal(fd: FormData) {
+  const { supabase, user } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const id = str(fd, "proposalId");
+  const accept = str(fd, "accept") === "1";
+  const back = `/g/${groupId}`;
+  const { data: pollId, error } = await supabase.rpc("decide_proposal", { p_id: id, p_accept: accept });
+  if (error) fail(`${back}#oneriler`, rpcMessage(error, "Karar kaydedilemedi"));
+  later(async () => {
+    const admin = createAdminClient();
+    const [{ data: p }, name] = await Promise.all([
+      admin.from("match_proposals").select("proposed_by, play_on, starts_at, venue").eq("id", id).maybeSingle(),
+      groupName(admin, groupId),
+    ]);
+    if (!p) return;
+    await notify([p.proposed_by as string], "poll", text.proposalDecided(name, groupId, accept, (pollId as string | null) ?? null));
+    if (accept && pollId) {
+      // Açılan çağrı normal çağrı gibi gruba duyurulur (öneren ve onaylayan hariç)
+      const ids = (await groupMemberIds(admin, groupId, { broadcast: true })).filter((u) => u !== p.proposed_by);
+      await notify(ids, "poll", text.pollOpened(name, groupId, pollId as string, callWhen({ play_on: p.play_on as string, starts_at: p.starts_at as string | null }), p.venue as string | null), { excludeUserId: user.id });
+    }
+  });
+  revalidatePath(back);
+  redirect(accept && pollId ? callPath(groupId, pollId as string) : `${back}#oneriler`);
+}
+
+export async function cancelProposal(fd: FormData) {
+  const { supabase } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const { error } = await supabase.rpc("cancel_proposal", { p_id: str(fd, "proposalId") });
+  if (error) fail(`/g/${groupId}#oneriler`, rpcMessage(error, "Öneri geri çekilemedi"));
+  revalidatePath(`/g/${groupId}`);
+  redirect(`/g/${groupId}`);
 }

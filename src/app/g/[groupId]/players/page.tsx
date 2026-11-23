@@ -2,7 +2,7 @@ import { LiveRefresh } from "@/components/LiveRefresh";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
-import { claimGuest, deleteGroup, leaveGroup, openDm, removePlayer, setMemberRole, setPosition, updateTeam } from "@/lib/actions";
+import { claimGuest, deleteGroup, disbandTeam, inviteToGroup, leaveGroup, openDm, removePlayer, setMemberRole, setPosition, updateTeam } from "@/lib/actions";
 import { getGroupSummaries, isGuestLike, isSquadMember, type Position } from "@/lib/data";
 import { ROLE_LABEL, type GroupKind, type Role } from "@/lib/teams-data";
 import { Badge, Button, Card, ErrorNote, Header, SectionTitle } from "@/components/ui";
@@ -54,15 +54,15 @@ export default async function ManagePage({
   searchParams,
 }: {
   params: Promise<{ groupId: string }>;
-  searchParams: Promise<{ error?: string; saved?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; davet?: string }>;
 }) {
   const { groupId } = await params;
-  const { error, saved } = await searchParams;
+  const { error, saved, davet } = await searchParams;
   const { supabase, user } = await requireUser();
 
   const { data: group } = await supabase
     .from("groups")
-    .select("id, name, kind, city, district, color, description")
+    .select("id, name, kind, city, district, color, description, archived_at")
     .eq("id", groupId)
     .maybeSingle();
   if (!group) notFound();
@@ -97,6 +97,7 @@ export default async function ManagePage({
       <Header title={canManage ? (isTeam ? "Takımı yönet" : "Grubu yönet") : isTeam ? "Oyuncular" : "Üyeler"} back={`/g/${groupId}`} />
       <ErrorNote message={error} />
       {saved && <p className="mb-4 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">Kaydedildi ✓</p>}
+      {davet && <p className="mb-4 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">Takım daveti gönderildi ✓ Kabul edince asıl kadroya geçer.</p>}
 
       <Card className="mb-4 text-sm text-muted">
         <b className="text-white">{labels.captain}</b> rolleri yönetir ve {isTeam ? "kaptanlığı" : "kuruculuğu"} devredebilir.{" "}
@@ -212,6 +213,15 @@ export default async function ManagePage({
                       </span>
                     </div>
                   </div>
+                  {canManage && isTeam && p.is_loan && p.user_id && (
+                    // Ödünç oynamış oyuncuyu takıma davet et (kabul edince asıl kadroya geçer)
+                    <form action={inviteToGroup}>
+                      <input type="hidden" name="groupId" value={groupId} />
+                      <input type="hidden" name="userId" value={p.user_id} />
+                      <input type="hidden" name="back" value={`/g/${groupId}/players`} />
+                      <button className="rounded-lg border border-accent/40 px-2 py-1 text-xs text-accent hover:bg-accent/10">Takıma davet et</button>
+                    </form>
+                  )}
                   {canRemove(p) && (
                     <form action={removePlayer}>
                       <input type="hidden" name="groupId" value={groupId} />
@@ -293,6 +303,28 @@ export default async function ManagePage({
               </Card>
             </>
           )}
+        </>
+      )}
+
+      {isTeam && isCaptain && !group.archived_at && (
+        <>
+          <SectionTitle>Takımı dağıt</SectionTitle>
+          <Card>
+            <details>
+              <summary className="cursor-pointer text-sm text-red-300">Takımı dağıt…</summary>
+              <form action={disbandTeam} className="mt-3 space-y-3">
+                <input type="hidden" name="groupId" value={groupId} />
+                <ul className="list-disc space-y-1 pl-5 text-xs text-muted">
+                  <li>Oynanmış maçı varsa takım arşivlenir: maç geçmişi ve puanlar kalır, yeni maç/teklif/katılım kapanır. İstersen sonra yeniden açarsın.</li>
+                  <li>Hiç maçı yoksa takım tamamen silinir.</li>
+                  <li>Planlı veya oylaması süren maç varsa önce o bitmeli ya da iptal edilmeli.</li>
+                </ul>
+                <Button variant="danger" className="w-full">
+                  Takımı dağıt
+                </Button>
+              </form>
+            </details>
+          </Card>
         </>
       )}
 

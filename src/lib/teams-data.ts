@@ -38,6 +38,10 @@ export interface TeamSummary {
   color: string | null;
   description: string | null;
   members: number;
+  /** Hızlı kurulmuş geçici takım (0037) */
+  temporary: boolean;
+  /** Dağıtılmış (arşivli) takım */
+  archived: boolean;
   rating: number;
   /** Rating'i maç oynamış oyunculardan hesaplanmış mı */
   rated: boolean;
@@ -53,6 +57,8 @@ function summarize(g: {
   district: string | null;
   color: string | null;
   description: string | null;
+  is_temporary?: boolean;
+  archived_at?: string | null;
   group_players: GPRow[];
 }, cards: Cards): TeamSummary {
   // Asıl kadro: hesabı olan üyeler. Misafirler (user_id boş) takım puanına ve oyuncu sayısına girmez.
@@ -66,20 +72,25 @@ function summarize(g: {
     color: g.color,
     description: g.description,
     members: members.length,
+    temporary: !!g.is_temporary,
+    archived: !!g.archived_at,
     rating: teamRating(ratings.map((r) => r?.overall ?? DEFAULT_OVERALL)),
     rated: ratings.some((r) => (r?.matches_played ?? 0) > 0),
   };
 }
 
 const TEAM_SELECT =
-  "id, name, city, district, color, description, group_players(user_id, is_loan, left_at)";
+  "id, name, city, district, color, description, is_temporary, archived_at, group_players(user_id, is_loan, left_at)";
 
-/** Bölgedeki takımlar, rating'e göre sıralı */
+/** Keşfet ve öne çıkanlarda listelenmek için en az bu kadar hesaplı asıl üye (kullanıcı kararı) */
+export const MIN_LISTED_MEMBERS = 5;
+
+/** Bölgedeki takımlar, rating'e göre sıralı. Geçici, dağıtılmış ve MIN_LISTED_MEMBERS'tan az üyeli takımlar listelenmez. */
 export async function findTeams(
   supabase: SupabaseClient,
   filter: { city?: string; district?: string; q?: string; limit?: number },
 ): Promise<TeamSummary[]> {
-  let query = supabase.from("groups").select(TEAM_SELECT).eq("kind", "team");
+  let query = supabase.from("groups").select(TEAM_SELECT).eq("kind", "team").eq("is_temporary", false).is("archived_at", null);
   if (filter.city) query = query.eq("city", filter.city);
   if (filter.district) query = query.ilike("district", filter.district.trim());
   if (filter.q) query = query.ilike("name", `%${filter.q.trim().replace(/[%_]/g, "")}%`);
@@ -88,6 +99,7 @@ export async function findTeams(
   const cards = await loadUserCards(supabase, (data ?? []).flatMap((g) => (g.group_players as GPRow[]).map((p) => p.user_id)));
   return (data ?? [])
     .map((g) => summarize(g as Parameters<typeof summarize>[0], cards))
+    .filter((t) => t.members >= MIN_LISTED_MEMBERS)
     .sort((a, b) => Number(b.rated) - Number(a.rated) || b.rating - a.rating || a.name.localeCompare(b.name, "tr"))
     .slice(0, filter.limit ?? 100);
 }

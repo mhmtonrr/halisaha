@@ -158,6 +158,20 @@ export const text = {
     url: `/g/${groupId}/cagri/${pollId}`,
     tag: `poll-apply:${pollId}`,
   }),
+  /** Kurucu/yetkili/organizatörlere: üye maç önerdi */
+  proposalReceived: (who: string, groupName: string, groupId: string, when: string): Content => ({
+    title: "💡 Maç önerisi",
+    body: truncate(join(`${who} maç öneriyor`, groupName, when), 300),
+    url: `/g/${groupId}#oneriler`,
+    tag: `proposal:${groupId}`,
+  }),
+  /** Önerene: onaylandı (çağrı açıldı, sen yönetiyorsun) veya reddedildi */
+  proposalDecided: (groupName: string, groupId: string, accepted: boolean, pollId: string | null): Content => ({
+    title: accepted ? "✅ Maç önerin onaylandı" : "Maç önerin onaylanmadı",
+    body: truncate(accepted ? `${groupName}: çağrı açıldı, kadroyu sen kesinleştireceksin` : groupName, 300),
+    url: accepted && pollId ? `/g/${groupId}/cagri/${pollId}` : `/g/${groupId}`,
+    tag: `proposal-decision:${groupId}`,
+  }),
   /** Organizatöre: kadroda yer açıldı, yedek var */
   spotOpened: (who: string, groupId: string, pollId: string, reserves: number): Content => ({
     title: "🔄 Kadroda yer açıldı",

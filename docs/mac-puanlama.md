@@ -3,7 +3,7 @@
 (CLAUDE.md'den taşındı; ilgili konuda çalışırken oku. Konu değişirse sadece bu dosyayı güncelle.)
 
 **Birleşik çağrı (0035, kullanıcı kararları)**: eski üye çağrısı (otomatik maç, %70), yetkili elle onayı ve oyuncu ilanı tek yapıda: `match_polls`.
-Açma/kesinleştirme sadece `can_create_match` (kurucu/yetkili/organizatör); yönetim `can_manage_poll` (açan veya kurucu/yetkili). Kurucu/yetkili dışındakiler
+Açma/kesinleştirme sadece `can_create_match` (kurucu/yetkili/organizatör; arşivli takımda false); yönetim `can_manage_poll` (açan veya kurucu/yetkili; üye önerisinden açılan çağrıda öneren, 0037). Kesinleştirmede hızlı (geçici) takım: `docs/takim-grup-uyelik.md`. Kurucu/yetkili dışındakiler
 aynı grupta en fazla 3 açık çağrı. Tabloya doğrudan yazma yok, hepsi RPC. `group_id` = çağrının yayınlandığı yer (kim görür/yanıtlar); maçın sahibi `matches.group_id`.
 - **Toplama** (`purpose='gather'`, `create_gather_poll`): zorunlu tek şey gün (`play_on`, bugün..+30); saat (`starts_at`, o günde), saha, kişi sayısı
   (`team_size` → kontenjan ×2), karar zamanı (`decide_by`, sadece hatırlatma), not isteğe bağlı; `update_gather_poll` ile netleşir (yanıt verenlere bildirim).

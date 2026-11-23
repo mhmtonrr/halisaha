@@ -613,6 +613,37 @@ export async function leaveGroup(fd: FormData) {
   redirect("/?left=1");
 }
 
+/** Takımı dağıt (kaptan): oynanmış maç varsa arşivlenir (geçmiş ve puanlar kalır), yoksa silinir */
+export async function disbandTeam(fd: FormData) {
+  const { supabase } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const { data, error } = await supabase.rpc("disband_team", { p_group: groupId });
+  if (error) fail(`/g/${groupId}/players`, rpcMessage(error, "Takım dağıtılamadı"));
+  revalidatePath("/", "layout");
+  redirect(data === "deleted" ? "/" : `/g/${groupId}`);
+}
+
+/** Dağıtılmış takımı yeniden aç veya geçici takımı kalıcı yap (kaptan) */
+export async function teamLifecycle(fd: FormData) {
+  const { supabase } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const op = str(fd, "op") === "permanent" ? "make_team_permanent" : "reopen_team";
+  const { error } = await supabase.rpc(op, { p_group: groupId });
+  if (error) fail(`/g/${groupId}`, rpcMessage(error, "İşlem yapılamadı"));
+  revalidatePath("/", "layout");
+  redirect(`/g/${groupId}`);
+}
+
+/** Grubu kendi için sessize al / sesi aç: toplu duyurular (yeni çağrı, sohbet…) gelmez; sana özel bildirimler gelir */
+export async function setGroupMuted(fd: FormData) {
+  const { supabase } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const { error } = await supabase.rpc("set_group_muted", { p_group: groupId, p_muted: str(fd, "muted") === "1" });
+  if (error) fail(`/g/${groupId}`, rpcMessage(error, "Ayar kaydedilemedi"));
+  revalidatePath(`/g/${groupId}`);
+  redirect(`/g/${groupId}`);
+}
+
 /** Tek başına kalan kaptan grubu/takımı siler (adını yazarak onaylar); kişinin genel rating'i yeniden hesaplanır */
 export async function deleteGroup(fd: FormData) {
   const { supabase, user } = await requireUser();
@@ -1042,7 +1073,10 @@ export async function deleteMatch(fd: FormData) {
   }
   const { error } = await supabase.from("matches").delete().eq("id", matchId);
   if (error) fail(`/g/${groupId}/m/${matchId}`, "Maç silinemedi");
-  redirect(`/g/${groupId}`);
+  // Geçici takımın maçı iptal olduysa: hiç maçı kalmayan takım silinir, sadece kapanmış maçları kalan arşivlenir
+  const { data: cleanup } = await supabase.rpc("cleanup_temp_team", { p_group: groupId });
+  revalidatePath("/", "layout");
+  redirect(cleanup === "deleted" ? "/" : `/g/${groupId}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -1212,7 +1246,7 @@ export async function notifyChatMessage(groupId: string, messageId: number) {
   const authorName = (author as { display_name: string }).display_name;
   later(async () => {
     const admin = createAdminClient();
-    const [ids, name] = await Promise.all([groupMemberIds(admin, groupId), groupName(admin, groupId)]);
+    const [ids, name] = await Promise.all([groupMemberIds(admin, groupId, { broadcast: true }), groupName(admin, groupId)]);
     await notify(ids, "chat", text.chat(name, groupId, authorName, msg.body), { excludeUserId: user.id });
   });
 }
@@ -1254,7 +1288,9 @@ export async function inviteToGroup(fd: FormData) {
   const { supabase, user } = await requireUser();
   const groupId = str(fd, "groupId");
   const userId = str(fd, "userId");
-  const back = `/oyuncu/${userId}`;
+  // Takım sayfasından (ödünç oyuncuya) gelindiyse oraya döner
+  const from = str(fd, "back");
+  const back = from.startsWith("/g/") ? from : `/oyuncu/${userId}`;
   if (!UUID_RE.test(groupId) || !UUID_RE.test(userId)) fail("/", "Geçersiz istek");
   const { data: inviteId, error } = await supabase.rpc("invite_to_group", { p_group_id: groupId, p_user_id: userId });
   if (error || !inviteId) fail(back, rpcMessage(error ?? {}, "Davet gönderilemedi"));
@@ -1268,7 +1304,7 @@ export async function inviteToGroup(fd: FormData) {
     if (!inv || !thread) return;
     await notify([userId], "invite", text.groupInvite(me?.display_name ?? "Bir oyuncu", inv.group_name, inv.group_kind as "team" | "community", thread.id, inviteId as string), { excludeUserId: user.id });
   });
-  redirect(`${back}?davet=1`);
+  redirect(`${back}${back.includes("?") ? "&" : "?"}davet=1`);
 }
 
 /** Daveti kabul et (üye olur) / reddet; daveti gönderene bildirim gider */

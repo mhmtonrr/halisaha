@@ -30,7 +30,7 @@ export default async function ChallengePage({
 
   // Teklifi sadece kaptan/yetkili olduğumuz takımlardan gönderebiliriz
   const mine = memberships.filter(
-    (m) => m.group.kind === "team" && m.role !== "member" && m.group.id !== groupId,
+    (m) => m.group.kind === "team" && m.role !== "member" && m.group.id !== groupId && !m.group.archived,
   );
   const targetRating = memberships.find((m) => m.group.id === groupId)?.group.rating;
 

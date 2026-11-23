@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { finalizePoll } from "@/lib/call-actions";
 import { isoToTime, type Responder } from "@/lib/call-rules";
-import type { Call } from "@/lib/calls-data";
+import type { Call, ManagedTeam } from "@/lib/calls-data";
 import { SIZES } from "@/lib/formations";
 import { Card, Input, Label, SectionTitle } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -26,10 +26,10 @@ export function FinalizeForm({
   candidates: Responder[];
   preselected: Set<string>;
   isCommunity: boolean;
-  teams: { id: string; name: string }[];
+  teams: ManagedTeam[];
 }) {
-  // Takımın kendi çağrısında maç o takımda ve rakibe karşı kurulur
-  const teamChoices = isCommunity ? teams : [{ id: groupId, name: "Bu takım" }];
+  // Takımın kendi çağrısında maç o takımda ve rakibe karşı kurulur; toplulukta takımlarım + hızlı takım
+  const teamChoices: ManagedTeam[] = isCommunity ? teams : [{ id: groupId, name: "Bu takım", temporary: false, archived: false }];
   return (
     <form action={finalizePoll} className="space-y-4">
       <input type="hidden" name="groupId" value={groupId} />
@@ -75,34 +75,38 @@ export function FinalizeForm({
             </label>
           )}
           <label className="flex items-center gap-2 rounded-xl border border-line p-3 text-sm has-checked:border-accent has-checked:bg-accent/10">
-            <input type="radio" name="kind" value="external" defaultChecked={!isCommunity} disabled={teamChoices.length === 0} />
+            <input type="radio" name="kind" value="external" defaultChecked={!isCommunity} />
             <span>
               <b>Rakibe karşı</b> <span className="text-muted">· takımın adına; takımda olmayanlar ödünç yazılır</span>
             </span>
           </label>
-          {teamChoices.length === 0 ? (
-            <p className="text-xs text-muted">
-              Rakibe karşı oynamak için maç kurabildiğin bir takım gerekli.{" "}
-              <Link href="/takim-kur" className="underline">
-                Takım kur
-              </Link>
-            </p>
-          ) : (
+          {(
             <div className="grid grid-cols-2 gap-3">
               <label className="block">
                 <Label>Takım</Label>
-                <select name="teamId" defaultValue={teamChoices[0].id} className={selectCls}>
+                <select name="teamId" defaultValue={teamChoices[0]?.id ?? "__new"} className={selectCls}>
                   {teamChoices.map((t) => (
                     <option key={t.id} value={t.id}>
                       {t.name}
+                      {t.temporary ? (t.archived ? " (geçici, yeniden aç)" : " (geçici)") : ""}
                     </option>
                   ))}
+                  {isCommunity && <option value="__new">+ Hızlı takım kur</option>}
                 </select>
               </label>
               <label className="block">
                 <Label hint="uygulamada olmasa da">Rakip adı</Label>
                 <Input name="opponent" maxLength={60} placeholder="Örn. Yıldızspor" />
               </label>
+              {isCommunity && (
+                <label className="col-span-2 block">
+                  <Label hint="sadece “Hızlı takım kur” seçiliyse">Hızlı takımın adı</Label>
+                  <Input name="newTeam" maxLength={60} placeholder="Örn. Cuma Ekibi" />
+                  <span className="mt-1 block text-xs text-muted">
+                    Geçici takım: Keşfet&apos;te görünmez, son maçı bitince kendiliğinden arşivlenir. İstersen sonra kalıcı yaparsın.
+                  </span>
+                </label>
+              )}
             </div>
           )}
         </fieldset>

@@ -121,7 +121,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
   const toVote = matches.filter((m) => m.status === "voting" && m.inRoster && !voted.has(m.id));
   const upcoming = matches.filter((m) => !toVote.includes(m));
 
-  const teams = memberships.filter((m) => m.group.kind === "team");
+  // Geçici ve dağıtılmış takımlar ayrı, kapalı bölümde (Takımlarım kalabalıklaşmasın)
+  const teams = memberships.filter((m) => m.group.kind === "team" && !m.group.temporary && !m.group.archived);
+  const tempTeams = memberships.filter((m) => m.group.kind === "team" && (m.group.temporary || m.group.archived));
   const groups = memberships.filter((m) => m.group.kind === "community");
   const best = memberships.reduce<number>((a, m) => Math.max(a, m.overall), DEFAULT_OVERALL);
   const totalMatches = memberships.reduce((a, m) => a + m.matchesPlayed, 0);
@@ -330,6 +332,12 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
         </Card>
       ) : (
         <div className="space-y-2">{teams.map((m) => <MembershipRow key={m.playerId} m={m} unread={unread.get(m.group.id) ?? 0} />)}</div>
+      )}
+      {tempTeams.length > 0 && (
+        <details className="mt-2">
+          <summary className="cursor-pointer py-2 text-sm text-muted">⏳ Geçici ve dağıtılmış takımlarım · {tempTeams.length}</summary>
+          <div className="space-y-2">{tempTeams.map((m) => <MembershipRow key={m.playerId} m={m} unread={unread.get(m.group.id) ?? 0} />)}</div>
+        </details>
       )}
 
       <SectionTitle
