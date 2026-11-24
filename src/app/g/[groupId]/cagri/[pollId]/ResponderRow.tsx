@@ -5,7 +5,6 @@ import type { Responder } from "@/lib/call-rules";
 import type { PollGuest } from "@/lib/calls-data";
 import { reliability } from "@/lib/reliability";
 import { OvrBadge, PositionChip } from "@/components/PlayerCard";
-import { cx } from "@/components/ui";
 
 const TONE = { good: "text-accent", ok: "text-amber-300", bad: "text-red-300", new: "text-muted" } as const;
 
@@ -24,18 +23,19 @@ export function ResponderRow({ r, origin, children }: { r: Responder; origin?: R
       <div className="flex items-center gap-3">
         <OvrBadge overall={r.overall} className="h-8 w-8 text-xs" />
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <Link href={`/oyuncu/${r.user_id}`} className="truncate hover:underline">
-              {r.display_name}
-            </Link>
+          {/* İsim tek başına tam genişlikte; mevki, köken ve güvenilirlik altta (dar ekranda isim kısalmasın) */}
+          <Link href={`/oyuncu/${r.user_id}`} className="block truncate hover:underline">
+            {r.display_name}
+          </Link>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs">
             <PositionChip position={(r.chosen_position ?? r.preferred_position) as Position | null} />
             {origin && (
               <span title={ORIGIN[origin].title} className="shrink-0 rounded-full border border-primary/50 px-1.5 text-[10px] font-semibold text-primary">
                 {ORIGIN[origin].label}
               </span>
             )}
+            {rel && <span className={TONE[rel.tone]}>{rel.label}</span>}
           </div>
-          {rel && <div className={cx("text-xs", TONE[rel.tone])}>{rel.label}</div>}
         </div>
         {children}
       </div>
