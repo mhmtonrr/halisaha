@@ -137,6 +137,12 @@ try {
     kNotif = must(await admin.from("notifications").select("title, body").eq("user_id", K.id).eq("title", "📨 Çağırdığın oyuncu yanıt verdi"));
   }
   check("organizatöre 'çağırdığın oyuncu yanıt verdi' bildirimi gitti", kNotif.length === 1 && kNotif[0].body.includes("belki gelir"));
+  // Kesinleştirme ekranında davetli üyelerden ayrılır (arkadaş grubun üyesi: etiketsiz)
+  await PK.goto(`${BASE}/g/${C}/cagri/${gather.id}?kesinlestir=1`);
+  await PK.waitForSelector("text=Kimler oynayacak?");
+  check("kesinleştirmede yabancı 'davetli' etiketli", (await PK.locator("li", { hasText: "Kart Yabanci" }).locator("span", { hasText: /^davetli$/ }).count()) === 1);
+  check("etiketli tek satır var", (await PK.locator("li span", { hasText: /^davetli$/ }).count()) === 1);
+  await PK.screenshot({ path: `${SHOTS}/card-finalize-invited.png`, fullPage: true });
   await PO.screenshot({ path: `${SHOTS}/card-outsider-gather.png`, fullPage: true });
   await PK.goto(`${BASE}/g/${T}/cagri/${fill.id}`);
   await PK.click('button:has-text("Kadroya al")');

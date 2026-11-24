@@ -6,7 +6,7 @@ import type { Call, PollGuest } from "@/lib/calls-data";
 import { SIZES } from "@/lib/formations";
 import { Card, Input, Label, SectionTitle } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
-import { GuestRow, ResponderRow } from "./ResponderRow";
+import { GuestRow, ResponderRow, type ResponderOrigin } from "./ResponderRow";
 
 const selectCls = "min-h-11 w-full rounded-xl border border-line bg-pitch-950 px-3 text-sm";
 
@@ -21,6 +21,7 @@ export function FinalizeForm({
   guests,
   preselected,
   isCommunity,
+  origins,
 }: {
   groupId: string;
   call: Call;
@@ -28,6 +29,8 @@ export function FinalizeForm({
   guests: PollGuest[];
   preselected: Set<string>;
   isCommunity: boolean;
+  /** Üye olmayan yanıtlayanlar: davetli / dışarıdan */
+  origins: Map<string, ResponderOrigin>;
 }) {
   return (
     <form action={finalizePoll} className="space-y-4">
@@ -69,6 +72,7 @@ export function FinalizeForm({
             <div>
               <b>Kendi aramızda</b> <span className="text-muted">· seçilenler iki dengeli tarafa bölünür</span>
             </div>
+            {origins.size > 0 && <p className="text-xs text-muted">&quot;davetli&quot; işaretliler grubun üyesi değil; seçilirse bu maça ödünç oyuncu olarak yazılır.</p>}
             <p className="text-xs text-muted">
               Rakip maçı mı yapacaksınız? Rakibe karşı maçlar takımdan açılır.{" "}
               <Link href="/takim-kur" className="text-accent underline">
@@ -94,7 +98,7 @@ export function FinalizeForm({
       <Card className="p-0">
         <ul className="divide-y divide-line">
           {candidates.map((r) => (
-            <ResponderRow key={r.user_id} r={r}>
+            <ResponderRow key={r.user_id} r={r} origin={origins.get(r.user_id)}>
               {r.answer === "maybe" && <span className="text-xs text-amber-300">belki</span>}
               <label className="flex items-center gap-1 text-xs text-muted" title="Kaleci">
                 <input type="checkbox" name="gk" value={r.user_id} defaultChecked={(r.chosen_position ?? r.preferred_position) === "GK"} />

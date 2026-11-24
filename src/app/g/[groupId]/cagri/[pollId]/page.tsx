@@ -13,7 +13,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { PushPrompt } from "@/components/PushControls";
 import { CallFields } from "../CallFields";
 import { FinalizeForm } from "./FinalizeForm";
-import { GuestRow, ResponderRow } from "./ResponderRow";
+import { GuestRow, ResponderRow, type ResponderOrigin } from "./ResponderRow";
 
 const ANSWERS: { value: Answer; label: string; icon: string; active: string }[] = [
   { value: "yes", label: "Geliyorum", icon: "check_circle", active: "bg-accent text-pitch-950 border-accent" },
@@ -67,6 +67,23 @@ export default async function CallPage({
   // Dışarıdan çağrılan / herkese açık aramaya bakan: sadece bilgiler ve kendi yanıtı
   const outsider = !isMember && !canManage;
   const groupHref = outsider && isCommunity ? "/" : `/g/${groupId}`;
+  // Organizatöre: üye olmayan yanıtlayanın kökeni (kartla çağrılan "davetli", herkese açık aramadan "dışarıdan")
+  const origins = new Map<string, ResponderOrigin>();
+  if (canManage && responders.length) {
+    const [{ data: members }, { data: invites }] = await Promise.all([
+      supabase
+        .from("group_players")
+        .select("user_id")
+        .eq("group_id", groupId)
+        .in("user_id", responders.map((r) => r.user_id))
+        .is("left_at", null)
+        .eq("is_loan", false),
+      supabase.from("poll_invites").select("user_id").eq("poll_id", pollId),
+    ]);
+    const memberIds = new Set((members ?? []).map((m) => m.user_id as string));
+    const invitedIds = new Set((invites ?? []).map((i) => i.user_id as string));
+    for (const r of responders) if (!memberIds.has(r.user_id)) origins.set(r.user_id, invitedIds.has(r.user_id) ? "invited" : "outside");
+  }
 
   const yes = responders.filter((r) => r.answer === "yes");
   // Geliyor sayısına organizatörün eklediği dışarıdan misafirler de girer
@@ -97,6 +114,7 @@ export default async function CallPage({
           // Misafirler hep işaretli; kontenjanın kalanı ilk gelenlerden
           preselected={new Set(defaultSelection(responders, call.capacity == null ? null : Math.max(call.capacity - guests.length, 0)))}
           isCommunity={isCommunity}
+          origins={origins}
         />
       </main>
     );
@@ -307,7 +325,7 @@ export default async function CallPage({
             <Card className="p-0">
               <ul className="divide-y divide-line">
                 {(isFill ? pending : reserves).map((r) => (
-                  <ResponderRow key={r.user_id} r={r}>
+                  <ResponderRow key={r.user_id} r={r} origin={origins.get(r.user_id)}>
                     <form action={acceptResponder}>
                       <Hidden groupId={groupId} pollId={pollId} />
                       <input type="hidden" name="userId" value={r.user_id} />
@@ -355,7 +373,7 @@ export default async function CallPage({
             <Card className="p-0">
               <ol className="divide-y divide-line">
                 {yes.map((r) => (
-                  <ResponderRow key={r.user_id} r={r}>
+                  <ResponderRow key={r.user_id} r={r} origin={origins.get(r.user_id)}>
                     {r.status === "selected" && <Badge tone="accent">Kadroda</Badge>}
                     {r.status === "reserve" && <Badge>Yedek</Badge>}
                     {r.status === "rejected" && <span className="text-xs text-muted">alınmadı</span>}
@@ -386,7 +404,7 @@ export default async function CallPage({
               <Card className="p-0">
                 <ul className="divide-y divide-line">
                   {maybe.map((r) => (
-                    <ResponderRow key={r.user_id} r={r} />
+                    <ResponderRow key={r.user_id} r={r} origin={origins.get(r.user_id)} />
                   ))}
                 </ul>
               </Card>
@@ -398,7 +416,7 @@ export default async function CallPage({
               <Card className="p-0 opacity-70">
                 <ul className="divide-y divide-line">
                   {no.map((r) => (
-                    <ResponderRow key={r.user_id} r={r} />
+                    <ResponderRow key={r.user_id} r={r} origin={origins.get(r.user_id)} />
                   ))}
                 </ul>
               </Card>
