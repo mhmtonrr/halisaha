@@ -316,6 +316,33 @@ export async function createFillPoll(fd: FormData) {
   redirect(callPath(target, pollId));
 }
 
+/**
+ * Maça çağır (maç ekranı): maçın grubundaki açık adam aramaya davet gönderilir; yoksa önce 1 kişilik, herkese kapalı
+ * bir adam arama sessizce açılır (gruba duyuru gitmez). Sonra kişi seçme sayfasına gidilir.
+ */
+export async function inviteToMatch(fd: FormData) {
+  const { supabase } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const matchId = str(fd, "matchId");
+  const back = `/g/${groupId}/m/${matchId}`;
+  const { data: open } = await supabase
+    .from("match_polls")
+    .select("id")
+    .eq("match_id", matchId)
+    .eq("group_id", groupId)
+    .eq("purpose", "fill")
+    .eq("status", "open")
+    .maybeSingle();
+  let pollId = open?.id as string | undefined;
+  if (!pollId) {
+    const { data, error } = await supabase.rpc("create_fill_poll", { p_match: matchId, p_needed: 1, p_positions: [], p_note: null, p_group: groupId });
+    if (error || !data) fail(back, rpcMessage(error, "Maça çağrı açılamadı"));
+    pollId = data as string;
+    revalidatePath(back);
+  }
+  redirect(`/davet/gonder?tur=poll&ref=${pollId}`);
+}
+
 // ---------------------------------------------------------------------------
 // Üye maç önerisi (0037): sadece öneren ve maç açabilenler görür; onaylanınca öneren adına çağrı açılır
 // ---------------------------------------------------------------------------

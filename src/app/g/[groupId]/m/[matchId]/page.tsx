@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { SendInviteLink } from "@/components/SendInviteLink";
+import { InviteToMatchButton } from "@/components/SendInviteLink";
 import { Icon } from "@/components/Icon";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
@@ -317,7 +317,7 @@ export default async function MatchPage({
         ) : null}
       </div>
       <ErrorNote message={error} />
-      {canManage && match.status === "planned" && <SendInviteLink tur="match" refId={matchId} className="mb-4" />}
+      {canManage && match.status === "planned" && <InviteToMatchButton groupId={groupId} matchId={matchId} className="mb-4" />}
       {!canManage &&
         fills
           .filter((f) => f.status === "open")

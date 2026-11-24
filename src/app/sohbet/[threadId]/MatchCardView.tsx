@@ -29,7 +29,7 @@ const when = (iso: string, dayOnly?: boolean) =>
     ? `${new Date(iso).toLocaleDateString("tr-TR", { timeZone: "Europe/Istanbul", weekday: "long", day: "numeric", month: "long" })} · saat belli değil`
     : new Date(iso).toLocaleString("tr-TR", { timeZone: "Europe/Istanbul", weekday: "short", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
 
-/** Maça davet kartı: çağrı (toplama / adam ara) veya planlı maç. Alıcı karttan ilgili sayfaya gider; özel grup içeriği üye olmayana açılmaz. */
+/** Maça davet kartı: çağrı (toplama / adam ara) veya planlı maç. Alıcı karttan ilgili sayfaya gider; çağrı kartı davet sayılır (üye olmayan da yanıt verir), maç kartında özel grup üye olmayana açılmaz. */
 export function MatchCardView({
   card,
   refId,
@@ -57,13 +57,16 @@ export function MatchCardView({
   let note = "";
   if (!refId) {
     note = card.type === "poll" ? "Bu çağrı artık yok." : "Bu maç artık yok.";
+  } else if (card.type === "poll") {
+    // Çağrı kartının alıcısı davetlidir (0041): üye olmasa da çağrıyı görür ve yanıt verir
+    href = `/g/${card.group_id}/cagri/${refId}`;
+    label = "Çağrıya yanıt ver";
   } else if (isMember) {
-    href = card.type === "poll" ? `/g/${card.group_id}/cagri/${refId}` : `/g/${card.group_id}/m/${refId}`;
-    label = card.type === "poll" ? "Çağrıya yanıt ver" : "Maça bak";
+    href = `/g/${card.group_id}/m/${refId}`;
+    label = "Maça bak";
   } else if (card.group_kind === "team") {
     href = `/g/${card.group_id}`;
     label = "Takıma bak";
-    note = card.type === "poll" ? "Çağrıya yanıt vermek için takımın oyuncusu olmalısın." : "";
   } else {
     note = "Bu davet grup üyelerine özel; yanıt vermek için üye olmalısın.";
   }

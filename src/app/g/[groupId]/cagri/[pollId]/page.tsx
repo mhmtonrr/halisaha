@@ -50,15 +50,23 @@ export default async function CallPage({
   const { groupId, pollId } = await params;
   const { error, kesinlestir, duzenle } = await searchParams;
   const { supabase, user } = await requireUser();
-  const [loaded, { data: group }, { data: isMember }] = await Promise.all([
+  const [loaded, { data: groupRow }, { data: isMember }, { data: overview }] = await Promise.all([
     loadCall(supabase, pollId, groupId),
     supabase.from("groups").select("name, kind").eq("id", groupId).maybeSingle(),
     supabase.rpc("is_group_member", { p_group_id: groupId }),
+    // Üye olmayan davetli özel grubu göremez; adı/bölgesi/organizatörü güvenli özetten (0041)
+    supabase
+      .rpc("poll_overview", { p_ids: [pollId] })
+      .maybeSingle<{ group_name: string; group_kind: string; organizer_name: string | null; city: string | null; district: string | null }>(),
   ]);
+  const group = groupRow ?? (overview ? { name: overview.group_name, kind: overview.group_kind } : null);
   if (!loaded || !group) notFound();
   const { call, responders, guests, canManage, match } = loaded;
   const isFill = call.purpose === "fill";
   const isCommunity = group.kind === "community";
+  // Dışarıdan çağrılan / herkese açık aramaya bakan: sadece bilgiler ve kendi yanıtı
+  const outsider = !isMember && !canManage;
+  const groupHref = outsider && isCommunity ? "/" : `/g/${groupId}`;
 
   const yes = responders.filter((r) => r.answer === "yes");
   // Geliyor sayısına organizatörün eklediği dışarıdan misafirler de girer
@@ -70,7 +78,8 @@ export default async function CallPage({
   const pending = pendingApplicants(responders);
   const mine = responders.find((r) => r.user_id === user.id);
   const matchPlanned = match?.status === "planned";
-  const canRespond = !!isMember && (call.status === "open" || ((call.status === "converted" || call.status === "filled") && matchPlanned));
+  // Görebilen yanıtlar (üye, davetli, herkese açık adam arama; kural veritabanında can_view_poll)
+  const canRespond = (call.status === "open" || ((call.status === "converted" || call.status === "filled") && matchPlanned));
   const due = canManage && decisionDue(call);
 
   if (canManage && kesinlestir && call.purpose === "gather" && call.status === "open") {
@@ -108,8 +117,26 @@ export default async function CallPage({
           { table: "poll_guests", filter: `poll_id=eq.${pollId}` },
         ]}
       />
-      <Header title={isFill ? "Adam aranıyor" : "Maç çağrısı"} back={`/g/${groupId}`} right={statusBadge} />
+      <Header title={isFill ? "Adam aranıyor" : "Maç çağrısı"} back={groupHref} right={statusBadge} />
       <ErrorNote message={error} />
+      {outsider && (
+        <Card className="mb-4 flex items-start gap-3 border-primary/40">
+          <Icon name="person_add" className="mt-0.5 text-[22px] text-primary" />
+          <div className="min-w-0 text-sm">
+            <div className="font-semibold">
+              {isCommunity ? "Grup maçı" : "Takım maçı"} · {group.name}
+            </div>
+            <div className="text-xs text-muted">
+              {overview?.organizer_name ? `Organizatör: ${overview.organizer_name}` : ""}
+              {overview?.city ? ` · ${[overview.district, overview.city].filter(Boolean).join(", ")}` : ""}
+            </div>
+            <p className="mt-1.5 text-xs text-on-surface-variant">
+              {isCommunity ? "Grubun üyesi değilsin" : "Takımın üyesi değilsin"}; organizatör kadroya alırsa bu maçta ödünç oyuncu olursun. Maçı ve
+              oylamasını görürsün; {isCommunity ? "grubun" : "takımın"} sohbeti ve diğer çağrıları sana kapalı kalır.
+            </p>
+          </div>
+        </Card>
+      )}
       {canManage && (call.status === "open" || (call.status === "converted" && matchPlanned)) && (
         <SendInviteLink tur="poll" refId={pollId} className="mb-4" />
       )}
@@ -147,19 +174,22 @@ export default async function CallPage({
           </div>
         )}
         {call.note && <p className="mt-3 whitespace-pre-line rounded-lg bg-pitch-950 p-3 text-sm">{call.note}</p>}
-        <div className="mt-3 flex flex-wrap justify-between gap-1 text-sm">
-          <span>
-            <b className="text-accent">{isFill ? yes.length : coming}</b>
-            <span className="text-muted">
-              {call.capacity && !isFill ? `/${call.capacity}` : ""} geliyor
-              {maybe.length > 0 && ` · ${maybe.length} belki`}
-              {isFill && ` · ${selected.length}/${call.capacity} alındı`}
+        {/* Dışarıdan bakan sadece kendi yanıtını görür; sayılar yanıltır */}
+        {!outsider && (
+          <div className="mt-3 flex flex-wrap justify-between gap-1 text-sm">
+            <span>
+              <b className="text-accent">{isFill ? yes.length : coming}</b>
+              <span className="text-muted">
+                {call.capacity && !isFill ? `/${call.capacity}` : ""} geliyor
+                {maybe.length > 0 && ` · ${maybe.length} belki`}
+                {isFill && ` · ${selected.length}/${call.capacity} alındı`}
+              </span>
             </span>
-          </span>
-          {call.decide_by && call.status === "open" && !isFill && (
-            <span className="text-xs text-muted">Kadro kararı: {formatDate(call.decide_by)}</span>
-          )}
-        </div>
+            {call.decide_by && call.status === "open" && !isFill && (
+              <span className="text-xs text-muted">Kadro kararı: {formatDate(call.decide_by)}</span>
+            )}
+          </div>
+        )}
       </Card>
 
       {due && (
@@ -306,67 +336,73 @@ export default async function CallPage({
         </>
       )}
 
-      <SectionTitle>Geliyor · {coming}</SectionTitle>
-      {coming === 0 ? (
-        <Card className="text-center text-sm text-muted">Henüz kimse &quot;geliyorum&quot; demedi.</Card>
-      ) : (
-        <Card className="p-0">
-          <ol className="divide-y divide-line">
-            {yes.map((r) => (
-              <ResponderRow key={r.user_id} r={r}>
-                {r.status === "selected" && <Badge tone="accent">Kadroda</Badge>}
-                {r.status === "reserve" && <Badge>Yedek</Badge>}
-                {r.status === "rejected" && <span className="text-xs text-muted">alınmadı</span>}
-                {r.status === "withdrawn" && <span className="text-xs text-muted">çekildi</span>}
-              </ResponderRow>
-            ))}
-            {guests.map((g) => (
-              <GuestRow key={g.id} g={g}>
-                {g.player_id && <Badge tone="accent">Kadroda</Badge>}
-                {!g.player_id && call.status === "converted" && <span className="text-xs text-muted">alınmadı</span>}
-                {canManage && call.status === "open" && (
-                  <form action={removePollGuest}>
-                    <Hidden groupId={groupId} pollId={pollId} />
-                    <input type="hidden" name="guestId" value={g.id} />
-                    <button className="rounded-lg px-2 py-1 text-xs text-muted hover:text-red-300" aria-label={`${g.name} çıkarılsın`}>
-                      ✕
-                    </button>
-                  </form>
-                )}
-              </GuestRow>
-            ))}
-          </ol>
-        </Card>
-      )}
-      {maybe.length > 0 && (
+      {!outsider && (
         <>
-          <SectionTitle>Belki · {maybe.length}</SectionTitle>
-          <Card className="p-0">
-            <ul className="divide-y divide-line">
-              {maybe.map((r) => (
-                <ResponderRow key={r.user_id} r={r} />
-              ))}
-            </ul>
-          </Card>
+          <SectionTitle>Geliyor · {coming}</SectionTitle>
+          {coming === 0 ? (
+            <Card className="text-center text-sm text-muted">Henüz kimse &quot;geliyorum&quot; demedi.</Card>
+          ) : (
+            <Card className="p-0">
+              <ol className="divide-y divide-line">
+                {yes.map((r) => (
+                  <ResponderRow key={r.user_id} r={r}>
+                    {r.status === "selected" && <Badge tone="accent">Kadroda</Badge>}
+                    {r.status === "reserve" && <Badge>Yedek</Badge>}
+                    {r.status === "rejected" && <span className="text-xs text-muted">alınmadı</span>}
+                    {r.status === "withdrawn" && <span className="text-xs text-muted">çekildi</span>}
+                  </ResponderRow>
+                ))}
+                {guests.map((g) => (
+                  <GuestRow key={g.id} g={g}>
+                    {g.player_id && <Badge tone="accent">Kadroda</Badge>}
+                    {!g.player_id && call.status === "converted" && <span className="text-xs text-muted">alınmadı</span>}
+                    {canManage && call.status === "open" && (
+                      <form action={removePollGuest}>
+                        <Hidden groupId={groupId} pollId={pollId} />
+                        <input type="hidden" name="guestId" value={g.id} />
+                        <button className="rounded-lg px-2 py-1 text-xs text-muted hover:text-red-300" aria-label={`${g.name} çıkarılsın`}>
+                          ✕
+                        </button>
+                      </form>
+                    )}
+                  </GuestRow>
+                ))}
+              </ol>
+            </Card>
+          )}
+          {maybe.length > 0 && (
+            <>
+              <SectionTitle>Belki · {maybe.length}</SectionTitle>
+              <Card className="p-0">
+                <ul className="divide-y divide-line">
+                  {maybe.map((r) => (
+                    <ResponderRow key={r.user_id} r={r} />
+                  ))}
+                </ul>
+              </Card>
+            </>
+          )}
+          {no.length > 0 && (
+            <>
+              <SectionTitle>Gelemiyor · {no.length}</SectionTitle>
+              <Card className="p-0 opacity-70">
+                <ul className="divide-y divide-line">
+                  {no.map((r) => (
+                    <ResponderRow key={r.user_id} r={r} />
+                  ))}
+                </ul>
+              </Card>
+            </>
+          )}
         </>
       )}
-      {no.length > 0 && (
-        <>
-          <SectionTitle>Gelemiyor · {no.length}</SectionTitle>
-          <Card className="p-0 opacity-70">
-            <ul className="divide-y divide-line">
-              {no.map((r) => (
-                <ResponderRow key={r.user_id} r={r} />
-              ))}
-            </ul>
-          </Card>
-        </>
+      {!(outsider && isCommunity) && (
+        <p className="mt-6 text-center text-xs text-muted">
+          <Link href={groupHref} className="underline">
+            {group.name} sayfasına dön
+          </Link>
+        </p>
       )}
-      <p className="mt-6 text-center text-xs text-muted">
-        <Link href={`/g/${groupId}`} className="underline">
-          {group.name} sayfasına dön
-        </Link>
-      </p>
     </main>
   );
 }

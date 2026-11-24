@@ -56,7 +56,7 @@ src/components/AutoOpenDetails.tsx  İlk yüklemede bir kez açılan açılır b
 src/components/ProfileFields.tsx  Profil ve karşılama formlarının ortak alanları; RegionSelect.tsx bağlı il/ilçe seçimi
 src/components/TeamFields.tsx  Takım kurma ve takım/grup bilgileri düzenleme form alanları; TeamSizeSelect.tsx kaç kişilik (5v5…11v11); TeamBadge.tsx renkli baş harf rozeti
 src/components/RosterTabs.tsx  Kadro / Misafirler sekmesi
-src/components/SendInviteLink.tsx  Maç/çağrı kartını sohbetten göndermeye götüren bağlantı (/davet/gonder)
+src/components/SendInviteLink.tsx  "Maça çağır": çağrı kartını sohbetten gönderme bağlantısı + maç ekranı düğmesi (/davet/gonder)
 src/components/ShareLink.tsx  Sayfa linkini paylaş (paylaşım menüsü ya da panoya kopyala); profile/ShareButton.tsx profil için
 src/components/SkillBars.tsx  Kartın 6 yeteneği çubuk olarak; SkillQueueBanner.tsx değerlendirme bekleyen varsa /yetenek kartı
 src/components/profile/  FlipCard (kart çevirme), MatchesList (geçmiş maçlar + filtre), ProfileBars (başlık), RadarChart (yetenek altıgeni)

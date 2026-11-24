@@ -54,12 +54,22 @@ export default async function SendCardPage({ searchParams }: { searchParams: Pro
   if (!canShare) redirect("/");
 
   const needle = q.trim().replace(/[%_,()]/g, " ");
-  const [{ data: rows }, { data: found }] = await Promise.all([
+  const [{ data: rows }, { data: found }, { data: invited }] = await Promise.all([
     supabase.from("friendships").select("user_a, user_b").eq("status", "accepted").limit(300),
+    // Aramada sadece profilini aramaya açanlar (Keşfet oyuncu aramasıyla aynı kural); arkadaşlar her zaman listede
     needle.length >= 2
-      ? supabase.from("profiles").select("id, display_name, photo_url, city").ilike("display_name", `%${needle}%`).neq("id", user.id).limit(15)
+      ? supabase
+          .from("profiles")
+          .select("id, display_name, photo_url, city")
+          .eq("discoverable", true)
+          .is("frozen_at", null)
+          .ilike("display_name", `%${needle}%`)
+          .neq("id", user.id)
+          .limit(15)
       : Promise.resolve({ data: [] as Person[] }),
+    tur === "poll" ? supabase.from("poll_invites").select("user_id").eq("poll_id", ref) : Promise.resolve({ data: [] as { user_id: string }[] }),
   ]);
+  const invitedSet = new Set((invited ?? []).map((r) => r.user_id as string));
   const friendIds = (rows ?? []).map((r) => (r.user_a === user.id ? r.user_b : r.user_a));
   const { data: friendProfiles } = friendIds.length
     ? await supabase.from("profiles").select("id, display_name, photo_url, city").in("id", friendIds)
@@ -75,8 +85,8 @@ export default async function SendCardPage({ searchParams }: { searchParams: Pro
         <div className="truncate font-medium">{p.display_name}</div>
         {p.city && <div className="truncate text-xs text-muted">{p.city}</div>}
       </div>
-      {ok === p.id ? (
-        <span className="shrink-0 rounded-lg bg-accent/15 px-3 py-1.5 text-sm font-bold text-accent">✓ Gönderildi</span>
+      {ok === p.id || invitedSet.has(p.id) ? (
+        <span className="shrink-0 rounded-lg bg-accent/15 px-3 py-1.5 text-sm font-bold text-accent">✓ {ok === p.id ? "Gönderildi" : "Çağrıldı"}</span>
       ) : (
         <form action={shareMatchCard} className="shrink-0">
           <input type="hidden" name="tur" value={tur} />
@@ -91,7 +101,10 @@ export default async function SendCardPage({ searchParams }: { searchParams: Pro
 
   return (
     <main>
-      <Header title="Davet gönder" back="/" />
+      <Header
+        title={tur === "poll" ? "Maça çağır" : "Davet gönder"}
+        back={tur === "poll" ? `/g/${source.groupId}/cagri/${ref}` : `/g/${source.groupId}/m/${ref}`}
+      />
       <ErrorNote message={error} />
       <Card className="mb-4 space-y-0.5">
         <div className="text-xs text-muted">Gönderilecek kart</div>
@@ -101,6 +114,11 @@ export default async function SendCardPage({ searchParams }: { searchParams: Pro
           {source.venue ? ` · ${source.venue}` : ""}
         </div>
         {!source.open && <p className="pt-1 text-xs text-amber-300">Bu kayıt artık açık değil; gönderilemez.</p>}
+        {tur === "poll" && source.open && (
+          <p className="pt-1 text-xs text-muted">
+            Kart sohbetten gider. Çağırdığın kişi üye olmasa da çağrıyı görüp yanıt verir; kadroya alırsan bu maç için ödünç oyuncu olur.
+          </p>
+        )}
       </Card>
 
       <form method="get" className="mb-4 flex gap-2">
