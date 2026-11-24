@@ -107,7 +107,14 @@ try {
   const ilcePanel = other.locator('[role="tabpanel"]:visible').filter({ hasText: /öne çıkan oyuncular/i }).first();
   const ilceText = (await ilcePanel.innerText()).toLowerCase();
   // Defans gizlendi: Merkez'de 2 oyuncu kaldı (eski kural 3 kişi isteyip Türkiye'ye çıkıyordu: Lüleburgaz hatası)
-  check("ilçede 3'ten az oyuncu varken de oyuncular üst kademeye çıkmaz", !/öne çıkan oyuncular[\s\S]*yeterli kayıt yok/.test(ilceText));
+  check("ilçe panelinde hiçbir bölüm üst kademeye geçmez ('yeterli kayıt yok' yok)", !ilceText.includes("yeterli kayıt yok") && !ilceText.includes("gösteriliyor"));
+  check("ilçede takım yoksa boş durum ilçe adıyla", ilceText.includes("merkez için henüz sıralanacak takım yok"));
+  for (const tab of ["Haftanın MVP'leri", "Yükselenler"]) {
+    await ilcePanel.locator(`[role="tab"]:has-text("${tab}")`).click();
+    const tt = (await ilcePanel.innerText()).toLowerCase();
+    check(`${tab}: ilçede kalır, Türkiye'ye geçmez`, !tt.includes("yeterli kayıt yok") && tt.includes("merkez için"));
+  }
+  await ilcePanel.locator('[role="tab"]:has-text("En yüksek")').click();
   const cards = ilcePanel.locator('[role="tabpanel"]:visible a[href^="/oyuncu/"]');
   const names = (await cards.allInnerTexts()).map((x) => x.toLowerCase());
   check("öne çıkan oyuncular yan yana kart (Merkez: forvet, orta)", names.length === 2 && names[0].includes("zeki forvet") && names[1].includes("zeki orta"));

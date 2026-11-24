@@ -6,11 +6,11 @@ import { one } from "@/lib/data";
 import { findTeams, type TeamSummary } from "@/lib/teams-data";
 import { loadCandidates, loadCandidatesByIds } from "@/lib/players-data";
 import type { PlayerCandidate } from "@/lib/player-search";
-import { FEATURED_MIN_ITEMS, levelChain, pickSection, rankFeaturedPlayers, type FeaturedLevel, type Section } from "@/lib/featured-rules";
+import { rankFeaturedPlayers, type FeaturedLevel } from "@/lib/featured-rules";
 
 /**
  * Ana sayfadaki "öne çıkanlar": herkese aynı gösterilir. Havuzlar (bölgedeki oyuncular/takımlar, Türkiye geneli MVP ve
- * yükselenler) 5 dakika önbellekte; seçilen kademede (ilçe/il/Türkiye) yeterli kayıt yoksa bir üst kademeye çıkılır.
+ * yükselenler) 5 dakika önbellekte; her bölüm sadece seçilen kademeyi (ilçe/il/Türkiye) gösterir, üst kademeye geçmez.
  */
 
 export interface MvpEntry {
@@ -26,10 +26,10 @@ export interface RiserEntry {
   matches: number;
 }
 export interface Featured {
-  players: Section<PlayerCandidate>;
-  teams: Section<TeamSummary>;
-  mvps: Section<MvpEntry>;
-  risers: Section<RiserEntry>;
+  players: PlayerCandidate[];
+  teams: TeamSummary[];
+  mvps: MvpEntry[];
+  risers: RiserEntry[];
 }
 
 const DAY = 864e5;
@@ -143,10 +143,9 @@ const same = (a: string | null, b: string | null) => (a ?? "").toLocaleLowerCase
 
 /**
  * Seçilen kademe için öne çıkanlar. `level` kullanıcının bölgesine göre: ilçe (il + ilçe), il, Türkiye.
- * Her bölüm ayrı ayrı yeterli kayıt bulana kadar üst kademeye çıkar.
+ * Her bölüm sadece o kademeyi gösterir; üst kademeye geçilmez (kullanıcı kararı 2026-11-24).
  */
 export async function loadFeatured(city: string | null, district: string | null, level: FeaturedLevel): Promise<Featured> {
-  const chain = levelChain(level, city, district);
   const region = (l: FeaturedLevel) => (l === "tr" ? { c: null, d: null } : l === "il" ? { c: city, d: null } : { c: city, d: district });
   const inRegion = (p: PlayerCandidate, l: FeaturedLevel) => {
     const r = region(l);
@@ -154,21 +153,14 @@ export async function loadFeatured(city: string | null, district: string | null,
   };
   const [mvpsAll, risersAll] = await Promise.all([cachedMvps(), cachedRisers()]);
 
-  // Oyuncular: seçilen bölgede kayıtlı biri varsa orada kalınır (çok maçlılar önce, maçı olmayanlar sonda);
-  // üst kademeye sadece bölgede hiç oyuncu yoksa çıkılır (eskiden 3 puanlı kişi yoksa çıkılıyordu: kayıtlı oyuncu varken "yeterli kayıt yok")
-  const players = await pickSection(
-    chain,
-    async (l) => {
-      const r = region(l);
-      return rankFeaturedPlayers(await cachedPlayers(r.c, r.d)).slice(0, LIST);
-    },
-    1,
-  );
-
-  const [teams, mvps, risers] = await Promise.all([
-    pickSection(chain, async (l) => (await cachedTeams(region(l).c, region(l).d)).slice(0, LIST), FEATURED_MIN_ITEMS),
-    pickSection(chain, async (l) => mvpsAll.filter((m) => inRegion(m.player, l)).slice(0, LIST), FEATURED_MIN_ITEMS),
-    pickSection(chain, async (l) => risersAll.filter((r) => inRegion(r.player, l)).slice(0, LIST), FEATURED_MIN_ITEMS),
-  ]);
-  return { players, teams, mvps, risers };
+  // Her bölüm SADECE seçilen bölgeyi gösterir (kullanıcı kararı 2026-11-24): üst kademeye kendiliğinden çıkılmaz;
+  // bölgede kayıt yoksa bölüm o bölgenin adıyla boş görünür. Oyuncular: çok maçlılar önce, maçı olmayanlar sonda.
+  const r = region(level);
+  const [players, teams] = await Promise.all([cachedPlayers(r.c, r.d), cachedTeams(r.c, r.d)]);
+  return {
+    players: rankFeaturedPlayers(players).slice(0, LIST),
+    teams: teams.slice(0, LIST),
+    mvps: mvpsAll.filter((m) => inRegion(m.player, level)).slice(0, LIST),
+    risers: risersAll.filter((x) => inRegion(x.player, level)).slice(0, LIST),
+  };
 }

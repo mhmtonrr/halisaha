@@ -8,7 +8,7 @@ import { HomeTabs } from "@/components/home/HomeTabs";
 import { SectionTitle, cx } from "@/components/ui";
 import { formatRegion } from "@/lib/regions";
 import { loadFeatured, type Featured } from "@/lib/featured-data";
-import { availableLevels, levelLabel, type FeaturedLevel, type Section } from "@/lib/featured-rules";
+import { availableLevels, levelLabel, type FeaturedLevel } from "@/lib/featured-rules";
 import type { PlayerCandidate } from "@/lib/player-search";
 
 interface Viewer {
@@ -22,17 +22,6 @@ interface Viewer {
 
 const rankClass = (i: number) => cx("w-6 shrink-0 font-display text-sm font-bold tabular-nums", i < 3 ? "text-gold-1" : "text-on-surface-variant");
 const listBox = "overflow-hidden rounded-xl border border-line bg-surface-low divide-y divide-white/[0.06]";
-
-/** Seçilen kademede yeterli kayıt yoksa nereden gösterildiğini söyler */
-function Fallback({ s, chosen, v }: { s: Section<unknown>; chosen: FeaturedLevel; v: Viewer }) {
-  if (s.level === chosen || s.items.length === 0) return null;
-  return (
-    <p className="mb-2 flex items-center gap-1 text-xs text-on-surface-variant">
-      <Icon name="info" className="text-[14px]" />
-      {levelLabel(chosen, v.city, v.district)} için yeterli kayıt yok, {levelLabel(s.level, v.city, v.district)} gösteriliyor
-    </p>
-  );
-}
 
 function Empty({ children }: { children: ReactNode }) {
   return <p className="rounded-xl border border-dashed border-line p-4 text-center text-sm text-on-surface-variant">{children}</p>;
@@ -68,14 +57,13 @@ function MiniCard({ c, i, children }: { c: PlayerCandidate; i: number; children:
   );
 }
 
-function TeamsList({ s, chosen, v }: { s: Featured["teams"]; chosen: FeaturedLevel; v: Viewer }) {
-  if (!s.items.length) return <Empty>Henüz sıralanacak takım yok. 5+ oyunculu takımlar maç oynadıkça burada sıralanır.</Empty>;
+function TeamsList({ s, where, v }: { s: Featured["teams"]; where: string; v: Viewer }) {
+  if (!s.length) return <Empty>{where} için henüz sıralanacak takım yok. Takımlar maç oynadıkça burada sıralanır.</Empty>;
   const canChallenge = v.challengerTeamIds.length > 0;
   return (
     <>
-      <Fallback s={s} chosen={chosen} v={v} />
       <div className={listBox}>
-        {s.items.slice(0, 5).map((t, i) => (
+        {s.slice(0, 5).map((t, i) => (
           <div key={t.id} className="flex items-center gap-2.5 p-3">
             <span className={rankClass(i)}>#{i + 1}</span>
             <Link href={`/g/${t.id}`} className="flex min-w-0 flex-1 items-center gap-2.5">
@@ -108,7 +96,7 @@ function TeamsList({ s, chosen, v }: { s: Featured["teams"]; chosen: FeaturedLev
   );
 }
 
-function PlayersTabs({ f, chosen, v }: { f: Featured; chosen: FeaturedLevel; v: Viewer }) {
+function PlayersTabs({ f, where }: { f: Featured; where: string }) {
   return (
     <HomeTabs
       initial="puan"
@@ -116,11 +104,10 @@ function PlayersTabs({ f, chosen, v }: { f: Featured; chosen: FeaturedLevel; v: 
         {
           key: "puan",
           label: "En yüksek",
-          content: f.players.items.length ? (
+          content: f.players.length ? (
             <>
-              <Fallback s={f.players} chosen={chosen} v={v} />
               <Strip>
-                {f.players.items.map((c, i) => (
+                {f.players.map((c, i) => (
                   <MiniCard key={c.userId} c={c} i={i}>
                     {c.matches ? `${c.matches} maç` : "henüz maç yok"}
                   </MiniCard>
@@ -128,17 +115,16 @@ function PlayersTabs({ f, chosen, v }: { f: Featured; chosen: FeaturedLevel; v: 
               </Strip>
             </>
           ) : (
-            <Empty>Maç oynayan oyuncular burada sıralanır. İlk maçını oyna, burada sen ol!</Empty>
+            <Empty>{where} için henüz kayıtlı oyuncu yok. Arkadaşlarını davet et, burada sen ol!</Empty>
           ),
         },
         {
           key: "mvp",
           label: "Haftanın MVP'leri",
-          content: f.mvps.items.length ? (
+          content: f.mvps.length ? (
             <>
-              <Fallback s={f.mvps} chosen={chosen} v={v} />
               <Strip>
-                {f.mvps.items.map((m, i) => (
+                {f.mvps.map((m, i) => (
                   <MiniCard key={m.player.userId} c={m.player} i={i}>
                     <span className="font-semibold text-gold-1">MVP</span> · {m.team.name}
                     {m.opponent ? ` vs ${m.opponent}` : ""}
@@ -148,17 +134,16 @@ function PlayersTabs({ f, chosen, v }: { f: Featured; chosen: FeaturedLevel; v: 
               </Strip>
             </>
           ) : (
-            <Empty>Bu hafta takım maçlarında MVP seçilen olmadı.</Empty>
+            <Empty>{where} için bu hafta takım maçlarında MVP seçilen olmadı.</Empty>
           ),
         },
         {
           key: "yukselen",
           label: "Yükselenler",
-          content: f.risers.items.length ? (
+          content: f.risers.length ? (
             <>
-              <Fallback s={f.risers} chosen={chosen} v={v} />
               <Strip>
-                {f.risers.items.map((r, i) => (
+                {f.risers.map((r, i) => (
                   <MiniCard key={r.player.userId} c={r.player} i={i}>
                     <span className="font-semibold text-primary">+{r.delta}</span> son 30 gün
                   </MiniCard>
@@ -166,7 +151,7 @@ function PlayersTabs({ f, chosen, v }: { f: Featured; chosen: FeaturedLevel; v: 
               </Strip>
             </>
           ) : (
-            <Empty>Son 30 günde puanı yükselen oyuncu yok.</Empty>
+            <Empty>{where} için son 30 günde puanı yükselen oyuncu yok (en az 2 puanlı maç gerekir).</Empty>
           ),
         },
       ]}
@@ -176,6 +161,7 @@ function PlayersTabs({ f, chosen, v }: { f: Featured; chosen: FeaturedLevel; v: 
 
 function LevelBody({ f, level, v }: { f: Featured; level: FeaturedLevel; v: Viewer }) {
   const region = new URLSearchParams(level === "tr" ? { il: "" } : { il: v.city ?? "", ...(level === "ilce" && v.district ? { ilce: v.district } : {}) }).toString();
+  const where = levelLabel(level, v.city, v.district);
   return (
     <>
       <SectionTitle
@@ -191,7 +177,7 @@ function LevelBody({ f, level, v }: { f: Featured; level: FeaturedLevel; v: View
           Öne çıkan takımlar
         </span>
       </SectionTitle>
-      <TeamsList s={f.teams} chosen={level} v={v} />
+      <TeamsList s={f.teams} where={where} v={v} />
 
       <SectionTitle
         action={
@@ -206,7 +192,7 @@ function LevelBody({ f, level, v }: { f: Featured; level: FeaturedLevel; v: View
           Öne çıkan oyuncular
         </span>
       </SectionTitle>
-      <PlayersTabs f={f} chosen={level} v={v} />
+      <PlayersTabs f={f} where={where} />
     </>
   );
 }
