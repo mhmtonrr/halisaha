@@ -7,9 +7,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { loadCandidates } from "@/lib/players-data";
 import { parseFilter, searchCandidates } from "@/lib/player-search";
 import { PAGE_SIZE, PlayerFilters, PlayerResults } from "./PlayerSearch";
-import { Button, Card, ErrorNote, Header, Input, LinkButton, SectionTitle, cx } from "@/components/ui";
+import { Badge, Button, Card, ErrorNote, Header, Input, LinkButton, SectionTitle, cx } from "@/components/ui";
 import { OvrBadge } from "@/components/PlayerCard";
 import { TeamBadge } from "@/components/TeamBadge";
+import { Icon } from "@/components/Icon";
+import { openFillCalls } from "@/lib/calls-data";
+import { callWhen } from "@/lib/call-rules";
+import { POSITION_NAME, type Position } from "@/lib/data";
 
 export default async function DiscoverPage({
   searchParams,
@@ -25,6 +29,7 @@ export default async function DiscoverPage({
   const city = sp.il === undefined ? (profile?.city ?? "") : isProvince(sp.il) ? sp.il : "";
   const district = canonicalDistrict(city, sp.ilce) ?? undefined;
   if (players) return <PlayersTab sp={sp} userId={user.id} city={city} district={district} />;
+  if (sp.sekme === "mac") return <FillCallsTab city={city} district={district} />;
 
   const [allTeams, { data: teamBlocks }] = await Promise.all([
     findTeams(supabase, { city: city || undefined, district, q: sp.q, limit: 100 }),
@@ -104,12 +109,14 @@ export default async function DiscoverPage({
   );
 }
 
-function Tabs({ active, city, district }: { active: "takim" | "oyuncu"; city: string; district?: string }) {
+type Tab = "takim" | "oyuncu" | "mac";
+
+function Tabs({ active, city, district }: { active: Tab; city: string; district?: string }) {
   // Sekme değişince seçili bölge korunur
   const region = new URLSearchParams({ il: city, ...(district ? { ilce: district } : {}) }).toString();
-  const tab = (key: "takim" | "oyuncu", label: string) => (
+  const tab = (key: Tab, label: string) => (
     <Link
-      href={`/kesfet?${key === "oyuncu" ? "sekme=oyuncu&" : ""}${region}`}
+      href={`/kesfet?${key === "takim" ? "" : `sekme=${key}&`}${region}`}
       className={cx(
         "flex min-h-10 flex-1 items-center justify-center rounded-lg text-sm font-semibold transition",
         active === key ? "bg-accent text-pitch-950" : "text-muted hover:text-white",
@@ -118,7 +125,82 @@ function Tabs({ active, city, district }: { active: "takim" | "oyuncu"; city: st
       {label}
     </Link>
   );
-  return <div className="mb-3 flex gap-1 rounded-xl border border-line bg-pitch-900/80 p-1">{tab("takim", "Takımlar")}{tab("oyuncu", "Oyuncular")}</div>;
+  return <div className="mb-3 flex gap-1 rounded-xl border border-line bg-pitch-900/80 p-1">{tab("takim", "Takımlar")}{tab("oyuncu", "Oyuncular")}{tab("mac", "Adam arayan")}</div>;
+}
+
+/** Herkese açık adam aramalar (0041): bölgedeki eksiği olan maçlar; "Başvur" çağrı sayfasına götürür */
+async function FillCallsTab({ city, district }: { city: string; district?: string }) {
+  const { supabase } = await requireUser();
+  const calls = await openFillCalls(supabase, city || undefined, district);
+  return (
+    <main>
+      <Header title="Keşfet" />
+      <Tabs active="mac" city={city} district={district} />
+      <form action="/kesfet">
+        <input type="hidden" name="sekme" value="mac" />
+        <RegionSelect
+          key={`${city}-${district ?? ""}`}
+          cityName="il"
+          districtName="ilce"
+          defaultCity={city}
+          defaultDistrict={district}
+          requireCity={false}
+          showLabels={false}
+          anyLabel={{ city: "Tüm Türkiye", district: "Tüm ilçeler" }}
+          onChangeSubmit
+        />
+      </form>
+
+      <SectionTitle>
+        {city ? `${city}${district ? ` · ${district}` : ""}` : "Türkiye"} · adam arayan maçlar · {calls.length}
+      </SectionTitle>
+      {calls.length === 0 ? (
+        <Card className="text-center text-sm text-muted">
+          Bu bölgede şu an oyuncu arayan maç yok. Kendi maçında eksik varsa maç ekranında &quot;Adam ara&quot; → &quot;Herkese açık&quot;.
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {calls.map((c) => {
+            const left = Math.max(c.needed - c.taken, 0);
+            const applied = c.my_answer === "yes";
+            return (
+              <Link key={c.poll_id} href={`/g/${c.group_id}/cagri/${c.poll_id}`} className="block">
+                <Card className="flex items-center gap-3 transition hover:border-accent/50">
+                  <Icon name="person_search" fill className="text-[26px] text-amber-300" />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold">{callWhen(c)}</div>
+                    <div className="truncate text-xs text-on-surface-variant">
+                      {c.group_kind === "team" ? "Takım" : "Grup"} · {c.group_name}
+                      {c.opponent_name ? ` vs ${c.opponent_name}` : ""}
+                    </div>
+                    <div className="truncate text-xs text-muted">
+                      {[c.venue, [c.district, c.city].filter(Boolean).join(", "), c.team_size ? `${c.team_size}v${c.team_size}` : null]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </div>
+                    <div className="mt-0.5 text-xs">
+                      <b className="text-accent">{left} oyuncu</b> aranıyor
+                      {c.positions.length > 0 && <span className="text-muted"> · {c.positions.map((p) => POSITION_NAME[p as Position] ?? p).join(", ")}</span>}
+                    </div>
+                  </div>
+                  {applied ? (
+                    <Badge tone="accent">Başvurdun</Badge>
+                  ) : c.is_member ? (
+                    <Badge>Senin grubun</Badge>
+                  ) : (
+                    <span className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-sm font-bold text-pitch-950">Başvur</span>
+                  )}
+                </Card>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+      <p className="mt-2 text-center text-xs text-muted">
+        Kadroya alınırsan o maçta ödünç oyuncu olursun: maçı ve oylamasını görürsün, puanın genel ratingine işler.
+      </p>
+    </main>
+  );
 }
 
 async function PlayersTab({

@@ -3,7 +3,7 @@ import { LiveRefresh } from "@/components/LiveRefresh";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
-import { acceptResponder, addPollGuest, closePoll, rejectResponder, removePollGuest, respondPoll, updateGatherPoll } from "@/lib/call-actions";
+import { acceptResponder, addPollGuest, closePoll, rejectResponder, removePollGuest, respondPoll, setPollPublic, updateGatherPoll } from "@/lib/call-actions";
 import { formatDate, POSITIONS, POSITION_NAME, toLocalInput } from "@/lib/data";
 import { callWhen, decisionDue, defaultSelection, isoToTime, pendingApplicants, reserveOrder, type Answer, type Responder } from "@/lib/call-rules";
 import { loadCall } from "@/lib/calls-data";
@@ -328,10 +328,20 @@ export default async function CallPage({
             </Card>
           )}
           {isFill && (
-            <form action={closePoll} className="mt-2 text-right">
-              <Hidden groupId={groupId} pollId={pollId} />
-              <button className="text-xs text-muted hover:text-red-300">Aramayı durdur</button>
-            </form>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <form action={setPollPublic}>
+                <Hidden groupId={groupId} pollId={pollId} />
+                <input type="hidden" name="public" value={call.is_public ? "0" : "1"} />
+                <button className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+                  <Icon name={call.is_public ? "public_off" : "public"} className="text-[16px]" />
+                  {call.is_public ? "Herkese açık · kapat" : "Herkese aç (Keşfet)"}
+                </button>
+              </form>
+              <form action={closePoll}>
+                <Hidden groupId={groupId} pollId={pollId} />
+                <button className="text-xs text-muted hover:text-red-300">Aramayı durdur</button>
+              </form>
+            </div>
           )}
         </>
       )}

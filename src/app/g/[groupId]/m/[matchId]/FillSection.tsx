@@ -95,6 +95,13 @@ export function FillSection({
             className="w-full rounded-xl border border-line bg-pitch-950 p-3 text-sm outline-none placeholder:text-muted/60 focus:border-accent"
           />
         </label>
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-line p-3 text-sm has-checked:border-accent has-checked:bg-accent/10">
+          <input type="checkbox" name="public" value="1" className="mt-0.5 accent-accent" />
+          <span>
+            <b>Herkese açık</b>
+            <span className="block text-xs text-muted">Keşfet&apos;te &quot;Adam arayan maçlar&quot;da bölgendeki herkes görür ve başvurur.</span>
+          </span>
+        </label>
         <SubmitButton className="w-full" pendingLabel="Yayınlanıyor…">
           <Icon name="person_search" className="text-[20px]" />
           Adam ara

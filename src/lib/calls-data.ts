@@ -11,6 +11,8 @@ export interface Call extends CallShape {
   note: string | null;
   positions: string[];
   match_id: string | null;
+  /** Herkese açık adam arama (0041) */
+  is_public: boolean;
 }
 
 /** Organizatörün çağrıya eklediği dışarıdan misafir (0038); player_id: kesinleşince kadrodaki misafir satırı */
@@ -31,7 +33,7 @@ export interface CallMatch {
   group_name: string;
 }
 
-const CALL_COLS = "id, group_id, created_by, purpose, status, play_on, starts_at, venue, team_size, capacity, decide_by, note, positions, match_id";
+const CALL_COLS = "id, group_id, created_by, purpose, status, play_on, starts_at, venue, team_size, capacity, decide_by, note, positions, match_id, is_public";
 
 export async function loadCall(supabase: SupabaseClient, pollId: string, groupId: string) {
   const { data: call } = await supabase.from("match_polls").select(CALL_COLS).eq("id", pollId).eq("group_id", groupId).maybeSingle();
@@ -146,4 +148,44 @@ export async function myManagedCommunities(supabase: SupabaseClient, userId: str
     .map((r) => one(r.groups as { id: string; name: string; kind: string } | { id: string; name: string; kind: string }[] | null))
     .filter((g): g is { id: string; name: string; kind: string } => !!g && g.kind === "community")
     .sort((a, b) => a.name.localeCompare(b.name, "tr"));
+}
+
+/** Çağrı özeti (0041 poll_overview): özel grubun tablosu açılmadan güvenli alanlar */
+export interface CallOverview {
+  poll_id: string;
+  group_id: string;
+  group_name: string;
+  group_kind: "community" | "team";
+  city: string | null;
+  district: string | null;
+  play_on: string;
+  starts_at: string | null;
+  venue: string | null;
+  team_size: number | null;
+  needed: number;
+  taken: number;
+  positions: string[];
+  note: string | null;
+  match_kind: "internal" | "external" | null;
+  opponent_name: string | null;
+  created_by: string;
+  organizer_name: string | null;
+  my_answer: string | null;
+  my_status: string | null;
+  is_member: boolean;
+}
+
+/** Keşfet "Adam arayan maçlar": herkese açık, açık, gelecekteki adam aramalar; engellediğim kişi/takım hariç, saate göre */
+export async function openFillCalls(supabase: SupabaseClient, city?: string, district?: string): Promise<CallOverview[]> {
+  const [{ data: ids }, { data: blocks }] = await Promise.all([
+    supabase.rpc("open_fill_polls", { p_city: city || null, p_district: district || null }),
+    supabase.from("user_blocks").select("blocked_user_id, blocked_group_id"),
+  ]);
+  const list = (ids ?? []) as string[];
+  if (!list.length) return [];
+  const { data } = await supabase.rpc("poll_overview", { p_ids: list });
+  const blocked = new Set((blocks ?? []).flatMap((b) => [b.blocked_user_id, b.blocked_group_id]).filter(Boolean) as string[]);
+  return ((data ?? []) as CallOverview[])
+    .filter((c) => !blocked.has(c.created_by) && !blocked.has(c.group_id))
+    .sort((a, b) => (a.starts_at ?? a.play_on).localeCompare(b.starts_at ?? b.play_on));
 }

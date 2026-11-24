@@ -303,6 +303,10 @@ export async function createFillPoll(fd: FormData) {
   });
   if (error || !data) fail(back, rpcMessage(error, "Adam arama açılamadı"));
   const pollId = data as string;
+  if (fd.get("public")) {
+    const { error: pubError } = await supabase.rpc("set_poll_public", { p_poll: pollId, p_public: true });
+    if (pubError) fail(callPath(target, pollId), rpcMessage(pubError, "Adam arama açıldı ama herkese açılamadı"));
+  }
   later(async () => {
     const admin = createAdminClient();
     const [ids, name, { data: m }] = await Promise.all([
@@ -314,6 +318,18 @@ export async function createFillPoll(fd: FormData) {
   });
   revalidatePath(back);
   redirect(callPath(target, pollId));
+}
+
+/** Adam aramayı herkese aç / kapat (Keşfet "Adam arayan maçlar") */
+export async function setPollPublic(fd: FormData) {
+  const { supabase } = await requireUser();
+  const groupId = str(fd, "groupId");
+  const pollId = str(fd, "pollId");
+  const { error } = await supabase.rpc("set_poll_public", { p_poll: pollId, p_public: str(fd, "public") === "1" });
+  if (error) fail(callPath(groupId, pollId), rpcMessage(error, "Değiştirilemedi"));
+  revalidatePath(callPath(groupId, pollId));
+  revalidatePath("/kesfet");
+  redirect(callPath(groupId, pollId));
 }
 
 /**

@@ -18,8 +18,8 @@
 kadrosuna girer; takımın asıl kadrosunda değildir: `is_group_member` onu **saymaz** (takım sohbeti, teklifler, çağrılar, yetkiler kapalı), `getMemberships`/Takımlarım/
 profil kartlarında yoktur, takım sayfasında "Misafirler" sekmesinde "ödünç" etiketiyle görünür (`isSquadMember`/`isGuestLike`). Oy verir/oylanır, genel ratingi geçerlidir.
 **Özel grupta ödünç (0041, kullanıcı kararı)**: grup maçına dışarıdan gelen ödünç oyuncu sadece oynadığı maçı görür (maç, kadro, sonuç, o maçtaki oyuncuların kartları; `is_match_participant`, `is_co_player`) + grubun adı (`has_group_row`); grubun diğer maçları, oyuncu listesi, sohbeti kapalı.
-Davet koduyla katılırsa kalıcı üye olur (`join_group` upsert). Eski herkese açık ilan (`player_listings`, `/ilan`, Keşfet "Oyuncu arayan takımlar") kalktı; "herkese aç"
-seçeneği ikinci aşamada "Adam arayan maçlar" olarak gelecek. Kurallar: `docs/mac-puanlama.md` "Birleşik çağrı".
+Davet koduyla katılırsa kalıcı üye olur (`join_group` upsert). Eski herkese açık ilan (`player_listings`, `/ilan`, Keşfet "Oyuncu arayan takımlar") kalktı; yerine
+adam arama "Herkese açık" seçilebilir (0041; Keşfet "Adam arayan" sekmesi). Kurallar: `docs/mac-puanlama.md` "Birleşik çağrı".
 **Geçici (hızlı) takım ve dağıtma (0037, kullanıcı kararları)**: **Arayüzde artık kurulmuyor** (kullanıcı kararı 2026-11-23: grupta sadece kendi aramızda maç; mevcut geçici takımlar ve RPC duruyor, e2e RPC ile kurar). Eskiden kesinleştirmede "Rakibe karşı" + "+ Hızlı takım kur" (`finalize_poll` `p_new_team`) geçici takım
 kurar (`groups.is_temporary`; il/ilçe çağrının topluluğundan, yoksa profilden; kişi başı en fazla 5 açık geçici). Geçici takım Keşfet'te, öne çıkanlarda, menüde ve
 ana sayfadaki Takımlar sekmesinin listesinde görünmez; aynı sekmede kapalı "Geçici ve dağıtılmış takımlarım" bölümünde durur. **Son maçı kapanınca** ve planlı/oylamada maçı
