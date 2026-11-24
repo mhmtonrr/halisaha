@@ -1,4 +1,5 @@
 "use client";
+import { Icon } from "@/components/Icon";
 
 import { useMemo, useState } from "react";
 import { createMatch } from "@/lib/actions";
@@ -159,7 +160,7 @@ export function NewMatchForm({
                     )}
                     title="Kaleci olarak işaretle"
                   >
-                    🧤 KL
+                    <Icon name="front_hand" className="text-[14px]" /> KL
                   </button>
                 )}
               </li>
@@ -183,7 +184,7 @@ export function NewMatchForm({
                 <ul className="space-y-0.5 text-muted">
                   {t.team.map((p) => (
                     <li key={p.id} className="truncate">
-                      {p.isGoalkeeper && "🧤 "}
+                      {p.isGoalkeeper && <Icon name="front_hand" className="mr-0.5 align-middle text-[13px]" />}
                       {shortName(p.name ?? "")}
                     </li>
                   ))}

@@ -1,3 +1,4 @@
+import { Icon } from "@/components/Icon";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
@@ -221,7 +222,7 @@ export default async function PlayerPage({
                         <div className="flex items-center gap-1.5">
                           <span className="truncate">{h.kind === "external" ? `vs ${h.opponentName}` : "Kendi aramızda"}</span>
                           <PositionChip position={h.position as Position | null} />
-                          {h.mvp && "⭐"}
+                          {h.mvp && <Icon name="star" fill className="text-[15px] text-gold-1" />}
                         </div>
                         <div className="text-xs text-muted">
                           {formatDate(h.playedAt)}

@@ -1,3 +1,4 @@
+import { Icon } from "@/components/Icon";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -130,7 +131,7 @@ export default async function ManagePage({
                     <form action={openDm}>
                       <input type="hidden" name="userId" value={p.user_id} />
                       <button aria-label={`${p.display_name} ile mesajlaş`} className="rounded-lg bg-pitch-800 px-2.5 py-1.5 text-sm hover:text-accent">
-                        💬
+                        <Icon name="chat" className="text-[18px]" />
                       </button>
                     </form>
                   )}

@@ -1,3 +1,4 @@
+import { Icon } from "@/components/Icon";
 import Link from "next/link";
 import { finalizePoll } from "@/lib/call-actions";
 import { isoToTime, type Responder } from "@/lib/call-rules";
@@ -89,7 +90,7 @@ export function FinalizeForm({
       </Card>
 
       <SectionTitle>Kimler oynayacak? · {preselected.size + guests.length} işaretli</SectionTitle>
-      <p className="-mt-1 mb-2 text-xs text-muted">İlk gelenler ve misafirler işaretli geldi. İşaretlenmeyen &quot;geliyorum&quot;cular yedek olur. Kaleciyi 🧤 ile işaretle.</p>
+      <p className="-mt-1 mb-2 text-xs text-muted">İlk gelenler ve misafirler işaretli geldi. İşaretlenmeyen &quot;geliyorum&quot;cular yedek olur. Kaleciyi eldiven kutusuyla işaretle.</p>
       <Card className="p-0">
         <ul className="divide-y divide-line">
           {candidates.map((r) => (
@@ -97,7 +98,7 @@ export function FinalizeForm({
               {r.answer === "maybe" && <span className="text-xs text-amber-300">belki</span>}
               <label className="flex items-center gap-1 text-xs text-muted" title="Kaleci">
                 <input type="checkbox" name="gk" value={r.user_id} defaultChecked={(r.chosen_position ?? r.preferred_position) === "GK"} />
-                🧤
+                <Icon name="front_hand" className="text-[16px]" />
               </label>
               <input
                 type="checkbox"
@@ -113,7 +114,7 @@ export function FinalizeForm({
             <GuestRow key={g.id} g={g}>
               <label className="flex items-center gap-1 text-xs text-muted" title="Kaleci">
                 <input type="checkbox" name="gk" value={g.id} defaultChecked={g.position === "GK"} />
-                🧤
+                <Icon name="front_hand" className="text-[16px]" />
               </label>
               <input type="checkbox" name="guests" value={g.id} defaultChecked aria-label={`${g.name} oynasın`} className="h-5 w-5" />
             </GuestRow>

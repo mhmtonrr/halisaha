@@ -1,3 +1,4 @@
+import { Icon } from "@/components/Icon";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { completeOnboarding } from "@/lib/actions";
@@ -28,7 +29,7 @@ export default async function WelcomePage({
   return (
     <main className="py-8">
       <div className="mb-6 text-center">
-        <div className="text-4xl">👋</div>
+        <Icon name="waving_hand" fill className="text-[44px] text-primary" />
         <h1 className="mt-3 text-2xl font-black">Hoş geldin!</h1>
         <p className="mt-1 text-muted">Kartını oluşturmak için seni biraz tanıyalım.</p>
       </div>

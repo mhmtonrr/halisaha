@@ -1,4 +1,5 @@
 "use client";
+import { Icon } from "@/components/Icon";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -310,7 +311,7 @@ export function DmRoom({
 
       {messages.length === 0 && (
         <div className="py-16 text-center text-muted">
-          <div className="text-4xl">💬</div>
+          <Icon name="forum" className="text-[40px] text-primary" />
           <p className="mt-2">{other.name} ile ilk mesajı sen yaz!</p>
         </div>
       )}
@@ -341,7 +342,7 @@ export function DmRoom({
               ) : m.kind === "invite" ? (
                 <div className={cx("my-2 flex", mine ? "justify-end" : "justify-start")}>
                   <div className="max-w-[85%] rounded-2xl border border-accent/40 bg-accent/10 px-3 py-2.5 text-sm">
-                    <div className="font-bold">{invite ? `${invite.group_kind === "team" ? "🛡️ Takım" : "👥 Grup"} daveti` : "Davet"}</div>
+                    <div className="font-bold">{invite ? `${invite.group_kind === "team" ? "Takım" : "Grup"} daveti` : "Davet"}</div>
                     <div className="mt-0.5">{invite ? invite.group_name : m.body}</div>
                     <div className="mt-1 text-[11px] text-muted">
                       {invite ? INVITE_STATUS[invite.status] : "Artık geçerli değil"} · {time(m.created_at)}

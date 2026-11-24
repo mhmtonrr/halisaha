@@ -1,3 +1,4 @@
+import { Icon } from "@/components/Icon";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -86,10 +87,10 @@ export default async function TeamStatsPage({ params }: { params: Promise<{ grou
     overall: p.overall,
   }));
   const boards: { key: LeaderKey; title: string; icon: string; unit: string }[] = [
-    { key: "goals", title: "Gol krallığı", icon: "⚽", unit: "gol" },
-    { key: "assists", title: "Asist krallığı", icon: "🎯", unit: "asist" },
-    { key: "mvps", title: "En çok MVP", icon: "⭐", unit: "MVP" },
-    { key: "saves", title: "Kurtarışlar", icon: "🧤", unit: "kurtarış" },
+    { key: "goals", title: "Gol krallığı", icon: "sports_soccer", unit: "gol" },
+    { key: "assists", title: "Asist krallığı", icon: "target", unit: "asist" },
+    { key: "mvps", title: "En çok MVP", icon: "star", unit: "MVP" },
+    { key: "saves", title: "Kurtarışlar", icon: "front_hand", unit: "kurtarış" },
   ];
 
   const rated = squad.filter((p) => p.matches_played > 0);
@@ -210,8 +211,8 @@ export default async function TeamStatsPage({ params }: { params: Promise<{ grou
           if (!top.length) return null;
           return (
             <Card key={b.key} className="p-0">
-              <div className="border-b border-line px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted">
-                {b.icon} {b.title}
+              <div className="flex items-center gap-1.5 border-b border-line px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted">
+                <Icon name={b.icon} fill className="text-[16px] text-gold-1" /> {b.title}
               </div>
               <ol className="divide-y divide-line">
                 {top.map((r, i) => (

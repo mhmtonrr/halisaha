@@ -1,4 +1,5 @@
 "use client";
+import { Icon } from "@/components/Icon";
 
 import { useEffect, useState, useTransition } from "react";
 import { removePushSubscription, savePushSubscription, sendTestNotification, setNotificationPref } from "@/lib/actions";
@@ -86,7 +87,7 @@ export function PushPrompt({ reason }: { reason: string }) {
   return (
     <Card className="mb-4 space-y-2 border-accent/40 bg-accent/10">
       <div className="flex items-start gap-3">
-        <span className="text-2xl">🔔</span>
+        <Icon name="notifications_active" fill className="text-[26px] text-primary" />
         <div className="min-w-0 flex-1">
           <div className="font-semibold">{reason}</div>
           <p className="mt-0.5 text-xs text-muted">{status === "ios-install" ? IOS_HELP : "Oylama, çağrı ve teklifler için bildirim gelsin; istediğin zaman profilinden kapatırsın."}</p>
@@ -152,7 +153,7 @@ export function PushSettings({ prefs }: { prefs: Prefs }) {
         {error && <p className="text-xs text-red-300">{error}</p>}
         {status === "off" && (
           <Button className="w-full" onClick={enable} disabled={busy} type="button">
-            {busy ? "Açılıyor…" : "🔔 Bu cihazda bildirimleri aç"}
+            {busy ? "Açılıyor…" : <><Icon name="notifications_active" className="text-[20px]" />Bu cihazda bildirimleri aç</>}
           </Button>
         )}
         {status === "on" && (

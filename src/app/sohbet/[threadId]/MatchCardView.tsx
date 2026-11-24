@@ -1,3 +1,4 @@
+import { Icon } from "@/components/Icon";
 import Link from "next/link";
 import { TeamBadge } from "@/components/TeamBadge";
 import { cx } from "@/components/ui";
@@ -79,7 +80,7 @@ export function MatchCardView({
     <div className={cx("my-2 flex", mine ? "justify-end" : "justify-start")}>
       <div className={cx("w-[88%] max-w-sm overflow-hidden rounded-2xl border bg-pitch-900", inactive ? "border-line opacity-80" : "border-accent/40")}>
         <div className="flex items-center gap-2 bg-accent/10 px-3 py-2">
-          <span className="text-base">⚽</span>
+          <Icon name="sports_soccer" fill className="text-[18px] text-primary" />
           <span className="flex-1 text-xs font-bold uppercase tracking-wide text-accent">{title(card)}</span>
           {inactive && <span className="rounded-full bg-pitch-800 px-2 py-0.5 text-[10px] text-muted">{closed ? "Kapandı" : "Geçti"}</span>}
         </div>

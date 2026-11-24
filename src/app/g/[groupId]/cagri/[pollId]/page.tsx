@@ -1,3 +1,4 @@
+import { Icon } from "@/components/Icon";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -15,9 +16,9 @@ import { FinalizeForm } from "./FinalizeForm";
 import { GuestRow, ResponderRow } from "./ResponderRow";
 
 const ANSWERS: { value: Answer; label: string; icon: string; active: string }[] = [
-  { value: "yes", label: "Geliyorum", icon: "✅", active: "bg-accent text-pitch-950 border-accent" },
-  { value: "maybe", label: "Belki", icon: "🤔", active: "bg-amber-400 text-pitch-950 border-amber-400" },
-  { value: "no", label: "Gelemem", icon: "❌", active: "bg-red-400 text-pitch-950 border-red-400" },
+  { value: "yes", label: "Geliyorum", icon: "check_circle", active: "bg-accent text-pitch-950 border-accent" },
+  { value: "maybe", label: "Belki", icon: "help", active: "bg-amber-400 text-pitch-950 border-amber-400" },
+  { value: "no", label: "Gelemem", icon: "cancel", active: "bg-red-400 text-pitch-950 border-red-400" },
 ];
 
 function Hidden({ groupId, pollId }: { groupId: string; pollId: string }) {
@@ -114,9 +115,20 @@ export default async function CallPage({
       )}
 
       <Card className="mb-4">
-        <div className="text-2xl font-black">{callWhen(call)}</div>
-        <div className="mt-0.5 text-sm text-muted">
-          {[call.venue && `📍 ${call.venue}`, call.team_size && `${call.team_size}v${call.team_size}`].filter(Boolean).join(" · ")}
+        <div className="font-display text-2xl font-bold">{callWhen(call)}</div>
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-on-surface-variant">
+          {call.venue && (
+            <span className="inline-flex items-center gap-1">
+              <Icon name="stadium" className="text-[16px]" />
+              {call.venue}
+            </span>
+          )}
+          {call.team_size && (
+            <span className="inline-flex items-center gap-1">
+              <Icon name="groups" className="text-[16px]" />
+              {call.team_size}v{call.team_size}
+            </span>
+          )}
         </div>
         {isFill && (
           <div className="mt-2 text-sm">
@@ -151,8 +163,9 @@ export default async function CallPage({
       </Card>
 
       {due && (
-        <p className="mb-4 rounded-xl border border-amber-400/50 bg-amber-400/10 p-3 text-sm text-amber-200">
-          ⏰ Kadro kararı zamanı geldi. Kadroyu kesinleştir veya çağrıyı iptal et.
+        <p className="mb-4 flex items-start gap-1.5 rounded-xl border border-amber-400/50 bg-amber-400/10 p-3 text-sm text-amber-200">
+          <Icon name="alarm" className="mt-0.5 text-[18px]" />
+          Kadro kararı zamanı geldi. Kadroyu kesinleştir veya çağrıyı iptal et.
         </p>
       )}
 
@@ -188,7 +201,7 @@ export default async function CallPage({
                   mine?.answer === a.value ? a.active : "border-line bg-pitch-900 hover:bg-pitch-800",
                 )}
               >
-                <span>{a.icon}</span>
+                <Icon name={a.icon} className="text-[18px]" />
                 {a.label}
               </button>
             ))}

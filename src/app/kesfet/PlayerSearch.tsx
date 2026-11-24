@@ -1,3 +1,4 @@
+import { Icon } from "@/components/Icon";
 import Link from "next/link";
 import { openDm } from "@/lib/actions";
 import { RegionSelect } from "@/components/RegionSelect";
@@ -207,7 +208,7 @@ export function PlayerRow({ c, me, skill }: { c: PlayerCandidate; me: boolean; s
       <form action={openDm} className="shrink-0 pl-1 pr-3">
         <input type="hidden" name="userId" value={c.userId} />
         <button aria-label={`${c.name} ile mesajlaş`} className="rounded-lg bg-pitch-800 px-2.5 py-1.5 text-sm hover:text-accent">
-          💬
+          <Icon name="chat" className="text-[18px]" />
         </button>
       </form>
     )}

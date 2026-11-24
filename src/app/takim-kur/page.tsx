@@ -1,3 +1,4 @@
+import { Icon } from "@/components/Icon";
 import { requireUser } from "@/lib/supabase/server";
 import { createTeam } from "@/lib/actions";
 import { Button, Card, ErrorNote, Header } from "@/components/ui";
@@ -12,7 +13,7 @@ export default async function NewTeamPage({ searchParams }: { searchParams: Prom
     <main>
       <Header title="Takım kur" back="/" />
       <Card className="mb-4 space-y-2 text-sm">
-        <div className="text-base font-semibold">🛡️ Takım: rekabet için</div>
+        <div className="flex items-center gap-1.5 text-base font-semibold"><Icon name="shield" fill className="text-[20px] text-primary" />Takım: rekabet için</div>
         <ul className="list-disc space-y-1 pl-5 text-muted">
           <li>Herkese açıktır; bölgendeki takım sıralamasında görünür.</li>
           <li>Başka takımlarla maç yapar, galibiyet-mağlubiyet karnesi tutulur.</li>

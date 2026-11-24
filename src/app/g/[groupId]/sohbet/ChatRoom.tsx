@@ -1,4 +1,5 @@
 "use client";
+import { Icon } from "@/components/Icon";
 
 import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -295,7 +296,7 @@ export function ChatRoom({
 
       {messages.length === 0 && (
         <div className="py-16 text-center text-muted">
-          <div className="text-4xl">💬</div>
+          <Icon name="forum" className="text-[40px] text-primary" />
           <p className="mt-2">Henüz mesaj yok. İlk mesajı sen yaz!</p>
         </div>
       )}

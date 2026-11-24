@@ -1,4 +1,5 @@
 "use client";
+import { Icon } from "@/components/Icon";
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -130,7 +131,7 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
 
       {rows.length === 0 ? (
         <Card className="space-y-2 text-center text-sm text-muted">
-          <div className="text-3xl">💬</div>
+          <Icon name="forum" className="text-[36px] text-primary" />
           <p>Henüz sohbetin yok. Bir takıma/gruba katıl ya da Keşfet’ten bir oyuncuya mesaj gönder.</p>
           <Link href="/kesfet" className="text-accent">
             Keşfet ›

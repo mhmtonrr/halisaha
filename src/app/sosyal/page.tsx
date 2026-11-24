@@ -1,3 +1,4 @@
+import { Icon } from "@/components/Icon";
 import Link from "next/link";
 import { requireUser } from "@/lib/supabase/server";
 import { getMemberships, ROLE_LABEL } from "@/lib/teams-data";
@@ -95,7 +96,7 @@ export default async function SocialPage({ searchParams }: { searchParams: Promi
               </div>
             </Link>
             <Link href={`/g/${m.group.id}/sohbet`} aria-label="Sohbet" className="rounded-lg bg-pitch-800 px-3 py-1.5 text-sm hover:text-accent">
-              💬
+              <Icon name="chat" className="text-[18px]" />
             </Link>
           </Card>
         ))}
@@ -153,7 +154,7 @@ export default async function SocialPage({ searchParams }: { searchParams: Promi
             </div>
             {friends.length === 0 ? (
               <Card className="space-y-2 text-center text-sm text-muted">
-                <div className="text-3xl">👋</div>
+                <Icon name="waving_hand" fill className="text-[36px] text-primary" />
                 <p>Henüz arkadaşın yok. Keşfet’ten oyuncu bul, profilinden “Arkadaş ekle”ye bas.</p>
               </Card>
             ) : (
@@ -161,13 +162,13 @@ export default async function SocialPage({ searchParams }: { searchParams: Promi
                 <PersonRow key={p.id} p={p}>
                   {canInvite && (
                     <Link href={`/oyuncu/${p.id}#davet`} aria-label={`${p.display_name} kişisini davet et`} className="rounded-lg bg-pitch-800 px-2.5 py-1.5 text-sm hover:text-accent">
-                      🛡️
+                      <Icon name="shield" className="text-[18px]" />
                     </Link>
                   )}
                   <form action={openDm}>
                     <input type="hidden" name="userId" value={p.id} />
                     <button aria-label={`${p.display_name} ile mesajlaş`} className="rounded-lg bg-pitch-800 px-3 py-1.5 text-sm hover:text-accent">
-                      💬 Mesaj
+                      <span className="inline-flex items-center gap-1"><Icon name="chat" className="text-[16px]" />Mesaj</span>
                     </button>
                   </form>
                 </PersonRow>

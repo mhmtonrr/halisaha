@@ -1,4 +1,5 @@
 "use client";
+import { Icon } from "@/components/Icon";
 
 import { useEffect, useRef, useState, type ComponentProps } from "react";
 import { useRouter } from "next/navigation";
@@ -224,7 +225,7 @@ export function CardPhotoUploader({ userId, currentUrl, preview }: { userId: str
       ) : (
         <div className={currentUrl ? "grid grid-cols-2 gap-2" : ""}>
           <Button type="button" variant="secondary" className="w-full" onClick={() => input.current?.click()} disabled={busy}>
-            {busy ? "İşleniyor…" : currentUrl ? "Fotoğrafı değiştir" : "📷 Fotoğraf seç"}
+            {busy ? "İşleniyor…" : currentUrl ? "Fotoğrafı değiştir" : <><Icon name="photo_camera" className="text-[20px]" />Fotoğraf seç</>}
           </Button>
           {currentUrl && (
             <Button type="button" variant="secondary" onClick={remove} disabled={busy}>Fotoğrafı sil</Button>

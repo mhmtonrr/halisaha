@@ -1,3 +1,4 @@
+import { Icon } from "@/components/Icon";
 import { requireUser } from "@/lib/supabase/server";
 import { createGroup } from "@/lib/actions";
 import { TEAM_COLORS } from "@/lib/teams-data";
@@ -13,7 +14,7 @@ export default async function NewGroupPage({ searchParams }: { searchParams: Pro
     <main>
       <Header title="Grup kur" back="/" />
       <Card className="mb-4 space-y-2 text-sm">
-        <div className="text-base font-semibold">👥 Grup: topluluk için</div>
+        <div className="flex items-center gap-1.5 text-base font-semibold"><Icon name="groups" fill className="text-[20px] text-primary" />Grup: topluluk için</div>
         <ul className="list-disc space-y-1 pl-5 text-muted">
           <li>Arkadaş çevreni, iş yerini, mahalleni ya da futbol severleri bir araya getir.</li>
           <li>Sadece üyelere görünür; davet linkiyle katılınır.</li>

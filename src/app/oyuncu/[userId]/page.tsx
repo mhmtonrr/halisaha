@@ -1,3 +1,4 @@
+import { Icon } from "@/components/Icon";
 import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -61,21 +62,21 @@ export default async function PlayerProfilePage({
         noShows={data.noShows}
         viewerGroups={data.viewerGroups}
       />
-      {davet && <p className="mt-4 rounded-xl border border-accent/40 bg-accent/10 p-3 text-center text-sm">✅ Davet gönderildi. Yanıtı sohbette görürsün.</p>}
+      {davet && <p className="mt-4 flex items-center justify-center gap-1.5 rounded-xl border border-accent/40 bg-accent/10 p-3 text-center text-sm"><Icon name="check_circle" fill className="text-[18px] text-primary" />Davet gönderildi. Yanıtı sohbette görürsün.</p>}
       {error && <p className="mt-4 rounded-xl border border-red-400/40 bg-red-950/40 p-3 text-center text-sm text-red-200">{error}</p>}
       <div className="mt-4 rounded-xl border border-line bg-pitch-900 p-3">
         {!fr && (
           <form action={friendAction}>
             <input type="hidden" name="op" value="add" />
             <input type="hidden" name="userId" value={userId} />
-            <button className="w-full rounded-lg bg-pitch-800 py-2.5 font-bold hover:bg-pitch-700">👋 Arkadaş ekle</button>
+            <button className="w-full rounded-lg bg-pitch-800 py-2.5 font-bold hover:bg-pitch-700"><span className="inline-flex items-center gap-1.5"><Icon name="person_add" className="text-[18px]" />Arkadaş ekle</span></button>
           </form>
         )}
         {fr?.status === "pending" && fr.requested_by === user.id && (
           <form action={friendAction} className="flex items-center justify-between gap-3">
             <input type="hidden" name="op" value="remove" />
             <input type="hidden" name="userId" value={userId} />
-            <span className="text-sm text-muted">⏳ Arkadaşlık isteği gönderildi</span>
+            <span className="inline-flex items-center gap-1 text-sm text-muted"><Icon name="hourglass_top" className="text-[16px]" />Arkadaşlık isteği gönderildi</span>
             <button className="rounded-lg bg-pitch-800 px-3 py-1.5 text-xs">Geri çek</button>
           </form>
         )}
@@ -106,13 +107,13 @@ export default async function PlayerProfilePage({
       </div>
       <form action={openDm} className="mt-3">
         <input type="hidden" name="userId" value={userId} />
-        <button className="w-full rounded-xl bg-accent py-3 font-bold text-pitch-950">✉️ Mesaj gönder</button>
+        <button className="w-full rounded-xl bg-accent py-3 font-bold text-pitch-950"><span className="inline-flex items-center gap-1.5"><Icon name="mail" className="text-[18px]" />Mesaj gönder</span></button>
       </form>
       {invitable.length > 0 && (
         <form id="davet" action={inviteToGroup} className="mt-3 space-y-2 rounded-xl border border-line bg-pitch-900 p-3">
           <input type="hidden" name="userId" value={userId} />
           <label className="block text-sm font-bold" htmlFor="invite-group">
-            🛡️ Takıma / gruba davet et
+            <span className="inline-flex items-center gap-1.5"><Icon name="shield" className="text-[18px] text-primary" />Takıma / gruba davet et</span>
           </label>
           <select id="invite-group" name="groupId" className="w-full rounded-lg border border-line bg-pitch-950 px-3 py-2.5">
             {invitable.map((g) => (

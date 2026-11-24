@@ -1,3 +1,4 @@
+import { Icon } from "@/components/Icon";
 import Link from "next/link";
 
 /** Kaptan/yetkili veya maçı/çağrıyı açan için: maç/çağrı kartını sohbetten bir oyuncuya/arkadaşa gönderme sayfasına götürür */
@@ -5,9 +6,10 @@ export function SendInviteLink({ tur, refId, className = "" }: { tur: "poll" | "
   return (
     <Link
       href={`/davet/gonder?tur=${tur}&ref=${refId}`}
-      className={`flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-accent/40 bg-pitch-900 px-4 text-sm font-bold transition hover:border-accent ${className}`}
+      className={`flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-primary/40 bg-surface-container px-4 text-sm font-bold transition hover:border-primary ${className}`}
     >
-      💬 Sohbetten davet et
+      <Icon name="send" className="text-[18px]" />
+      Sohbetten davet et
     </Link>
   );
 }

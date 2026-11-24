@@ -1,3 +1,4 @@
+import { Icon } from "@/components/Icon";
 import Link from "next/link";
 import { requireUser } from "@/lib/supabase/server";
 import { LiveRefresh } from "@/components/LiveRefresh";
@@ -5,7 +6,7 @@ import { Card, Header, cx } from "@/components/ui";
 import type { NotificationType } from "@/lib/notify-rules";
 import { MarkRead } from "./MarkRead";
 
-const ICON: Record<NotificationType, string> = { vote: "🗳️", poll: "📣", match: "⚽", offer: "🤝", listing: "🔎", chat: "💬", dm: "✉️", invite: "🛡️", friend: "👋" };
+const ICON: Record<NotificationType, string> = { vote: "how_to_vote", poll: "campaign", match: "sports_soccer", offer: "handshake", listing: "person_search", chat: "forum", dm: "mail", invite: "shield", friend: "waving_hand" };
 
 function timeAgo(iso: string) {
   const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
@@ -43,7 +44,7 @@ export default async function NotificationsPage() {
       />
       {items.length === 0 ? (
         <Card className="space-y-2 text-center text-sm text-muted">
-          <div className="text-3xl">🔔</div>
+          <Icon name="notifications" className="text-[36px] text-primary" />
           <p>Henüz bildirimin yok. Oylama, maç çağrısı, teklif ve ilan gelişmeleri burada görünür.</p>
           <Link href="/profil?sekme=ayarlar#bildirimler" className="text-accent">
             Push bildirimlerini aç ›
@@ -54,7 +55,9 @@ export default async function NotificationsPage() {
           {items.map((n) => (
             <Link key={n.id} href={n.url}>
               <Card className={cx("flex items-start gap-3 transition hover:border-accent/50", !n.read_at && "border-accent/40 bg-accent/5")}>
-                <span className="text-2xl">{ICON[n.type as NotificationType] ?? "🔔"}</span>
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-primary/15 text-primary">
+                  <Icon name={ICON[n.type as NotificationType] ?? "notifications"} fill className="text-[22px]" />
+                </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline justify-between gap-2">
                     <span className={cx("truncate", n.read_at ? "font-medium" : "font-bold")}>{n.title.replace(/^[^\p{L}\p{N}]+/u, "")}</span>
