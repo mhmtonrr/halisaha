@@ -131,6 +131,12 @@ try {
   await PO.waitForLoadState("networkidle");
   const oResp = must(await admin.from("poll_responses").select("answer").eq("poll_id", gather.id).eq("user_id", O.id));
   check("yabancı toplama çağrısına yanıt verdi", oResp[0]?.answer === "maybe");
+  let kNotif = [];
+  for (let i = 0; i < 20 && !kNotif.length; i++) {
+    await PO.waitForTimeout(500);
+    kNotif = must(await admin.from("notifications").select("title, body").eq("user_id", K.id).eq("title", "📨 Çağırdığın oyuncu yanıt verdi"));
+  }
+  check("organizatöre 'çağırdığın oyuncu yanıt verdi' bildirimi gitti", kNotif.length === 1 && kNotif[0].body.includes("belki gelir"));
   await PO.screenshot({ path: `${SHOTS}/card-outsider-gather.png`, fullPage: true });
   await PK.goto(`${BASE}/g/${T}/cagri/${fill.id}`);
   await PK.click('button:has-text("Kadroya al")');

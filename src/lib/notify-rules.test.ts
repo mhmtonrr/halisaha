@@ -77,6 +77,8 @@ describe("metinler", () => {
     text.pollReserve("Grup", "g", "p", "Cum 21:00", 2),
     text.pollRejected("Grup", "g", "p"),
     text.pollApplied("Ali", "g", "p"),
+    text.pollInviteeAnswered("Ali", "yes", "g", "p"),
+    text.pollInviteeAnswered("Ali", "maybe", "g", "p"),
     text.spotOpened("Ali", "g", "p", 3),
     text.proposalReceived("Ali", "Grup", "g", "Cuma"),
     text.proposalDecided("Grup", "g", true, "p"),

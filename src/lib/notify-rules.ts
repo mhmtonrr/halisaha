@@ -177,6 +177,13 @@ export const text = {
     url: `/g/${groupId}/cagri/${pollId}`,
     tag: `poll-apply:${pollId}`,
   }),
+  /** Organizatöre: dışarıdan çağırdığı (üye olmayan) oyuncu toplama çağrısına "geliyorum"/"belki" dedi */
+  pollInviteeAnswered: (who: string, answer: "yes" | "maybe", groupId: string, pollId: string): Content => ({
+    title: "📨 Çağırdığın oyuncu yanıt verdi",
+    body: truncate(`${who} ${answer === "yes" ? "geliyor" : "belki gelir"}; kadroyu kesinleştirirken seçebilirsin`, 300),
+    url: `/g/${groupId}/cagri/${pollId}`,
+    tag: `poll-invitee:${pollId}`,
+  }),
   /** Kurucu/yetkili/organizatörlere: üye maç önerdi */
   proposalReceived: (who: string, groupName: string, groupId: string, when: string): Content => ({
     title: "💡 Maç önerisi",

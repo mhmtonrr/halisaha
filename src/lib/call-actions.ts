@@ -118,16 +118,32 @@ export async function respondPoll(fd: FormData) {
     p_note: str(fd, "note").slice(0, 200) || null,
   });
   if (error) fail(back, rpcMessage(error, "Yanıt kaydedilemedi"));
-  if (answer === "yes") {
-    // Adam aramaya veya kesinleşmiş çağrıya gelen "geliyorum": organizatör kabul edecek, haber ver
+  if (answer === "yes" || answer === "maybe") {
     later(async () => {
       const admin = createAdminClient();
       const [{ data: poll }, { data: me }] = await Promise.all([
-        admin.from("match_polls").select("created_by, purpose, status").eq("id", pollId).maybeSingle(),
+        admin.from("match_polls").select("created_by, group_id, purpose, status").eq("id", pollId).maybeSingle(),
         admin.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
       ]);
-      if (!poll || (poll.purpose !== "fill" && poll.status === "open")) return;
-      await notify([poll.created_by as string], "poll", text.pollApplied(me?.display_name ?? "Bir oyuncu", groupId, pollId), { excludeUserId: user.id });
+      if (!poll) return;
+      const who = me?.display_name ?? "Bir oyuncu";
+      // Adam aramaya veya kesinleşmiş çağrıya gelen "geliyorum": organizatör kabul edecek, haber ver
+      if (answer === "yes" && (poll.purpose === "fill" || poll.status !== "open")) {
+        await notify([poll.created_by as string], "poll", text.pollApplied(who, groupId, pollId), { excludeUserId: user.id });
+        return;
+      }
+      // Açık toplama çağrısına dışarıdan çağrılan (üye olmayan) yanıt verdi: üyelerin yanıtı gibi listede kaybolmasın
+      if (poll.purpose !== "gather" || poll.status !== "open") return;
+      const { data: member } = await admin
+        .from("group_players")
+        .select("id")
+        .eq("group_id", poll.group_id)
+        .eq("user_id", user.id)
+        .is("left_at", null)
+        .eq("is_loan", false)
+        .maybeSingle();
+      if (member) return;
+      await notify([poll.created_by as string], "poll", text.pollInviteeAnswered(who, answer, groupId, pollId), { excludeUserId: user.id });
     });
   }
   revalidatePath(callPath(groupId, pollId));
