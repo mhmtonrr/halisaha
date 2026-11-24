@@ -8,8 +8,17 @@ export interface Section<T> {
   level: FeaturedLevel;
 }
 
-/** Öne çıkması için en az bu kadar puanlı maç (tek maçlık yıldız çıkmasın); kimse yoksa 1'e düşülür */
+/** Bu kadar puanlı maçı olan önde sıralanır (tek maçlık yıldız öne geçmesin) */
 export const FEATURED_MIN_MATCHES = 3;
+
+/**
+ * Öne çıkan oyuncu sırası: önce en az FEATURED_MIN_MATCHES maçlılar, sonra puanlı maçı olanlar, en sonda henüz maçı
+ * olmayan kayıtlı oyuncular; her grupta rating, eşitlikte maç sayısı. Bölgede az puanlı oyuncu varsa da bölge boş kalmasın.
+ */
+export function rankFeaturedPlayers<T extends { matches: number; overall: number }>(list: T[]): T[] {
+  const band = (p: T) => (p.matches >= FEATURED_MIN_MATCHES ? 2 : p.matches > 0 ? 1 : 0);
+  return [...list].sort((a, b) => band(b) - band(a) || b.overall - a.overall || b.matches - a.matches);
+}
 /** Kademede bu kadar kayıt yoksa bir üst kademeye çıkılır */
 export const FEATURED_MIN_ITEMS = 3;
 

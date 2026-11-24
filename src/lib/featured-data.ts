@@ -5,8 +5,8 @@ import { fetchIn } from "@/lib/fetch-in";
 import { one } from "@/lib/data";
 import { findTeams, type TeamSummary } from "@/lib/teams-data";
 import { loadCandidates, loadCandidatesByIds } from "@/lib/players-data";
-import { searchCandidates, type PlayerCandidate } from "@/lib/player-search";
-import { FEATURED_MIN_MATCHES, FEATURED_MIN_ITEMS, levelChain, pickSection, type FeaturedLevel, type Section } from "@/lib/featured-rules";
+import type { PlayerCandidate } from "@/lib/player-search";
+import { FEATURED_MIN_ITEMS, levelChain, pickSection, rankFeaturedPlayers, type FeaturedLevel, type Section } from "@/lib/featured-rules";
 
 /**
  * Ana sayfadaki "öne çıkanlar": herkese aynı gösterilir. Havuzlar (bölgedeki oyuncular/takımlar, Türkiye geneli MVP ve
@@ -119,10 +119,10 @@ async function risingStars(): Promise<RiserEntry[]> {
   });
 }
 
-/** Bölgedeki en az 1 maçlı oyuncular, rating'e göre (ilk 50) */
+/** Bölgedeki aramaya açık oyuncular (maçı olmayanlar dahil), öne çıkan sırasıyla (ilk 50) */
 async function playersPool(city: string | null, district: string | null): Promise<PlayerCandidate[]> {
   const list = await loadCandidates(createAdminClient(), { city: city ?? undefined, district: district ?? undefined });
-  return searchCandidates(list, { minMatches: 1 }, "rating").slice(0, 50);
+  return rankFeaturedPlayers(list).slice(0, 50);
 }
 
 /** Bölgedeki puanı oluşmuş takımlar (ilk 20) */
@@ -136,7 +136,7 @@ export const FEATURED_TAG = "featured";
 const opts = { revalidate: 300, tags: [FEATURED_TAG] };
 const cachedMvps = unstable_cache(weeklyMvps, ["featured-mvps-v2"], opts);
 const cachedRisers = unstable_cache(risingStars, ["featured-risers-v2"], opts);
-const cachedPlayers = unstable_cache(playersPool, ["featured-players-v2"], opts);
+const cachedPlayers = unstable_cache(playersPool, ["featured-players-v3"], opts);
 const cachedTeams = unstable_cache(teamsPool, ["featured-teams-v2"], opts);
 
 const same = (a: string | null, b: string | null) => (a ?? "").toLocaleLowerCase("tr") === (b ?? "").toLocaleLowerCase("tr");
@@ -154,13 +154,16 @@ export async function loadFeatured(city: string | null, district: string | null,
   };
   const [mvpsAll, risersAll] = await Promise.all([cachedMvps(), cachedRisers()]);
 
-  // Oyuncular: önce en az FEATURED_MIN_MATCHES maçlılar; hiçbir kademede yetmezse 1 maçlılara düş
-  const playersAt = (min: number) => async (l: FeaturedLevel) => {
-    const r = region(l);
-    return (await cachedPlayers(r.c, r.d)).filter((p) => p.matches >= min).slice(0, LIST);
-  };
-  let players = await pickSection(chain, playersAt(FEATURED_MIN_MATCHES), FEATURED_MIN_ITEMS);
-  if (players.items.length < FEATURED_MIN_ITEMS) players = await pickSection(chain, playersAt(1), FEATURED_MIN_ITEMS);
+  // Oyuncular: seçilen bölgede kayıtlı biri varsa orada kalınır (çok maçlılar önce, maçı olmayanlar sonda);
+  // üst kademeye sadece bölgede hiç oyuncu yoksa çıkılır (eskiden 3 puanlı kişi yoksa çıkılıyordu: kayıtlı oyuncu varken "yeterli kayıt yok")
+  const players = await pickSection(
+    chain,
+    async (l) => {
+      const r = region(l);
+      return rankFeaturedPlayers(await cachedPlayers(r.c, r.d)).slice(0, LIST);
+    },
+    1,
+  );
 
   const [teams, mvps, risers] = await Promise.all([
     pickSection(chain, async (l) => (await cachedTeams(region(l).c, region(l).d)).slice(0, LIST), FEATURED_MIN_ITEMS),

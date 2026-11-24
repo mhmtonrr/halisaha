@@ -104,6 +104,14 @@ try {
   check("gizlenen (kaleci, defans) öne çıkanlarda yok", !t.includes("zeki kaleci") && !t.includes("zeki defans"));
   const chips = other.locator('[role="tablist"][aria-label="Öne çıkanların bölgesi"] [role="tab"]');
   check("bölge çipleri İlçe · İl · Türkiye (Merkez, Edirne, Türkiye)", (await chips.allInnerTexts()).join("|") === "Merkez|Edirne|Türkiye");
+  const ilcePanel = other.locator('[role="tabpanel"]:visible').filter({ hasText: /öne çıkan oyuncular/i }).first();
+  const ilceText = (await ilcePanel.innerText()).toLowerCase();
+  // Defans gizlendi: Merkez'de 2 oyuncu kaldı (eski kural 3 kişi isteyip Türkiye'ye çıkıyordu: Lüleburgaz hatası)
+  check("ilçede 3'ten az oyuncu varken de oyuncular üst kademeye çıkmaz", !/öne çıkan oyuncular[\s\S]*yeterli kayıt yok/.test(ilceText));
+  const cards = ilcePanel.locator('[role="tabpanel"]:visible a[href^="/oyuncu/"]');
+  const names = (await cards.allInnerTexts()).map((x) => x.toLowerCase());
+  check("öne çıkan oyuncular yan yana kart (Merkez: forvet, orta)", names.length === 2 && names[0].includes("zeki forvet") && names[1].includes("zeki orta"));
+  check("kart altında sıra ve maç sayısı", names[0].includes("#1") && names[0].includes("5 maç"));
   await other.screenshot({ path: `${SHOTS}/discover-home.png`, fullPage: true });
   await chips.filter({ hasText: "Türkiye" }).click();
   const trPanel = other.locator('[role="tabpanel"]:visible').filter({ hasText: /öne çıkan takımlar/i }).first();
