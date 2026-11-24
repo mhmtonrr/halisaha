@@ -17,6 +17,7 @@
 (`ensure_match_player`: kesinleştirmede "rakibe karşı" seçilince veya "adam ara" başvurusu kabul edilince; ayrılmış eski üye de ödünç olarak yeniden açılır) ve o maçın
 kadrosuna girer; takımın asıl kadrosunda değildir: `is_group_member` onu **saymaz** (takım sohbeti, teklifler, çağrılar, yetkiler kapalı), `getMemberships`/Takımlarım/
 profil kartlarında yoktur, takım sayfasında "Misafirler" sekmesinde "ödünç" etiketiyle görünür (`isSquadMember`/`isGuestLike`). Oy verir/oylanır, genel ratingi geçerlidir.
+**Özel grupta ödünç (0041, kullanıcı kararı)**: grup maçına dışarıdan gelen ödünç oyuncu sadece oynadığı maçı görür (maç, kadro, sonuç, o maçtaki oyuncuların kartları; `is_match_participant`, `is_co_player`) + grubun adı (`has_group_row`); grubun diğer maçları, oyuncu listesi, sohbeti kapalı.
 Davet koduyla katılırsa kalıcı üye olur (`join_group` upsert). Eski herkese açık ilan (`player_listings`, `/ilan`, Keşfet "Oyuncu arayan takımlar") kalktı; "herkese aç"
 seçeneği ikinci aşamada "Adam arayan maçlar" olarak gelecek. Kurallar: `docs/mac-puanlama.md` "Birleşik çağrı".
 **Geçici (hızlı) takım ve dağıtma (0037, kullanıcı kararları)**: **Arayüzde artık kurulmuyor** (kullanıcı kararı 2026-11-23: grupta sadece kendi aramızda maç; mevcut geçici takımlar ve RPC duruyor, e2e RPC ile kurar). Eskiden kesinleştirmede "Rakibe karşı" + "+ Hızlı takım kur" (`finalize_poll` `p_new_team`) geçici takım
