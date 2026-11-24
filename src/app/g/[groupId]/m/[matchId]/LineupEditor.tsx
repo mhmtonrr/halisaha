@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { Icon } from "@/components/Icon";
 import { setLineup } from "@/lib/actions";
 import { autoLineup, cardWidthPct, formationsFor, getFormation, type Role } from "@/lib/formations";
 import { Button, Card, cx } from "@/components/ui";
@@ -248,7 +249,8 @@ export function LineupEditor({
             setSelected(null);
           }}
         >
-          ✨ Otomatik diz
+          <Icon name="auto_awesome" className="text-[18px]" />
+          Otomatik diz
         </Button>
         <Button disabled={pending}>{pending ? "Kaydediliyor…" : "Dizilişi kaydet"}</Button>
       </div>

@@ -155,7 +155,7 @@ try {
   await capP.goto(`${BASE}/g/${A}/m/${mid2}`);
   await capP.locator("summary:has-text('Adam ara')").click();
   await capP.selectOption('select[name="needed"]', "1");
-  await capP.click('button:has-text("🔎 Adam ara")');
+  await capP.click('button:has-text("Adam ara")');
   await capP.waitForURL(/cagri\/[0-9a-f-]{36}$/, { timeout: 20000 });
   const F = capP.url().split("/cagri/")[1];
   const fillN = async () => (await notifs(mem, "poll")).filter((n) => n.url === `/g/${A}/cagri/${F}`);

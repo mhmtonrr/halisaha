@@ -37,7 +37,7 @@ export function GuestForm({ groupId, matchId }: { groupId: string; matchId: stri
         </Button>
       </div>
       {state.error && <p className="rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">{state.error}</p>}
-      {state.ok && <p className="rounded-lg bg-accent/10 px-3 py-2 text-sm text-accent">{state.added} kadroya eklendi ✓</p>}
+      {state.ok && <p className="rounded-lg bg-accent/10 px-3 py-2 text-sm text-accent">{state.added} kadroya eklendi</p>}
     </form>
   );
 }

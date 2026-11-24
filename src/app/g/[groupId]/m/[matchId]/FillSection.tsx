@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createFillPoll } from "@/lib/call-actions";
+import { Icon } from "@/components/Icon";
 import { POSITIONS, POSITION_NAME } from "@/lib/data";
 import type { Call } from "@/lib/calls-data";
 import { Badge, Card, Label } from "@/components/ui";
@@ -35,7 +36,7 @@ export function FillSection({
       {fills.map((f) => (
         <Link key={f.id} href={`/g/${f.group_id}/cagri/${f.id}`} className="block">
           <Card className="flex items-center gap-2 p-3 transition hover:border-accent/50">
-            <span className="text-xl">🔎</span>
+            <Icon name="person_search" className="text-[22px] text-primary" />
             <div className="min-w-0 flex-1 text-sm">
               <b>{f.capacity} oyuncu</b> aranıyor · {f.group_name}
               {f.positions.length > 0 && <span className="text-muted"> · {f.positions.map((p) => POSITION_NAME[p as keyof typeof POSITION_NAME]).join(", ")}</span>}
@@ -95,7 +96,8 @@ export function FillSection({
           />
         </label>
         <SubmitButton className="w-full" pendingLabel="Yayınlanıyor…">
-          🔎 Adam ara
+          <Icon name="person_search" className="text-[20px]" />
+          Adam ara
         </SubmitButton>
       </form>
     </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Icon } from "@/components/Icon";
 import { submitVotes } from "@/lib/actions";
 import { Button, Card, cx } from "@/components/ui";
 import { PositionChip } from "@/components/PlayerCard";
@@ -90,7 +91,8 @@ export function VoteForm({
                         )}
                         aria-pressed={mvp === t.id}
                       >
-                        ⭐ MVP
+                        <Icon name="star" fill className="text-[14px]" />
+                        MVP
                       </button>
                       <div className="w-16 text-right">
                         <div className="text-xl font-black tabular-nums">{scores[t.id]}</div>

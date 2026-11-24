@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SendInviteLink } from "@/components/SendInviteLink";
+import { Icon } from "@/components/Icon";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -295,16 +296,26 @@ export default async function MatchPage({
             : []),
         ]}
       />
-      <Header
-        title={external ? `vs ${oppName}` : formatDate(match.played_at)}
-        back={`/g/${groupId}`}
-        right={statusBadge}
-      />
-      <p className="-mt-3 mb-4 text-sm text-muted">
-        {external ? formatDate(match.played_at) : "Kendi aramızda"}
-        {match.team_size ? ` · ${match.team_size} kişilik` : ""}
-        {match.venue ? ` · ${match.venue}` : ""}
-      </p>
+      <Header title={external ? `vs ${oppName}` : "Kendi aramızda"} back={`/g/${groupId}`} />
+      <div className="-mt-3 mb-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-on-surface-variant">
+        {statusBadge}
+        <span className="inline-flex items-center gap-1">
+          <Icon name="calendar_today" className="text-[16px]" />
+          {formatDate(match.played_at)}
+        </span>
+        {match.team_size ? (
+          <span className="inline-flex items-center gap-1">
+            <Icon name="groups" className="text-[16px]" />
+            {match.team_size} kişilik
+          </span>
+        ) : null}
+        {match.venue ? (
+          <span className="inline-flex min-w-0 items-center gap-1">
+            <Icon name="stadium" className="text-[16px]" />
+            <span className="truncate">{match.venue}</span>
+          </span>
+        ) : null}
+      </div>
       <ErrorNote message={error} />
       {canManage && match.status === "planned" && <SendInviteLink tur="match" refId={matchId} className="mb-4" />}
       {!canManage &&
@@ -313,7 +324,7 @@ export default async function MatchPage({
           .map((f) => (
             <Link key={f.id} href={`/g/${f.group_id}/cagri/${f.id}`} className="mb-4 block">
               <Card className="flex items-center gap-3 border-amber-400/40 bg-amber-400/10 transition hover:border-amber-400">
-                <span className="text-2xl">🔎</span>
+                <Icon name="person_search" fill className="text-[24px] text-amber-300" />
                 <div className="min-w-0 flex-1">
                   <div className="font-semibold">{f.capacity} oyuncu aranıyor</div>
                   <div className="truncate text-xs text-muted">
@@ -321,20 +332,21 @@ export default async function MatchPage({
                     {f.group_name} · çağrıyı gör ve başvur
                   </div>
                 </div>
-                <span className="text-amber-300">›</span>
+                <Icon name="chevron_right" className="text-[22px] text-amber-300" />
               </Card>
             </Link>
           ))}
       {kabul && (
-        <p className="mb-4 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">
-          Teklif kabul edildi ✓ Şimdi kadronu belirle. Rakip takım da kendi kadrosunu belirliyor.
+        <p className="mb-4 flex items-start gap-1.5 rounded-xl bg-primary/10 p-3 text-sm text-primary">
+          <Icon name="check_circle" fill className="mt-0.5 text-[18px]" />
+          <span>Teklif kabul edildi. Şimdi kadronu belirle. Rakip takım da kendi kadrosunu belirliyor.</span>
         </p>
       )}
       {positions && (
-        <p className="mb-4 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">Mevkiler kaydedildi ✓</p>
+        <p className="mb-4 flex items-center justify-center gap-1.5 rounded-xl bg-primary/10 p-3 text-center text-sm text-primary"><Icon name="check_circle" fill className="text-[18px]" />Mevkiler kaydedildi</p>
       )}
       {dizilis && (
-        <p className="mb-4 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">Diziliş kaydedildi ✓ Rakip takım da görebilir.</p>
+        <p className="mb-4 flex items-center justify-center gap-1.5 rounded-xl bg-primary/10 p-3 text-center text-sm text-primary"><Icon name="check_circle" fill className="text-[18px]" />Diziliş kaydedildi. Rakip takım da görebilir.</p>
       )}
 
       {linked && opp && <VersusCard mine={{ id: groupId, name: myTeamName, color: myTeamColor, roster }} opp={opp} />}
@@ -343,12 +355,12 @@ export default async function MatchPage({
       )}
 
       {match.status !== "planned" && (
-        <Card className="mb-4 flex items-center justify-around py-5">
+        <Card className="mb-4 flex items-center justify-around bg-gradient-to-br from-primary/10 via-surface-container to-surface-container py-5 shadow-md">
           {(["A", "B"] as const).map((t, i) => (
             <div key={t} className="flex items-center gap-4">
               {i === 1 && <span className="text-2xl text-muted">-</span>}
               <div className="text-center">
-                <div className={cx("text-5xl font-black tabular-nums", external ? (t === "A" ? "text-white" : "text-muted") : TEAM[t].text)}>
+                <div className={cx("font-display text-5xl font-bold tabular-nums", external ? (t === "A" ? "text-on-surface" : "text-on-surface-variant") : TEAM[t].text)}>
                   {t === "A" ? match.score_a : match.score_b}
                 </div>
                 <div className="mt-1 max-w-28 truncate text-xs uppercase text-muted">{labels[t]}</div>
@@ -549,7 +561,8 @@ async function PlannedView({
             <form action={reshuffleTeams} className="mt-3">
               <Hidden groupId={groupId} matchId={matchId} />
               <Button variant="secondary" className="w-full">
-                🔀 Takımları yeniden karıştır
+                <Icon name="shuffle" className="text-[20px]" />
+                Takımları yeniden karıştır
               </Button>
             </form>
           )}
@@ -592,10 +605,11 @@ async function PlannedView({
             className="mt-1"
             openInitially={false}
             summary={
-              <>
-                🔎 Adam ara
+              <span className="inline-flex items-center gap-1.5 align-middle">
+                <Icon name="person_search" className="text-[18px]" />
+                Adam ara
                 {fills.length > 0 && ` · ${fills.filter((f) => f.status === "open").length} açık`}
-              </>
+              </span>
             }
           >
             <Card className="mt-2">
@@ -604,7 +618,12 @@ async function PlannedView({
           </AutoOpenDetails>
 
           <details className="mt-1">
-            <summary className="cursor-pointer py-2 text-sm text-muted">🧩 Diziliş (sürükle-bırak)</summary>
+            <summary className="cursor-pointer py-2 text-sm text-muted">
+              <span className="inline-flex items-center gap-1.5 align-middle">
+                <Icon name="sports" className="text-[18px]" />
+                Diziliş (sürükle-bırak)
+              </span>
+            </summary>
             <div className="mt-2 space-y-6">
               {(external ? (["A"] as const) : (["A", "B"] as const)).map((t) => {
                 const mine = teams[t];
@@ -839,7 +858,7 @@ async function VotingView({
 
       {justVoted && (
         <p className="mb-4 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">
-          Oyların kaydedildi ✓ Süre bitene kadar değiştirebilirsin.
+          Oyların kaydedildi. Süre bitene kadar değiştirebilirsin.
         </p>
       )}
       {justVoted && <PushPrompt reason="Sonuçlar açıklanınca haber verelim mi?" />}
@@ -922,10 +941,12 @@ async function ResultsView({
     <>
       {mvp && (
         <Card className="mb-4 flex items-center gap-4 border-amber-400/40 bg-amber-400/10">
-          <div className="text-4xl">⭐</div>
-          <div>
-            <div className="text-xs uppercase tracking-wide text-amber-300">Maçın adamı</div>
-            <div className="text-xl font-black">{mvp.p.name}</div>
+          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-amber-400/20">
+            <Icon name="star" fill className="text-[34px] text-gold-1" />
+          </span>
+          <div className="min-w-0">
+            <div className="t-label-caps uppercase text-amber-300">Maçın adamı</div>
+            <div className="truncate font-display text-xl font-bold">{mvp.p.name}</div>
             <div className="text-sm text-muted">Maç puanı {mvp.r!.match_score.toFixed(1)}</div>
           </div>
         </Card>
@@ -955,7 +976,7 @@ async function ResultsView({
                   {!external && <span className={cx("h-2 w-2 shrink-0 rounded-full", TEAM[p.team].bg)} />}
                   <span className="truncate font-medium">{p.name}</span>
                   <PositionChip position={p.position} />
-                  {r?.is_mvp && <span>⭐</span>}
+                  {r?.is_mvp && <Icon name="star" fill className="text-[16px] text-gold-1" />}
                 </span>
                 <span className={cx("block text-xs text-muted", !external && "pl-4")}>
                   {[p.goals && `${p.goals} gol`, p.assists && `${p.assists} asist`, p.saves && `${p.saves} kurtarış`]

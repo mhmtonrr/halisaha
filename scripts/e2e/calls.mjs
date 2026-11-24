@@ -186,7 +186,7 @@ try {
   await oP.locator("summary:has-text('Adam ara')").click();
   await oP.selectOption('select[name="needed"]', "1");
   await oP.check('input[name="positions"][value="DEF"]');
-  await oP.click('button:has-text("🔎 Adam ara")');
+  await oP.click('button:has-text("Adam ara")');
   await oP.waitForURL(/cagri\/[0-9a-f-]{36}$/, { timeout: 20000 });
   const fill = oP.url().split("/cagri/")[1];
   check("adam arama sayfası açıldı", has(await body(oP), "Adam aranıyor") && has(await body(oP), "1 oyuncu"));
