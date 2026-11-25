@@ -1410,17 +1410,12 @@ export async function friendAction(fd: FormData) {
   redirect(back);
 }
 
-/** Maç/çağrı kartını bir kişiye sohbetten gönder (kaptan/yetkili veya maçı/çağrıyı açan; RPC denetler). Seçici sayfada kalır. */
-export async function shareMatchCard(fd: FormData) {
+/** Maça davet (yöneten): kişiye sohbetten maç kartı gider (share_match_card = davet); sayfadan ayrılmadan sonuç döner */
+export async function inviteToMatch(groupId: string, matchId: string, userId: string): Promise<{ error?: string }> {
   const { supabase, user } = await requireUser();
-  const type = str(fd, "tur");
-  const ref = str(fd, "ref");
-  const userId = str(fd, "userId");
-  const q = str(fd, "q");
-  const page = `/davet/gonder?tur=${encodeURIComponent(type)}&ref=${encodeURIComponent(ref)}${q ? `&q=${encodeURIComponent(q)}` : ""}`;
-  if (type !== "match" || !UUID_RE.test(ref) || !UUID_RE.test(userId)) fail("/", "Geçersiz istek");
-  const { data: messageId, error } = await supabase.rpc("share_match_card", { p_user_id: userId, p_type: type, p_ref: ref });
-  if (error || messageId == null) fail(page, rpcMessage(error ?? {}, "Davet gönderilemedi"));
+  if (![groupId, matchId, userId].every((v) => UUID_RE.test(v))) return { error: "Geçersiz istek" };
+  const { data: messageId, error } = await supabase.rpc("share_match_card", { p_user_id: userId, p_type: "match", p_ref: matchId });
+  if (error || messageId == null) return { error: rpcMessage(error ?? {}, "Davet gönderilemedi") };
   later(async () => {
     const admin = createAdminClient();
     const [{ data: msg }, { data: me }] = await Promise.all([
@@ -1429,7 +1424,6 @@ export async function shareMatchCard(fd: FormData) {
     ]);
     const card = msg?.card as { group_name?: string; starts_at?: string; time_tbd?: boolean } | null;
     if (!msg || !card?.group_name) return;
-    const label = "Maç";
     const whenText = card.starts_at
       ? new Date(card.starts_at).toLocaleString("tr-TR", {
           timeZone: "Europe/Istanbul",
@@ -1438,9 +1432,10 @@ export async function shareMatchCard(fd: FormData) {
           ...(card.time_tbd ? { weekday: "long" } : { hour: "2-digit", minute: "2-digit" }),
         })
       : "";
-    await notify([userId], "invite", text.matchCard(me?.display_name ?? "Bir oyuncu", card.group_name, label, whenText, msg.thread_id as string, ref), { excludeUserId: user.id });
+    await notify([userId], "invite", text.matchCard(me?.display_name ?? "Bir oyuncu", card.group_name, "Maç", whenText, msg.thread_id as string, matchId), { excludeUserId: user.id });
   });
-  redirect(`${page}&ok=${userId}`);
+  revalidatePath(`/g/${groupId}/m/${matchId}`);
+  return {};
 }
 
 /** Bekleyen mesaj isteğini kabul et / reddet */

@@ -46,8 +46,8 @@ try {
 
   // Maç ekranında kaptan misafir ekler
   await cap.goto(`${BASE}/g/${gid}/m/${m.id}`);
-  await cap.locator("summary:has-text('Kadroya oyuncu ekle')").click();
-  check("maç ekranında misafir ekleme formu var", (await cap.locator("text=Misafir oyuncu ekle").count()) > 0);
+  await cap.click('button:text-is("Misafir")');
+  check("maç ekranında misafir ekleme formu var", (await cap.locator('input[name="name"]').count()) === 1);
   await cap.fill('input[name="name"]', "Zeki Misafir");
   await cap.selectOption('select[name="position"]', "GK");
   // Sayfa zıplamasın: gönderimden önce kaydırma konumunu al, sonra aynı yerde kalmalı
@@ -93,12 +93,12 @@ try {
 
   // Kısa isim ve normal oyuncu
   await cap.goto(`${BASE}/g/${gid}/m/${m.id}`);
-  await cap.locator("summary:has-text('Kadroya oyuncu ekle')").click();
+  await cap.click('button:text-is("Misafir")');
   await cap.fill('input[name="name"]', "A");
   await cap.click('button:has-text("Misafiri ekle")');
   check("1 harfli isim reddedilir (tarayıcı doğrulaması: form gönderilmedi)", (await admin.from("group_players").select("id", { count: "exact", head: true }).eq("group_id", gid).is("user_id", null)).count === 1);
   await member.goto(`${BASE}/g/${gid}/m/${m.id}`);
-  check("normal oyuncu misafir formunu görmez", (await member.locator("text=Misafir oyuncu ekle").count()) === 0);
+  check("normal oyuncu misafir formunu görmez", (await member.locator('button:text-is("Misafir")').count()) === 0);
 
   // Doğrudan istek: yetkisiz oyuncu RLS'e takılır, misafir yetim kalmaz
   const before = (await admin.from("group_players").select("id", { count: "exact", head: true }).eq("group_id", gid)).count;

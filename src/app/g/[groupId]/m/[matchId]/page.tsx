@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { SendInviteLink } from "@/components/SendInviteLink";
 import { GatheringPanel, type EntryStatus } from "./GatheringPanel";
 import { matchWhen, feeText } from "@/lib/match-rules";
 import { Icon } from "@/components/Icon";
@@ -24,7 +23,7 @@ import { LineupPitch, type PitchPlayer } from "@/components/LineupPitch";
 import { LineupEditor } from "./LineupEditor";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { trPattern } from "@/lib/search";
-import { GuestForm } from "./GuestForm";
+import { AddPlayer, type Person } from "./AddPlayer";
 import { FeeManage, ListingManage, RivalManage, RosterManage, ScheduleManage, type EntryRow } from "./ManageSections";
 import { applyMatch, cancelApplication } from "@/lib/match-manage-actions";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -237,7 +236,7 @@ export default async function MatchPage({
     fetchRoster(supabase, matchId, groupId),
     getGroupPlayers(supabase, groupId),
     supabase.rpc("can_manage_match", { p_match_id: matchId }),
-    supabase.from("groups").select("name, color, kind").eq("id", groupId).single(),
+    supabase.from("groups").select("name, color, kind, city").eq("id", groupId).single(),
     // Misafiri sadece kaptan/yetkili ekler (0042)
     supabase.rpc("is_group_admin", { p_group_id: groupId }),
     // Yeni maç yapısı (0042): benim kaydım (kadro/yedek/davetli/başvuru) ve üyeliğim
@@ -322,6 +321,8 @@ export default async function MatchPage({
     .map((r) => one(r.groups))
     .filter((g): g is { id: string; name: string } => !!g && !listed.has(g.id))
     .sort((a, b) => a.name.localeCompare(b.name, "tr"));
+  const friends = manage ? await loadFriends(supabase, user.id) : [];
+  const statuses = Object.fromEntries(entries.filter((e) => e.userId && busy.has(e.userId)).map((e) => [e.userId as string, e.status]));
   const full = !!match.capacity && match.roster_count >= match.capacity;
   const myTeamColor = myTeam?.color ?? null;
   const opp = match.challenge_id
@@ -454,9 +455,6 @@ export default async function MatchPage({
           flash={yanit}
         />
       )}
-      {canManage && (match.status === "planned" || match.status === "gathering") && (
-        <SendInviteLink refId={matchId} className="mb-4" />
-      )}
       {match.status === "gathering" && !manage && (
         <>
           <SectionTitle>Kadro · {roster.length}</SectionTitle>
@@ -533,6 +531,17 @@ export default async function MatchPage({
         <RosterManage groupId={groupId} matchId={matchId} roster={[]} entries={entries} addable={[]} isAdmin={false} full={full} />
       )}
       {manage && <ListingManage groupId={groupId} matchId={matchId} listings={listings} targets={targets} code={code} full={full} />}
+      {manage && (
+        <AddPlayer
+          groupId={groupId}
+          matchId={matchId}
+          meId={user.id}
+          friends={friends}
+          statuses={statuses}
+          homeCity={myTeam?.city ?? ""}
+          canAddGuest={!!isAdmin}
+        />
+      )}
       {manage && match.kind === "external" && !match.challenge_id && (
         <RivalManage
           groupId={groupId}
@@ -692,6 +701,17 @@ export default async function MatchPage({
 }
 
 // ---------------------------------------------------------------------------
+
+/** Arkadaşlarım (ada göre) — "Oyuncu ekle" listesi */
+async function loadFriends(supabase: Awaited<ReturnType<typeof requireUser>>["supabase"], userId: string): Promise<Person[]> {
+  const { data: rows } = await supabase.from("friendships").select("user_a, user_b").eq("status", "accepted").limit(300);
+  const ids = (rows ?? []).map((r) => (r.user_a === userId ? r.user_b : r.user_a) as string);
+  if (!ids.length) return [];
+  const { data } = await supabase.from("profiles").select("id, display_name, photo_url, city, district").in("id", ids);
+  return (data ?? [])
+    .map((p) => ({ id: p.id as string, name: p.display_name as string, photoUrl: p.photo_url as string | null, city: p.city as string | null, district: p.district as string | null }))
+    .sort((a, b) => a.name.localeCompare(b.name, "tr"));
+}
 
 async function PlannedView({
   groupId,
@@ -905,7 +925,6 @@ async function PlannedView({
                   </SubmitButton>
                 </form>
               )}
-              {isAdmin && <GuestForm groupId={groupId} matchId={matchId} />}
             </Card>
           </details>
 

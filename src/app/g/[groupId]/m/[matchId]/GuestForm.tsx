@@ -12,11 +12,10 @@ import { POSITIONS, POSITION_NAME } from "@/lib/data";
 export function GuestForm({ groupId, matchId }: { groupId: string; matchId: string }) {
   const [state, action, pending] = useActionState<GuestState, FormData>(addGuestToMatch, {});
   return (
-    <form action={action} key={state.at ?? 0} className="space-y-2 border-t border-line pt-3">
+    <form action={action} key={state.at ?? 0} className="space-y-2">
       <input type="hidden" name="groupId" value={groupId} />
       <input type="hidden" name="matchId" value={matchId} />
-      <div className="text-xs uppercase tracking-wide text-muted">Misafir oyuncu ekle</div>
-      <p className="text-xs text-muted">Uygulamayı kullanmayan biri maça geldiyse. Oylanır ama oy veremez.</p>
+      <p className="text-xs text-muted">Uygulamayı kullanmayan oyuncu doğrudan kadroya yazılır. Maç sonunda oylanır ama oy veremez.</p>
       <Input name="name" placeholder="İsim" required minLength={2} maxLength={60} defaultValue={state.error ? state.name : ""} />
       <div className="flex gap-2">
         <select

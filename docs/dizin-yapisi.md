@@ -13,6 +13,7 @@ src/lib/call-rules.ts    Birleşik çağrı: varsayılan seçim, yedek/başvuru 
 src/lib/match-actions.ts Yeni maç yapısı Server Action'ları: Maç ayarla (setupMatch), Geliyorum/Gelemem (respondMatch) + bildirimler
 src/lib/match-manage-actions.ts  Maç ekranı yönetimi (4b): kadro/yedek/başvuru, ilan, bağlantı kodu, rakip/teklif/karşı teklif, kesinleştir/ertele/iptal + bildirimler
 src/app/g/[groupId]/m/[matchId]/ManageSections.tsx  Maç ekranı yönetim bölümleri (kadro, adam ara, rakip, kesinleştir/ertele/iptal) + CounterForm
+src/app/g/[groupId]/m/[matchId]/AddPlayer.tsx  Oyuncu ekle: arkadaşlardan / uygulamada arayarak davet, misafir (GuestForm)
 src/app/g/[groupId]/m/[matchId]/GatheringPanel.tsx  Toplanan/kesin maç şeridi: sayaç, benim durumum, Geliyorum/Gelemem
 src/lib/listings-data.ts Maç özeti (match_overview) ve Keşfet "Adam arayan" ilanları (open_listings, engellenen süzülür)
 src/lib/match-rules.ts   Maç kuralları (saf, testli): varsayılan kadro, saat belli değil metni, direkt kesin mi
@@ -66,7 +67,6 @@ src/components/AutoOpenDetails.tsx  İlk yüklemede bir kez açılan açılır b
 src/components/ProfileFields.tsx  Profil ve karşılama formlarının ortak alanları; RegionSelect.tsx bağlı il/ilçe seçimi
 src/components/TeamFields.tsx  Takım kurma ve takım/grup bilgileri düzenleme form alanları; TeamSizeSelect.tsx kaç kişilik (5v5…11v11); TeamBadge.tsx renkli baş harf rozeti
 src/components/RosterTabs.tsx  Kadro / Misafirler sekmesi
-src/components/SendInviteLink.tsx  "Maça çağır": maç/çağrı kartını sohbetten gönderme bağlantısı (/davet/gonder; maçta kişiye özel davet)
 src/components/ShareLink.tsx  Sayfa linkini paylaş (paylaşım menüsü ya da panoya kopyala); profile/ShareButton.tsx profil için
 src/components/SkillBars.tsx  Kartın 6 yeteneği çubuk olarak; SkillQueueBanner.tsx değerlendirme bekleyen varsa /yetenek kartı
 src/components/profile/  FlipCard (kart çevirme), MatchesList (geçmiş maçlar + filtre), ProfileBars (başlık), RadarChart (yetenek altıgeni)
@@ -87,5 +87,5 @@ scripts/recompute-all.ts Tüm ratingleri baştan hesaplar (vite-node ile, aşağ
 
 Sayfalar: `/login` (e-posta+şifre, Google, şifremi unuttum) · `/hosgeldin` (ilk giriş: ad, il/ilçe, mevki…)
 · `/` ana sayfa · `/kesfet` takım sıralaması (`?sekme=oyuncu` oyuncu arama, `?sekme=mac` adam arayan maçlar) · `/profil` · `/takim-kur` · `/grup-kur` · `/sifre-yenile`
-· `/profil/ayarlar/{kisisel,futbolcu,iletisim,guvenlik,gorunurluk,engellenenler}` · `/sohbet` (genel sohbet: takım/grup/kişi; `/sohbet/[threadId]` birebir) · `/sosyal` (arkadaşlar ve istekler, takımlarım, gruplarım) · `/bildirimler` (bildirim kutusu, son 50) · `/davet/gonder` (Maça çağır: maç kartını sohbetten gönder; `?tur=match&ref=`) · `/privacy` (gizlilik) · `/yardim` · `/geri-bildirim` · `/yetenek` (yetenek değerlendirmesi) · `/oyuncu/[userId]` (başkasının profili) · `/katil` (davet koduyla takıma/gruba katıl; `?tur=takim|grup`) · `/join/[code]` · `/mac-ayarla` (Maç ayarla sihirbazı: `MatchSetupForm` + `RivalPicker`; `?grup=&rakip=&adim=`) · `/davet/m/[code]` (maç davet bağlantısı: özet, kadro, Başvur) · `/g/[id]` grup/takım · `/g/[id]/{players,kadro,sohbet,cagri/[pollId],m/[matchId],p/[playerId]}` (`matches/new` ve `cagri/yeni` → `/mac-ayarla`)
+· `/profil/ayarlar/{kisisel,futbolcu,iletisim,guvenlik,gorunurluk,engellenenler}` · `/sohbet` (genel sohbet: takım/grup/kişi; `/sohbet/[threadId]` birebir) · `/sosyal` (arkadaşlar ve istekler, takımlarım, gruplarım) · `/bildirimler` (bildirim kutusu, son 50) · `/privacy` (gizlilik) · `/yardim` · `/geri-bildirim` · `/yetenek` (yetenek değerlendirmesi) · `/oyuncu/[userId]` (başkasının profili) · `/katil` (davet koduyla takıma/gruba katıl; `?tur=takim|grup`) · `/join/[code]` · `/mac-ayarla` (Maç ayarla sihirbazı: `MatchSetupForm` + `RivalPicker`; `?grup=&rakip=&adim=`) · `/davet/m/[code]` (maç davet bağlantısı: özet, kadro, Başvur) · `/g/[id]` grup/takım · `/g/[id]/{players,kadro,sohbet,cagri/[pollId],m/[matchId],p/[playerId]}` (`matches/new` ve `cagri/yeni` → `/mac-ayarla`)
 · takımlara özel: `/g/[id]/teklif` (bu takıma maç teklif et) · `/g/[id]/teklifler` (gelen/giden/kabul edilen) · `/g/[id]/istatistik` (herkese açık)

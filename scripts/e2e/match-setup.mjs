@@ -69,7 +69,7 @@ try {
   const m = must(await admin.from("matches").select("status, capacity, roster_count, time_tbd, open_to_members, venue, fee_per_person").eq("id", matchId).single());
   check("maç toplanıyor açıldı (3/5, saat belli değil, duyurulu)", m.status === "gathering" && m.capacity === 5 && m.roster_count === 3 && m.time_tbd && m.open_to_members && m.venue === "Petroller" && m.fee_per_person === 150);
   check("maç ekranında 'Toplanıyor' ve 3/5", (await PO.locator("text=Toplanıyor").count()) >= 1 && (await PO.locator("text=3/5").count()) >= 1);
-  check("maç ekranında 'Maça çağır' arkadaş listesine gider", (await PO.locator(`a[href="/davet/gonder?tur=match&ref=${matchId}"]`).count()) === 1);
+  check("maç ekranında 'Oyuncu ekle' arkadaş sekmesi", (await PO.locator('button:text-is("Arkadaşlar")').count()) === 1);
   await PO.screenshot({ path: `${SHOTS}/setup-gathering.png`, fullPage: true });
   await new Promise((r) => setTimeout(r, 2500));
   const notes = async (u, tag) => (must(await admin.from("notifications").select("tag").eq("user_id", u.id)) ?? []).some((n) => n.tag === tag);

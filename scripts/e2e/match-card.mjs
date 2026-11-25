@@ -1,5 +1,5 @@
-// Maça çağır + canlı maç kartı + Keşfet "Adam arayan" + ana sayfa yapılacaklar (yeniden tasarım 5a):
-// kaptan maç ekranından "Maça çağır" → arkadaşa ve aramayla bulunan yabancıya kart gönderir (kişiye özel davet, 0043);
+// Oyuncu ekle (davet) + canlı maç kartı + Keşfet "Adam arayan" + ana sayfa yapılacaklar (yeniden tasarım 5a):
+// kaptan maç ekranındaki "Oyuncu ekle"den arkadaşa ve aramayla bulunan yabancıya davet gönderir (kişiye özel davet, 0043);
 // gizli profil aramada yok; davetli sohbette canlı sayacı ve "Davetlisin"i görür, maça bakıp "Geliyorum" der (üye değil → ödünç);
 // Keşfet ilanı il süzgeciyle "Adam arayan"da, yabancı oradan başvurur; takım üyesi ana sayfadan hızlı "Geliyorum" der.
 // Canlı Supabase'e karşı çalışır; test verisini sonunda siler.
@@ -50,18 +50,19 @@ try {
   };
   const PK = await login(K);
 
-  // --- Maça çağır: arkadaş + aramayla yabancı; gizli profil aramada yok
+  // --- Oyuncu ekle: arkadaş + aramayla yabancı; gizli profil aramada yok
   await PK.goto(`${BASE}/g/${T}/m/${M}`, { waitUntil: "networkidle" });
-  await PK.click('a:has-text("Maça çağır")'); await PK.waitForURL(/davet\/gonder\?tur=match/);
-  check("seçici başlığı 'Maça çağır' ve arkadaş listesi", (await PK.locator("h1", { hasText: "Maça çağır" }).count()) === 1 && (await PK.locator("text=Arkadaşlarım (1)").count()) === 1);
-  await PK.click('form button:has-text("Gönder")');
-  check("arkadaşa kart gönderildi", !!(await PK.waitForSelector("text=Gönderildi", { timeout: 15000 }).catch(() => null)));
+  await PK.click('button:text-is("Davet et")');
+  check("arkadaşa davet gönderildi", !!(await PK.waitForSelector("text=✓ Davet edildi", { timeout: 15000 }).catch(() => null)));
   check("arkadaş 'davetli' kaydı aldı (onaysız davet)", (await admin.from("match_entries").select("status").eq("match_id", M).eq("user_id", F.id).single()).data?.status === "invited");
-  await PK.fill('input[aria-label="Oyuncu ara"]', "Kart Gizli"); await PK.click('button:has-text("Ara")'); await PK.waitForLoadState("networkidle");
-  check("aramada gizli profil çıkmaz", (await PK.locator("text=Eşleşen oyuncu yok").count()) === 1);
-  await PK.fill('input[aria-label="Oyuncu ara"]', `Kart Yabanci ${stamp % 10000}`); await PK.click('button:has-text("Ara")'); await PK.waitForLoadState("networkidle");
-  await PK.locator('form button:has-text("Gönder")').first().click();
-  check("aramayla bulunan yabancıya da gönderildi", !!(await PK.waitForSelector("text=Gönderildi", { timeout: 15000 }).catch(() => null)));
+  await PK.click('button:text-is("Uygulamada ara")');
+  await PK.selectOption('select[aria-label="İl"]', "");
+  await PK.fill('input[aria-label="Oyuncu ara"]', "Kart Gizli");
+  check("aramada gizli profil çıkmaz", !!(await PK.waitForSelector("text=Oyuncu bulunamadı", { timeout: 15000 }).catch(() => null)));
+  await PK.fill('input[aria-label="Oyuncu ara"]', `Kart Yabanci ${stamp % 10000}`);
+  await PK.click('button:text-is("Davet et")');
+  for (let i = 0; i < 40 && !(await admin.from("match_entries").select("status").eq("match_id", M).eq("user_id", users[2].id).maybeSingle()).data; i++) await sleep(300);
+  check("aramayla bulunan yabancıya da gönderildi", (await admin.from("match_entries").select("status").eq("match_id", M).eq("user_id", users[2].id).single()).data?.status === "invited");
   await PK.screenshot({ path: `${SHOTS}/card-picker.png`, fullPage: true });
 
   // --- Arkadaş sohbette canlı kartı görür, maça bakıp "Geliyorum" der (üye değil → ödünç)
