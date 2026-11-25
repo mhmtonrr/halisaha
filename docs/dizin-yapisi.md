@@ -13,6 +13,7 @@ src/lib/match-actions.ts Yeni maç yapısı Server Action'ları: Maç ayarla (se
 src/lib/match-manage-actions.ts  Maç ekranı yönetimi (4b): kadro/yedek/başvuru, ilan, bağlantı kodu, rakip/teklif/karşı teklif, kesinleştir/ertele/iptal + bildirimler
 src/app/g/[groupId]/m/[matchId]/ManageSections.tsx  Maç ekranı yönetim bölümleri (kadro, adam ara, rakip, kesinleştir/ertele/iptal) + CounterForm
 src/app/g/[groupId]/m/[matchId]/GatheringPanel.tsx  Toplanan/kesin maç şeridi: sayaç, benim durumum, Geliyorum/Gelemem
+src/lib/listings-data.ts Maç özeti (match_overview) ve Keşfet "Adam arayan" ilanları (open_listings, engellenen süzülür)
 src/lib/match-rules.ts   Maç kuralları (saf, testli): varsayılan kadro, saat belli değil metni, direkt kesin mi
 src/lib/call-actions.ts  Eski çağrı Server Action'ları (düzenle/yanıtla/kesinleştir/kadroya al/adam ara; açma artık /mac-ayarla) + bildirimler
 src/lib/calls-data.ts    Çağrı sorguları (çağrı + yanıtlayanlar, gruptaki/maçtaki çağrılar, yönettiğim takım/topluluklar)
@@ -73,7 +74,7 @@ src/lib/authErrors.ts    Supabase Auth hatalarının Türkçesi
 src/lib/supabase/        server.ts (requireUser + karşılama yönlendirmesi), client.ts, admin.ts
 src/middleware.ts        Oturum yenileme, girişsiz yönlendirme, x-pathname başlığı
 src/app/                 Sayfalar (aşağıda)
-supabase/migrations/     0001..0045 SQL (sırayla; hepsi canlıya uygulandı)
+supabase/migrations/     0001..0046 SQL (sırayla; hepsi canlıya uygulandı)
 scripts/db-checks/       PGlite ile RLS/yetki kontrolleri (npm run db:check)
 scripts/setup-cron.mjs   Supabase pg_cron+pg_net ile /api/cron/tick'i 15 dakikada bir çağıran işi kurar/kaldırır (Vault'ta CRON_SECRET)
 scripts/e2e/             Canlı veritabanına karşı Playwright akış testleri

@@ -1,50 +1,45 @@
-// Maça çağır (0041): adam arama (takım maçı) ve toplama çağrısı (topluluk) kartını arkadaşa / aramayla yabancıya gönder;
-// gizli profil aramada çıkmaz; alıcı kartla çağrıyı açar (üye olmasa da), yabancı sade görünümde yanıt verir ve kadroya alınır;
-// maç ekranında "Maça çağır" açık adam aramayı kullanır, yoksa 1 kişilik kapalı arama açar; yetkisiz kişi seçiciye giremez.
-// Canlı Supabase'e karşı çalışır; test verisini sonunda siler. Kullanım: node scripts/e2e/match-card.mjs [ekran-klasörü]
+// Maça çağır + canlı maç kartı + Keşfet "Adam arayan" + ana sayfa yapılacaklar (yeniden tasarım 5a):
+// kaptan maç ekranından "Maça çağır" → arkadaşa ve aramayla bulunan yabancıya kart gönderir (kişiye özel davet, 0043);
+// gizli profil aramada yok; davetli sohbette canlı sayacı ve "Davetlisin"i görür, maça bakıp "Geliyorum" der (üye değil → ödünç);
+// Keşfet ilanı il süzgeciyle "Adam arayan"da, yabancı oradan başvurur; takım üyesi ana sayfadan hızlı "Geliyorum" der.
+// Canlı Supabase'e karşı çalışır; test verisini sonunda siler.
 import { createRequire } from "module";
 import fs from "fs";
 import { removeTestUsers } from "./cleanup.mjs";
-import os from "os";
-import path from "path";
 const PROJ = process.cwd();
 const require = createRequire(PROJ + "/package.json");
 const { createClient } = require("@supabase/supabase-js");
 const { chromium } = require("playwright");
-const SHOTS = process.argv[2] ?? path.join(os.tmpdir(), "halisaha-shots");
+const SHOTS = process.argv[2] ?? "/tmp/halisaha-shots";
 fs.mkdirSync(SHOTS, { recursive: true });
-const env = Object.fromEntries(
-  fs.readFileSync(PROJ + "/.env.local", "utf8").trim().split(/\r?\n/).filter((l) => l.includes("=")).map((l) => [l.slice(0, l.indexOf("=")).trim(), l.slice(l.indexOf("=") + 1).trim()]),
-);
+const env = Object.fromEntries(fs.readFileSync(PROJ + "/.env.local", "utf8").split(/\r?\n/).filter((l) => l.includes("=")).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
 const admin = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 const BASE = "http://localhost:3000";
 let failed = 0;
 const check = (label, cond) => { console.log(cond ? "  ✓" : "  ✗ HATA:", label); if (!cond) failed++; };
-const trDate = (offsetDays) => new Date(Date.now() + 3 * 3600e3 + offsetDays * 86400e3).toISOString().slice(0, 10);
 const must = ({ data, error }) => { if (error) throw new Error(error.message); return data; };
-
-const users = []; const groups = []; let browser;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const users = []; let browser;
+const stamp = Date.now();
 try {
-  for (const [i, n] of ["Kart Kaptan", "Kart Arkadas", "Kart Yabanci", "Kart Gizli"].entries()) {
-    const email = `e2e-card-${Date.now()}-${i}@example.com`, password = "Sifre-" + Math.random().toString(36).slice(2, 8) + "9";
+  for (const [i, n] of ["Kart Kaptan", "Kart Arkadas", `Kart Yabanci ${stamp % 10000}`, "Kart Gizli", "Kart Uye", "Kart Kesifci"].entries()) {
+    const email = `e2e-card-${stamp}-${i}@example.com`, password = "Sifre-" + Math.random().toString(36).slice(2, 8) + "9";
     const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name: n } });
     if (error) throw error;
-    await admin.from("profiles").update({ city: "İstanbul", preferred_position: "MID", onboarded_at: new Date().toISOString() }).eq("id", data.user.id);
+    await admin.from("profiles").update({ city: "Edirne", preferred_position: "MID", onboarded_at: new Date().toISOString() }).eq("id", data.user.id);
     users.push({ id: data.user.id, email, password, name: n });
   }
-  const [K, F, O, H] = users;
+  const [K, F, , H, U, X] = users; // 3. kullanıcı: aramayla bulunan yabancı (adıyla aranır)
   await admin.from("profiles").update({ discoverable: false }).eq("id", H.id);
-  const mk = async (name, kind) => { const g = must(await admin.from("groups").insert({ name, kind, created_by: K.id, city: "İstanbul" }).select("id").single()); groups.push(g.id); return g.id; };
-  const T = await mk("Kart Takimi", "team"), C = await mk("Kart Grubu", "community");
-  must(await admin.from("group_players").insert({ group_id: C, user_id: F.id, display_name: F.name, role: "member" }));
-  const playedAt = new Date(Date.now() + 3 * 864e5);
-  const m = must(await admin.from("matches").insert({ group_id: T, played_at: playedAt.toISOString(), venue: "Meydan Saha", created_by: K.id, kind: "external", opponent_name: "Rakip FK" }).select("id").single());
-  // Adam ara (takım maçının eksiği) ve toplama çağrısı (toplulukta, sadece gün)
-  const fill = must(await admin.from("match_polls").insert({ group_id: T, match_id: m.id, created_by: K.id, purpose: "fill", play_on: trDate(3), starts_at: playedAt.toISOString(), venue: "Meydan Saha", capacity: 2, positions: ["GK"] }).select("id").single());
-  const gather = must(await admin.from("match_polls").insert({ group_id: C, created_by: K.id, purpose: "gather", play_on: trDate(4), venue: "Poll Saha", capacity: 10 }).select("id").single());
-  const m2 = must(await admin.from("matches").insert({ group_id: T, played_at: playedAt.toISOString(), venue: "Meydan Saha", created_by: K.id, kind: "external", opponent_name: "Rakip 2" }).select("id").single());
+  const T = must(await admin.from("groups").insert({ name: `Kart Takimi ${stamp % 1000}`, kind: "team", created_by: K.id, city: "Edirne" }).select("id").single()).id;
+  must(await admin.from("group_players").insert({ group_id: T, user_id: U.id, display_name: U.name, role: "member" }));
   const [a, b] = K.id < F.id ? [K.id, F.id] : [F.id, K.id];
   must(await admin.from("friendships").insert({ user_a: a, user_b: b, status: "accepted", requested_by: K.id }));
+  // Kaptan maç ayarlar (kendi oturumuyla): 5v5, kadro 5, saat belli değil, takıma duyurulu
+  const kc = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, { auth: { persistSession: false } });
+  must(await kc.auth.signInWithPassword({ email: K.email, password: K.password }));
+  const day = new Date(Date.now() + 3 * 3600e3 + 2 * 864e5).toISOString().slice(0, 10);
+  const M = must(await kc.rpc("create_match_v2", { p_group: T, p_day: day, p_time: null, p_team_size: 5, p_kind: "external", p_capacity: 5, p_venue: "Meydan Saha" }));
 
   browser = await chromium.launch();
   const login = async (u) => {
@@ -53,115 +48,62 @@ try {
     await page.goto(BASE + "/login", { waitUntil: "networkidle" }); await page.fill('input[type="email"]', u.email); await page.fill('input[type="password"]', u.password);
     await page.click('form button:has-text("Giriş yap")'); await page.waitForURL(BASE + "/", { timeout: 30000 }); return page;
   };
-  const [PK, PF, PO] = [await login(K), await login(F), await login(O)];
-  const sendToFriend = async () => {
-    await PK.waitForSelector("text=Arkadaşlarım (1)");
-    await PK.click('form button:has-text("Gönder")');
-    return PK.waitForSelector("text=Gönderildi", { timeout: 15000 }).then(() => true, () => false);
-  };
+  const PK = await login(K);
 
-  // 1) Adam arama sayfasından arkadaşa + aramayla yabancıya
-  await PK.goto(`${BASE}/g/${T}/cagri/${fill.id}`);
-  await PK.click('a:has-text("Maça çağır")');
-  await PK.waitForURL(/\/davet\/gonder/);
-  check("seçici başlığı 'Maça çağır'", (await PK.locator("h1", { hasText: "Maça çağır" }).count()) === 1);
-  await PK.screenshot({ path: `${SHOTS}/card-picker.png` });
-  check("adam arama kartı arkadaşa gönderildi", await sendToFriend());
-  await PK.fill('input[aria-label="Oyuncu ara"]', "Yabanci"); await PK.click('button:has-text("Ara")');
-  await PK.waitForSelector("text=Arama sonucu");
+  // --- Maça çağır: arkadaş + aramayla yabancı; gizli profil aramada yok
+  await PK.goto(`${BASE}/g/${T}/m/${M}`, { waitUntil: "networkidle" });
+  await PK.click('a:has-text("Maça çağır")'); await PK.waitForURL(/davet\/gonder\?tur=match/);
+  check("seçici başlığı 'Maça çağır' ve arkadaş listesi", (await PK.locator("h1", { hasText: "Maça çağır" }).count()) === 1 && (await PK.locator("text=Arkadaşlarım (1)").count()) === 1);
+  await PK.click('form button:has-text("Gönder")');
+  check("arkadaşa kart gönderildi", !!(await PK.waitForSelector("text=Gönderildi", { timeout: 15000 }).catch(() => null)));
+  check("arkadaş 'davetli' kaydı aldı (onaysız davet)", (await admin.from("match_entries").select("status").eq("match_id", M).eq("user_id", F.id).single()).data?.status === "invited");
+  await PK.fill('input[aria-label="Oyuncu ara"]', "Kart Gizli"); await PK.click('button:has-text("Ara")'); await PK.waitForLoadState("networkidle");
+  check("aramada gizli profil çıkmaz", (await PK.locator("text=Eşleşen oyuncu yok").count()) === 1);
+  await PK.fill('input[aria-label="Oyuncu ara"]', `Kart Yabanci ${stamp % 10000}`); await PK.click('button:has-text("Ara")'); await PK.waitForLoadState("networkidle");
   await PK.locator('form button:has-text("Gönder")').first().click();
-  check("aramayla bulunan yabancıya gönderildi", await PK.waitForSelector("text=Gönderildi", { timeout: 15000 }).then(() => true, () => false));
-  await PK.fill('input[aria-label="Oyuncu ara"]', "Kart Gizli"); await PK.click('button:has-text("Ara")');
-  await PK.waitForSelector("text=Eşleşen oyuncu yok");
-  check("profilini gizleyen aramada çıkmaz", (await PK.locator("text=Kart Gizli").count()) === 0);
-  await PK.fill('input[aria-label="Oyuncu ara"]', "Yabanci"); await PK.click('button:has-text("Ara")');
-  await PK.waitForSelector("text=Arama sonucu");
-  check("çağrılan kişi 'Çağrıldı' görünür", (await PK.locator("text=Çağrıldı").count()) >= 1);
+  check("aramayla bulunan yabancıya da gönderildi", !!(await PK.waitForSelector("text=Gönderildi", { timeout: 15000 }).catch(() => null)));
+  await PK.screenshot({ path: `${SHOTS}/card-picker.png`, fullPage: true });
 
-  // 2) Toplama çağrısı ve maç kartı
-  await PK.goto(`${BASE}/g/${C}/cagri/${gather.id}`);
-  await PK.click('a:has-text("Maça çağır")');
-  check("toplama çağrısı kartı gönderildi", await sendToFriend());
-  await PK.fill('input[aria-label="Oyuncu ara"]', "Yabanci"); await PK.click('button:has-text("Ara")');
-  await PK.waitForSelector("text=Arama sonucu");
-  await PK.locator('form button:has-text("Gönder")').first().click();
-  check("toplama çağrısı yabancıya da gönderildi", await PK.waitForSelector("text=Gönderildi", { timeout: 15000 }).then(() => true, () => false));
-  // Maç ekranı: açık adam arama varsa ona çağırır
-  await PK.goto(`${BASE}/g/${T}/m/${m.id}`);
-  await PK.click('button:has-text("Maça çağır")');
-  await PK.waitForURL(/\/davet\/gonder/);
-  check("maç ekranı açık adam aramaya çağırır", PK.url().includes(`ref=${fill.id}`));
-  // Adam araması olmayan maç: 1 kişilik, herkese kapalı arama açılır
-  await PK.goto(`${BASE}/g/${T}/m/${m2.id}`);
-  await PK.click('button:has-text("Maça çağır")');
-  await PK.waitForURL(/\/davet\/gonder/);
-  const newFill = must(await admin.from("match_polls").select("id, capacity, is_public").eq("match_id", m2.id).eq("purpose", "fill"));
-  check("aramasız maçta 1 kişilik kapalı adam arama açıldı", newFill.length === 1 && newFill[0].capacity === 1 && newFill[0].is_public === false && PK.url().includes(newFill[0].id));
-  await PK.screenshot({ path: `${SHOTS}/card-picker-match.png` });
-
-  // 3) Arkadaş: açık sohbet (istek değil), 3 kart, üyeliğe göre düğme
-  await PF.goto(`${BASE}/sohbet`); await PF.waitForSelector("text=Kart Kaptan");
-  check("arkadaşta 'Mesaj istekleri' yok", (await PF.locator("text=Mesaj istekleri").count()) === 0);
-  await PF.click("text=Kart Kaptan"); await PF.waitForURL(/\/sohbet\/[0-9a-f-]{36}/);
-  await PF.waitForSelector("text=Adam aranıyor");
-  check("arkadaş 2 kartı görür (adam aranıyor, maç çağrısı)", (await PF.locator("text=Maç çağrısı").count()) >= 1);
-  check("adam arama kartında aranan sayı yazar", (await PF.locator("text=2 oyuncu aranıyor").count()) >= 1);
+  // --- Arkadaş sohbette canlı kartı görür, maça bakıp "Geliyorum" der (üye değil → ödünç)
+  const PF = await login(F);
+  const { data: th } = await admin.from("dm_messages").select("thread_id").eq("match_id", M).eq("kind", "match").limit(1).single();
+  await PF.goto(`${BASE}/sohbet/${th.thread_id}`, { waitUntil: "networkidle" });
+  check("kart başlığı 'Maça davet', canlı sayaç 1/5 ve 'Davetlisin'", (await PF.locator("text=Maça davet").count()) === 1 && (await PF.locator("text=1/5").count()) === 1 && (await PF.locator("text=Davetlisin").count()) === 1);
   await PF.screenshot({ path: `${SHOTS}/card-thread.png`, fullPage: true });
-  check("iki çağrı kartında da 'Çağrıya yanıt ver' (üye olunmayan takımınki dahil)", (await PF.locator("a", { hasText: "Çağrıya yanıt ver" }).count()) === 2);
-  check("'Takıma bak' kalmadı", (await PF.locator("a", { hasText: "Takıma bak" }).count()) === 0);
-  await PF.locator(`a[href*="${gather.id}"]`).click();
-  await PF.waitForURL(new RegExp(`/cagri/${gather.id}`));
-  check("çağrı kartı çağrı sayfasını açar", PF.url().includes(gather.id));
+  await PF.click('a:has-text("Maça bak ve yanıtla")'); await PF.waitForURL(/\/m\//); await PF.waitForLoadState("networkidle");
+  check("üye olmayan davetli maç ekranını görür", (await PF.locator("text=Bu maça çağrıldın").count()) === 1);
+  await PF.click('form button:has-text("Geliyorum")'); await PF.waitForURL(/yanit=in/);
+  check("davetli kadroya girdi (ödünç)", (await admin.from("group_players").select("is_loan").eq("group_id", T).eq("user_id", F.id).single()).data?.is_loan === true);
+  await PF.goto(`${BASE}/sohbet/${th.thread_id}`, { waitUntil: "networkidle" });
+  check("sohbet kartı güncel: 2/5 ve 'Kadrodasın'", (await PF.locator("text=2/5").count()) === 1 && (await PF.locator("text=Kadrodasın").count()) === 1);
 
-  // 4) Yabancı: istek olarak düştü
-  await PO.goto(`${BASE}/sohbet`);
-  check("yabancıya kart istek olarak düştü", await PO.waitForSelector("text=Mesaj istekleri", { timeout: 15000 }).then(() => true, () => false));
+  // --- Takım üyesi ana sayfadan hızlı "Geliyorum"
+  const PU = await login(U);
+  check("ana sayfada 'Maça geliyor musun?'", (await PU.locator("text=Maça geliyor musun?").count()) === 1);
+  await PU.locator('form button:has-text("Geliyorum")').first().click();
+  await PU.waitForLoadState("networkidle"); await sleep(1500);
+  check("hızlı yanıtla kadroya girdi, ana sayfada kaldı", (await admin.from("match_entries").select("status").eq("match_id", M).eq("user_id", U.id).single()).data?.status === "in" && PU.url() === BASE + "/");
 
-  // 4b) Yabancı: kartla çağrıyı açar, sade görünümde yanıt verir; kaptan kadroya alır
-  await PO.goto(`${BASE}/g/${T}/cagri/${fill.id}`);
-  check("yabancı adam aramada 'üyesi değilsin' bilgisini görür", await PO.waitForSelector("text=Takımın üyesi değilsin", { timeout: 15000 }).then(() => true, () => false));
-  check("yabancı başvuru listesini görmez", (await PO.locator("text=Geliyor ·").count()) === 0);
-  await PO.click('button[name="answer"]:has-text("Geliyorum")');
-  check("yabancı başvurdu", await PO.waitForSelector("text=Organizatörün kararını bekliyorsun", { timeout: 15000 }).then(() => true, () => false));
-  await PO.screenshot({ path: `${SHOTS}/card-outsider-fill.png`, fullPage: true });
-  await PO.goto(`${BASE}/g/${C}/cagri/${gather.id}`);
-  check("yabancı özel grubun çağrısını görür", await PO.waitForSelector("text=Grubun üyesi değilsin", { timeout: 15000 }).then(() => true, () => false));
-  check("özel grupta grup sayfasına bağlantı yok", (await PO.locator("text=Kart Grubu sayfasına dön").count()) === 0);
-  await PO.click('button[name="answer"]:has-text("Belki")');
-  await PO.waitForLoadState("networkidle");
-  const oResp = must(await admin.from("poll_responses").select("answer").eq("poll_id", gather.id).eq("user_id", O.id));
-  check("yabancı toplama çağrısına yanıt verdi", oResp[0]?.answer === "maybe");
-  let kNotif = [];
-  for (let i = 0; i < 20 && !kNotif.length; i++) {
-    await PO.waitForTimeout(500);
-    kNotif = must(await admin.from("notifications").select("title, body").eq("user_id", K.id).eq("title", "📨 Çağırdığın oyuncu yanıt verdi"));
-  }
-  check("organizatöre 'çağırdığın oyuncu yanıt verdi' bildirimi gitti", kNotif.length === 1 && kNotif[0].body.includes("belki gelir"));
-  // Kesinleştirme ekranında davetli üyelerden ayrılır (arkadaş grubun üyesi: etiketsiz)
-  await PK.goto(`${BASE}/g/${C}/cagri/${gather.id}?kesinlestir=1`);
-  await PK.waitForSelector("text=Kimler oynayacak?");
-  check("kesinleştirmede yabancı 'davetli' etiketli", (await PK.locator("li", { hasText: "Kart Yabanci" }).locator("span", { hasText: /^davetli$/ }).count()) === 1);
-  check("etiketli tek satır var", (await PK.locator("li span", { hasText: /^davetli$/ }).count()) === 1);
-  await PK.screenshot({ path: `${SHOTS}/card-finalize-invited.png`, fullPage: true });
-  await PO.screenshot({ path: `${SHOTS}/card-outsider-gather.png`, fullPage: true });
-  await PK.goto(`${BASE}/g/${T}/cagri/${fill.id}`);
-  await PK.click('button:has-text("Kadroya al")');
-  await PK.waitForLoadState("networkidle");
-  const loan = must(await admin.from("group_players").select("is_loan").eq("group_id", T).eq("user_id", O.id));
-  check("yabancı ödünç olarak kadroya alındı", loan.length === 1 && loan[0].is_loan === true);
-
-  // 5) Yetkisiz kişi seçiciye giremez
-  await PF.goto(`${BASE}/davet/gonder?tur=poll&ref=${gather.id}`); await PF.waitForLoadState("networkidle");
-  check("çağrıyı görebilen ama yönetemeyen üye seçiciden ana sayfaya atılır", new URL(PF.url()).pathname === "/");
-  const notifs = must(await admin.from("notifications").select("title").eq("user_id", F.id).eq("type", "invite"));
-  check("arkadaşa davet bildirimi yazıldı", notifs.length >= 1);
+  // --- Keşfet ilanı → "Adam arayan" (il süzgeci) → yabancı başvurur
+  must(await kc.rpc("create_listing", { p_match: M, p_target: null, p_positions: ["GK"], p_note: null }));
+  const PX = await login(X);
+  await PX.goto(`${BASE}/kesfet?sekme=mac&il=Edirne`, { waitUntil: "networkidle" });
+  check("Keşfet 'Adam arayan'da maç, sayaç 3/5 ve mevki", (await PX.locator(`text=Kart Takimi ${stamp % 1000}`).count()) >= 1 && (await PX.locator("text=3/5").count()) >= 1 && (await PX.locator("text=Aranan: Kaleci").count()) >= 1);
+  await PX.goto(`${BASE}/kesfet?sekme=mac&il=Bolu`, { waitUntil: "networkidle" });
+  check("başka il süzgecinde yok", (await PX.locator(`text=Kart Takimi ${stamp % 1000}`).count()) === 0);
+  await PX.goto(`${BASE}/kesfet?sekme=mac&il=Edirne`, { waitUntil: "networkidle" });
+  await PX.screenshot({ path: `${SHOTS}/card-kesfet.png`, fullPage: true });
+  await PX.click(`a:has-text("Kart Takimi ${stamp % 1000}")`); await PX.waitForURL(/\/m\//); await PX.waitForLoadState("networkidle");
+  await PX.click('button:has-text("Başvur")'); await PX.waitForURL(/ok=basvuru/);
+  check("Keşfet'ten başvuru onay bekliyor", (await admin.from("match_entries").select("status, source").eq("match_id", M).eq("user_id", X.id).single()).data?.source === "listing");
+  await PX.goto(`${BASE}/kesfet?sekme=mac&il=Edirne`, { waitUntil: "networkidle" });
+  check("Keşfet'te 'Başvurdun' rozeti", (await PX.locator("text=Başvurdun").count()) >= 1);
 } catch (e) {
-  console.log("  ✗ ÇÖKTÜ:", e?.message ?? e);
+  console.log("  ✗ ÇÖKTÜ:", e.message.split("\n")[0]);
   failed++;
 } finally {
   await browser?.close();
-  for (const g of groups) await admin.from("groups").delete().eq("id", g);
   await removeTestUsers(admin, users.map((u) => u.id));
-  console.log(failed ? `\n${failed} kontrol BAŞARISIZ` : "\nTüm kontroller geçti");
-  process.exit(failed ? 1 : 0);
 }
+console.log(failed ? `\n${failed} kontrol BAŞARISIZ` : "\nTüm kontroller geçti");
+process.exitCode = failed ? 1 : 0;

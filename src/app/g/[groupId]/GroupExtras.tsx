@@ -4,6 +4,7 @@ import { callWhen, istanbulDate } from "@/lib/call-rules";
 import { Card, Input, Label, SectionTitle } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Icon } from "@/components/Icon";
+import { SIZES } from "@/lib/formations";
 
 export interface Proposal {
   id: string;
@@ -104,19 +105,30 @@ export function Proposals({
                   {p.venue ? ` · ${p.venue}` : ""}
                 </div>
                 {p.note && <p className="rounded-lg bg-surface-low p-2 text-xs text-on-surface-variant">“{p.note}”</p>}
-                <div className="grid grid-cols-2 gap-2">
-                  {(["1", "0"] as const).map((accept) => (
-                    <form key={accept} action={decideProposal}>
-                      <Hidden groupId={groupId} />
-                      <input type="hidden" name="proposalId" value={p.id} />
-                      <input type="hidden" name="accept" value={accept} />
-                      <SubmitButton variant={accept === "1" ? "primary" : "secondary"} className="min-h-10 w-full text-sm" pendingLabel="…">
-                        {accept === "1" ? "Onayla, çağrı aç" : "Reddet"}
-                      </SubmitButton>
-                    </form>
-                  ))}
-                </div>
-                <p className="text-[11px] text-on-surface-variant">Onaylarsan çağrı öneren adına açılır; kadroyu o kesinleştirir.</p>
+                <form action={decideProposal} className="flex gap-2">
+                  <Hidden groupId={groupId} />
+                  <input type="hidden" name="proposalId" value={p.id} />
+                  <input type="hidden" name="accept" value="1" />
+                  <select name="size" defaultValue={7} aria-label="Format" className="min-h-10 rounded-xl border border-line bg-pitch-950 px-2 text-sm">
+                    {SIZES.map((n) => (
+                      <option key={n} value={n}>
+                        {n}v{n}
+                      </option>
+                    ))}
+                  </select>
+                  <SubmitButton className="min-h-10 flex-1 text-sm" pendingLabel="…">
+                    Onayla, maçı ayarla
+                  </SubmitButton>
+                </form>
+                <form action={decideProposal}>
+                  <Hidden groupId={groupId} />
+                  <input type="hidden" name="proposalId" value={p.id} />
+                  <input type="hidden" name="accept" value="0" />
+                  <SubmitButton variant="secondary" className="min-h-10 w-full text-sm" pendingLabel="…">
+                    Reddet
+                  </SubmitButton>
+                </form>
+                <p className="text-[11px] text-on-surface-variant">Onaylarsan maç öneren adına açılır, gruba duyurulur; kadro toplanınca o kesinleştirir.</p>
               </Card>
             ))}
           </div>

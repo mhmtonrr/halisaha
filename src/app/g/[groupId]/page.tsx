@@ -5,7 +5,6 @@ import { matchWhen } from "@/lib/match-rules";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { finalizeExpired } from "@/lib/finalize";
-import { callWhen } from "@/lib/call-rules";
 import { byRanking, formatDate, getGroupSummaries, isGuestLike, isSquadMember, POSITION_LABEL } from "@/lib/data";
 import { formatRegion } from "@/lib/regions";
 import { ROLE_LABEL, canCreateMatch, teamRating, type GroupKind, type Role } from "@/lib/teams-data";
@@ -65,7 +64,7 @@ export default async function GroupPage({
   // Günü geçen açık çağrılar kapanır (cron yok; sayfa açılışında)
   await supabase.rpc("close_stale_polls", { p_group: groupId });
 
-  const [players, { data: matches }, { data: inviteCode }, { data: polls }, { data: unread }] = await Promise.all([
+  const [players, { data: matches }, { data: inviteCode }, { data: unread }] = await Promise.all([
     getGroupSummaries(supabase, groupId),
     supabase
       .from("matches")
@@ -74,13 +73,6 @@ export default async function GroupPage({
       .order("played_at", { ascending: false })
       .limit(50),
     supabase.rpc("group_invite_code", { p_group_id: groupId }),
-    supabase
-      .from("match_polls")
-      .select("id, purpose, play_on, starts_at, venue, capacity, status, positions, poll_responses(user_id, answer)")
-      .eq("group_id", groupId)
-      .in("status", ["open", "filled"])
-      .order("play_on")
-      .limit(10),
     supabase.rpc("unread_counts"),
   ]);
   const pendingOffers = isTeam && (await supabase.rpc("is_group_member", { p_group_id: groupId })).data
@@ -143,7 +135,6 @@ export default async function GroupPage({
       <LiveRefresh
         watches={[
           { table: "matches", filter: `group_id=eq.${groupId}` },
-          { table: "match_polls", filter: `group_id=eq.${groupId}` },
           { table: "group_players", filter: `group_id=eq.${groupId}` },
           ...(isTeam
             ? [
@@ -313,42 +304,6 @@ export default async function GroupPage({
         sent={oneri === "gonderildi"}
       />
 
-      {(polls ?? []).length > 0 && (
-        <>
-          <SectionTitle>{isTeam ? "Maç çağrıları" : "Çağrılar"}</SectionTitle>
-          <div className="space-y-2">
-            {(polls ?? []).map((poll) => {
-              const yes = poll.poll_responses.filter((r) => r.answer === "yes").length;
-              const mine = poll.poll_responses.find((r) => r.user_id === user.id)?.answer;
-              const fill = poll.purpose === "fill";
-              return (
-                <Link key={poll.id} href={`/g/${groupId}/cagri/${poll.id}`} className="flex items-center gap-3 rounded-xl border border-primary/30 bg-surface-container p-3 transition hover:border-primary">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-primary/15 text-primary">
-                    <Icon name={fill ? "person_search" : "campaign"} fill className="text-[22px]" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-semibold">{fill ? `${poll.capacity} oyuncu aranıyor` : callWhen(poll)}</div>
-                    <div className="truncate text-xs text-on-surface-variant">
-                      {fill ? callWhen(poll) : poll.venue ?? "Saha belli değil"} · {yes}
-                      {poll.capacity && !fill ? `/${poll.capacity}` : ""} geliyor
-                      {poll.status === "filled" ? " · doldu" : ""}
-                    </div>
-                  </div>
-                  {mine === "yes" ? (
-                    <Badge tone="accent">Geliyorsun</Badge>
-                  ) : mine === "maybe" ? (
-                    <Badge tone="warn">Belki</Badge>
-                  ) : mine === "no" ? (
-                    <Badge>Gelmiyorsun</Badge>
-                  ) : me ? (
-                    <Badge tone="warn">Yanıtla</Badge>
-                  ) : null}
-                </Link>
-              );
-            })}
-          </div>
-        </>
-      )}
       {!me && isTeam && (
         <p className="mt-3 text-center text-xs text-on-surface-variant">
           Bu takımın oyuncusu değilsin. Katılmak için kaptandan davet linki iste.

@@ -11,8 +11,8 @@ import { Badge, Button, Card, ErrorNote, Header, Input, LinkButton, SectionTitle
 import { OvrBadge } from "@/components/PlayerCard";
 import { TeamBadge } from "@/components/TeamBadge";
 import { Icon } from "@/components/Icon";
-import { openFillCalls } from "@/lib/calls-data";
-import { callWhen } from "@/lib/call-rules";
+import { openListings } from "@/lib/listings-data";
+import { matchWhen } from "@/lib/match-rules";
 import { POSITION_NAME, type Position } from "@/lib/data";
 
 export default async function DiscoverPage({
@@ -131,7 +131,7 @@ function Tabs({ active, city, district }: { active: Tab; city: string; district?
 /** Herkese açık adam aramalar (0041): bölgedeki eksiği olan maçlar; "Başvur" çağrı sayfasına götürür */
 async function FillCallsTab({ city, district }: { city: string; district?: string }) {
   const { supabase } = await requireUser();
-  const calls = await openFillCalls(supabase, city || undefined, district);
+  const calls = await openListings(supabase, city || undefined, district);
   return (
     <main>
       <Header title="Keşfet" />
@@ -156,40 +156,51 @@ async function FillCallsTab({ city, district }: { city: string; district?: strin
       </SectionTitle>
       {calls.length === 0 ? (
         <Card className="text-center text-sm text-muted">
-          Bu bölgede şu an oyuncu arayan maç yok. Kendi maçında eksik varsa maç ekranında &quot;Adam ara&quot; → &quot;Herkese açık&quot;.
+          Bu bölgede şu an oyuncu arayan maç yok. Kendi maçında eksik varsa maç ekranında &quot;Adam ara&quot; → &quot;Keşfet (herkese açık)&quot;.
         </Card>
       ) : (
         <div className="space-y-2">
           {calls.map((c) => {
-            const left = Math.max(c.needed - c.taken, 0);
-            const applied = c.my_answer === "yes";
+            const left = Math.max((c.capacity ?? 0) - c.roster_count, 0);
+            const pct = Math.min(100, Math.round((c.roster_count / Math.max(1, c.capacity ?? 1)) * 100));
+            const badge =
+              c.can_manage ? <Badge>Senin maçın</Badge>
+              : c.my_status === "pending" ? <Badge tone="warn">Başvurdun</Badge>
+              : c.my_status === "in" ? <Badge tone="accent">Kadrodasın</Badge>
+              : c.my_status === "reserve" ? <Badge tone="warn">Yedektesin</Badge>
+              : c.is_member ? <Badge>Senin grubun</Badge>
+              : <span className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-sm font-bold text-pitch-950">Başvur</span>;
             return (
-              <Link key={c.poll_id} href={`/g/${c.group_id}/cagri/${c.poll_id}`} className="block">
-                <Card className="flex items-center gap-3 transition hover:border-accent/50">
-                  <Icon name="person_search" fill className="text-[26px] text-amber-300" />
-                  <div className="min-w-0 flex-1">
-                    <div className="font-semibold">{callWhen(c)}</div>
-                    <div className="truncate text-xs text-on-surface-variant">
-                      {c.group_kind === "team" ? "Takım" : "Grup"} · {c.group_name}
-                      {c.opponent_name ? ` vs ${c.opponent_name}` : ""}
+              <Link key={c.listing_id} href={`/g/${c.group_id}/m/${c.match_id}`} className="block">
+                <Card className="space-y-2 transition hover:border-accent/50">
+                  <div className="flex items-center gap-3">
+                    <Icon name="person_search" fill className="text-[26px] text-amber-300" />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold">{matchWhen(c.played_at, c.time_tbd)}</div>
+                      <div className="truncate text-xs text-on-surface-variant">
+                        {c.group_kind === "team" ? "Takım" : "Grup"} · {c.group_name}
+                        {c.opponent_name ? ` vs ${c.opponent_name}` : ""}
+                      </div>
+                      <div className="truncate text-xs text-muted">
+                        {[c.venue, [c.district, c.city].filter(Boolean).join(", "), c.team_size ? `${c.team_size}v${c.team_size}` : null]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </div>
                     </div>
-                    <div className="truncate text-xs text-muted">
-                      {[c.venue, [c.district, c.city].filter(Boolean).join(", "), c.team_size ? `${c.team_size}v${c.team_size}` : null]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </div>
-                    <div className="mt-0.5 text-xs">
-                      <b className="text-accent">{left} oyuncu</b> aranıyor
-                      {c.positions.length > 0 && <span className="text-muted"> · {c.positions.map((p) => POSITION_NAME[p as Position] ?? p).join(", ")}</span>}
-                    </div>
+                    {badge}
                   </div>
-                  {applied ? (
-                    <Badge tone="accent">Başvurdun</Badge>
-                  ) : c.is_member ? (
-                    <Badge>Senin grubun</Badge>
-                  ) : (
-                    <span className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-sm font-bold text-pitch-950">Başvur</span>
-                  )}
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="font-bold tabular-nums">
+                      {c.roster_count}/{c.capacity}
+                    </span>
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-pitch-800">
+                      <div className="h-full rounded-full bg-amber-400" style={{ width: `${pct}%` }} />
+                    </div>
+                    <span>
+                      <b className="text-accent">{left} oyuncu</b> aranıyor
+                    </span>
+                  </div>
+                  {c.positions.length > 0 && <div className="text-xs text-muted">Aranan: {c.positions.map((p) => POSITION_NAME[p as Position] ?? p).join(", ")}</div>}
                 </Card>
               </Link>
             );

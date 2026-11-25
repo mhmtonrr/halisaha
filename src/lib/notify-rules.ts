@@ -192,10 +192,10 @@ export const text = {
     tag: `proposal:${groupId}`,
   }),
   /** Önerene: onaylandı (çağrı açıldı, sen yönetiyorsun) veya reddedildi */
-  proposalDecided: (groupName: string, groupId: string, accepted: boolean, pollId: string | null): Content => ({
+  proposalDecided: (groupName: string, groupId: string, accepted: boolean, matchId: string | null): Content => ({
     title: accepted ? "✅ Maç önerin onaylandı" : "Maç önerin onaylanmadı",
-    body: truncate(accepted ? `${groupName}: çağrı açıldı, kadroyu sen kesinleştireceksin` : groupName, 300),
-    url: accepted && pollId ? `/g/${groupId}/cagri/${pollId}` : `/g/${groupId}`,
+    body: truncate(accepted ? `${groupName}: maç ayarlandı, kadroda yerin hazır; toplanınca sen kesinleştirirsin` : groupName, 300),
+    url: accepted && matchId ? `/g/${groupId}/m/${matchId}` : `/g/${groupId}`,
     tag: `proposal-decision:${groupId}`,
   }),
   /** Organizatöre: kadroda yer açıldı, yedek var */

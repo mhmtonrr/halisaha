@@ -10,6 +10,7 @@ import { groupMemberIds, groupName } from "@/lib/recipients";
 import { balanceTeams } from "@/lib/teams";
 import { formatDate, parseLocalDateTime, POSITIONS, type Position } from "@/lib/data";
 import { isValidSize } from "@/lib/formations";
+import { matchWhen } from "@/lib/match-rules";
 import { callWhen, dayTimeToIso, reserveOrder, type Responder } from "@/lib/call-rules";
 
 const str = (fd: FormData, key: string) => String(fd.get(key) ?? "").trim();
@@ -354,24 +355,28 @@ export async function decideProposal(fd: FormData) {
   const id = str(fd, "proposalId");
   const accept = str(fd, "accept") === "1";
   const back = `/g/${groupId}`;
-  const { data: pollId, error } = await supabase.rpc("decide_proposal", { p_id: id, p_accept: accept });
+  // 0046: onaylanan öneri toplanan maç açar; formatı onaylayan seçer
+  const size = Number(fd.get("size"));
+  const { data: matchId, error } = await supabase.rpc("decide_proposal", { p_id: id, p_accept: accept, p_team_size: isValidSize(size) ? size : 7 });
   if (error) fail(`${back}#oneriler`, rpcMessage(error, "Karar kaydedilemedi"));
   later(async () => {
     const admin = createAdminClient();
     const [{ data: p }, name] = await Promise.all([
-      admin.from("match_proposals").select("proposed_by, play_on, starts_at, venue").eq("id", id).maybeSingle(),
+      admin.from("match_proposals").select("proposed_by").eq("id", id).maybeSingle(),
       groupName(admin, groupId),
     ]);
     if (!p) return;
-    await notify([p.proposed_by as string], "poll", text.proposalDecided(name, groupId, accept, (pollId as string | null) ?? null));
-    if (accept && pollId) {
-      // Açılan çağrı normal çağrı gibi gruba duyurulur (öneren ve onaylayan hariç)
+    await notify([p.proposed_by as string], "match", text.proposalDecided(name, groupId, accept, (matchId as string | null) ?? null));
+    if (accept && matchId) {
+      // Açılan maç gruba duyurulur (öneren ve onaylayan hariç)
+      const { data: m } = await admin.from("matches").select("played_at, time_tbd, roster_count, capacity").eq("id", matchId as string).maybeSingle();
+      if (!m) return;
       const ids = (await groupMemberIds(admin, groupId, { broadcast: true })).filter((u) => u !== p.proposed_by);
-      await notify(ids, "poll", text.pollOpened(name, groupId, pollId as string, callWhen({ play_on: p.play_on as string, starts_at: p.starts_at as string | null }), p.venue as string | null), { excludeUserId: user.id });
+      await notify(ids, "match", text.matchGathering(name, groupId, matchId as string, matchWhen(m.played_at, m.time_tbd), m.roster_count, m.capacity ?? m.roster_count), { excludeUserId: user.id });
     }
   });
   revalidatePath(back);
-  redirect(accept && pollId ? callPath(groupId, pollId as string) : `${back}#oneriler`);
+  redirect(accept && matchId ? `/g/${groupId}/m/${matchId as string}` : `${back}#oneriler`);
 }
 
 export async function cancelProposal(fd: FormData) {

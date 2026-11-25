@@ -37,22 +37,24 @@ await as(3);
 ok("öneren kendi önerisini görür", (await q(`select * from match_proposals where id=$1`, [PR])).length === 1);
 await as(2);
 ok("organizatör öneriyi görür", (await q(`select * from match_proposals where id=$1`, [PR])).length === 1);
-const PP = (await one(`select decide_proposal($1, true) id`, [PR])).id;
-const pp = await one(`select created_by, proposal_id, purpose, venue, note from match_polls where id=$1`, [PP]);
-ok("onaylanınca öneren adına toplama çağrısı açılır", pp.created_by === U(3) && pp.proposal_id === PR && pp.purpose === "gather" && pp.venue === "Petroller");
-ok("öneri 'kabul' ve çağrıya bağlı", (await one(`select status, poll_id from match_proposals where id=$1`, [PR])).poll_id === PP);
+ok("geçersiz format reddedilir", await fails(`select decide_proposal($1, true, 4::smallint)`, [PR]));
+const PM = (await one(`select decide_proposal($1, true, 6::smallint) id`, [PR])).id;
+const pm = await one(`select created_by, status::text s, team_size, capacity, venue, open_to_members, roster_count from matches where id=$1`, [PM]);
+ok("onaylanınca öneren adına toplanan maç açılır (0046)", pm.created_by === U(3) && pm.s === "gathering" && pm.venue === "Petroller" && pm.open_to_members);
+ok("format onaylayanın seçimi, toplulukta kadro 2×", pm.team_size === 6 && pm.capacity === 12);
+ok("öneren kadroya yazılır", pm.roster_count === 1);
+ok("öneri 'kabul' ve maça bağlı", (await one(`select status, match_id from match_proposals where id=$1`, [PR])).match_id === PM);
 ok("sonuçlanmış öneriye tekrar karar verilemez", await fails(`select decide_proposal($1, false)`, [PR]));
 await as(3);
-ok("öneren (rolü olmadan) çağrısını yönetir", (await one(`select can_manage_poll($1) c`, [PP])).c === true);
-ok("öneren çağrısını düzenler", !(await fails(`select update_gather_poll($1, null, 'Saha 2', null, null, null, null)`, [PP])));
-ok("öneren yine de yeni çağrı açamaz", await fails(`select create_gather_poll($1, current_date + 3) id`, [C]));
-for (const n of [1, 2, 3, 4]) { await as(n); await db.query(`select respond_poll($1, 'yes')`, [PP]); }
+ok("öneren (rolü olmadan) maçını yönetir", (await one(`select can_manage_match($1) c`, [PM])).c === true);
+ok("öneren yine de yeni maç açamaz", await fails(`select create_match_v2($1, current_date + 3, null, 5::smallint, 'internal') id`, [C]));
+for (const n of [1, 2, 4]) { await as(n); await db.query(`select respond_match($1, 'yes')`, [PM]); }
 await as(3);
+await db.query(`select confirm_match($1, (current_date + 2 + time '21:00') at time zone 'Europe/Istanbul')`, [PM]);
+ok("öneren maçı kesinleştirir", (await one(`select status::text s from matches where id=$1`, [PM])).s === "planned");
+// Geçici takım kontrolleri (eski çağrı kesinleştirme; 5b'de kalkar) için yardımcılar
 const roster = (ns, team = "A") => JSON.stringify(ns.map((n, i) => ({ user_id: U(n), team: team === "split" ? (i % 2 ? "B" : "A") : team })));
 const when = `(current_date + 2 + time '21:00') at time zone 'Europe/Istanbul'`;
-const M0 = (await one(`select finalize_poll($1, ${when}, null, 5::smallint, 'internal', null, null, $2::jsonb) id`, [PP, roster([1, 2, 3, 4], "split")])).id;
-ok("öneren kadroyu kesinleştirir, maç onun adına kurulur", (await one(`select created_by from matches where id=$1`, [M0])).created_by === U(3));
-ok("öneren kurduğu maçı yönetir", (await one(`select can_manage_match($1) c`, [M0])).c === true);
 await as(4);
 const PR2 = (await one(propose(), [C])).id;
 await as(2);

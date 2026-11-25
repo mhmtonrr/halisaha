@@ -140,5 +140,9 @@ export async function respondMatch(fd: FormData) {
     }
   });
   revalidatePath(back);
+  if (str(fd, "returnTo") === "/") {
+    revalidatePath("/");
+    redirect("/");
+  }
   redirect(`${back}?yanit=${result as string}`);
 }

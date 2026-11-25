@@ -1,5 +1,5 @@
-// 0037: üye maç önerisi → onay → öneren kesinleştirir (grupta arayüz sadece kendi aramızda; hızlı/geçici takım RPC ile) → geçici takım listelerde ayrı,
-// Keşfet'te yok → ödünç oyuncuya takım daveti → sessize alma (toplu duyuru gelmez). Canlı Supabase; test verisini siler.
+// 0037/0046: üye maç önerisi → onay (format seçilir) → öneren adına toplanan maç → üyeler Geliyorum → öneren kesinleştirir (taraflar bölünür)
+// → sessize alma (toplu "Maç ayarlanıyor" duyurusu gelmez). Canlı Supabase; test verisini siler.
 import { createRequire } from "module";
 import fs from "fs";
 import { removeTestUsers } from "./cleanup.mjs";
@@ -21,7 +21,6 @@ const check = (label, cond) => { console.log(cond ? "  ✓" : "  ✗ HATA:", lab
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const has = (t, x) => t.toLocaleLowerCase("tr").includes(x.toLocaleLowerCase("tr"));
 const trDate = (offsetDays) => new Date(Date.now() + 3 * 3600e3 + offsetDays * 86400e3).toISOString().slice(0, 10);
-const stamp = Date.now().toString(36).slice(-5);
 
 const names = ["Kerem Kurucu", "Orhan Organizatör", "Onur Öneren", "Ali Oyuncu", "Sena Sessiz"];
 const users = []; const groupIds = []; let browser;
@@ -68,73 +67,46 @@ try {
   await oP.goto(`${BASE}/g/${C}`);
   check("organizatör öneriyi görür", has(await body(oP), "Maç önerileri · 1") && has(await body(oP), "Onur Öneren"));
   await oP.screenshot({ path: `${SHOTS}/p01-oneriler.png`, fullPage: true });
-  await oP.click('button:has-text("Onayla, çağrı aç")');
-  await oP.waitForURL(/cagri\/[0-9a-f-]{36}$/, { timeout: 20000 });
-  const poll = oP.url().split("/cagri/")[1];
-  const { data: pr } = await admin.from("match_polls").select("created_by, proposal_id").eq("id", poll).single();
-  check("çağrı öneren adına açıldı", pr.created_by === N.id && !!pr.proposal_id);
+  // 0046: onayda format seçilir, öneren adına toplanan maç açılır
+  await oP.selectOption('select[aria-label="Format"]', "6");
+  await oP.click('button:has-text("Onayla, maçı ayarla")');
+  await oP.waitForURL(/\/m\/[0-9a-f-]{36}/, { timeout: 20000 });
+  const mid = oP.url().split("/m/")[1].split("?")[0];
+  const { data: mm } = await admin.from("matches").select("created_by, status, team_size, capacity, roster_count").eq("id", mid).single();
+  check("öneri onayıyla öneren adına toplanan maç açıldı (6v6, kadro 12, öneren kadroda)", mm.created_by === N.id && mm.status === "gathering" && mm.team_size === 6 && mm.capacity === 12 && mm.roster_count === 1);
+  check("öneri maça bağlandı", (await admin.from("match_proposals").select("match_id").eq("group_id", C).eq("status", "accepted").single()).data.match_id === mid);
 
-  // 2) Yanıtlar; öneren kesinleştirme ekranında sadece "kendi aramızda" görür; hızlı takımla rakibe karşı (RPC)
-  for (const p of [aP, sP]) {
-    await p.goto(`${BASE}/g/${C}/cagri/${poll}`);
-    await p.click('button[name="answer"]:has-text("Geliyorum")');
-    await p.waitForLoadState("networkidle");
+  // 2) Üyeler "Geliyorum" der; öneren (rolü olmadan) maçı yönetir ve kesinleştirir
+  for (const p of [aP, sP, oP]) {
+    await p.goto(`${BASE}/g/${C}/m/${mid}`, { waitUntil: "networkidle" });
+    await p.click('form button:has-text("Geliyorum")');
+    await p.waitForURL(/yanit=in/, { timeout: 20000 });
   }
-  await nP.goto(`${BASE}/g/${C}/cagri/${poll}`);
-  check("öneren (rolü olmadan) 'Kadroyu kesinleştir' görür", has(await body(nP), "Kadroyu kesinleştir"));
-  await nP.goto(`${BASE}/g/${C}/cagri/${poll}?kesinlestir=1`);
-  check(
-    "grupta kesinleştirmede 'rakibe karşı' yok, 'Takım kur' yönlendirmesi var",
-    (await nP.locator('input[name="kind"][value="external"]').count()) === 0 && has(await body(nP), "Takım kur"),
-  );
-  await nP.screenshot({ path: `${SHOTS}/p02-kesinlestir.png`, fullPage: true });
-  // Arayüz grupta hızlı takım kurmuyor; RPC hâlâ destekliyor. Geçici takım davranışı (adım 3-4) için öneren adına RPC ile kurulur
-  const asN = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, { auth: { persistSession: false } });
-  await asN.auth.signInWithPassword({ email: N.email, password: N.password });
-  const { data: mid, error: fe } = await asN.rpc("finalize_poll", {
-    p_poll: poll, p_starts_at: `${trDate(2)}T21:00:00+03:00`, p_venue: "Petroller", p_team_size: null, p_kind: "external", p_team: null,
-    p_opponent: "Yıldızspor", p_roster: [A, S].map((u) => ({ user_id: u.id, team: "A", gk: false })), p_new_team: `Cuma Ekibi ${stamp}`,
-  });
-  if (fe) throw fe;
-  const T = (await admin.from("matches").select("group_id").eq("id", mid).single()).data.group_id;
-  groupIds.push(T);
-  const { data: t } = await admin.from("groups").select("name, is_temporary, city, created_by").eq("id", T).single();
-  check("hızlı takım geçici kuruldu, öneren kaptan", t.is_temporary && t.created_by === N.id && t.city === "İstanbul");
-  const { data: loans } = await admin.from("group_players").select("user_id, is_loan").eq("group_id", T).eq("is_loan", true);
-  check("seçilen iki oyuncu hızlı takıma ödünç yazıldı", loans.length === 2);
+  await nP.goto(`${BASE}/g/${C}/m/${mid}`, { waitUntil: "networkidle" });
+  check("öneren 'Maçı kesinleştir' görür (4/12)", has(await body(nP), "Maçı kesinleştir") && has(await body(nP), "4/12"));
+  await nP.screenshot({ path: `${SHOTS}/p02-oneri-maci.png`, fullPage: true });
+  await nP.fill('input[aria-label="Maç saati"]', "21:00");
+  await nP.click('button:has-text("Maçı kesinleştir")');
+  await nP.waitForURL(/ok=kesin/, { timeout: 20000 });
+  const { data: kk } = await admin.from("matches").select("status").eq("id", mid).single();
+  const { data: sides } = await admin.from("match_players").select("team").eq("match_id", mid);
+  check("öneren kesinleştirdi, taraflar bölündü", kk.status === "planned" && new Set(sides.map((x) => x.team)).size === 2);
 
-  // 3) Geçici takım listelerde ayrı, Keşfet'te yok; şerit görünür
-  await nP.goto(`${BASE}/`);
-  const home = await body(nP);
-  check("ana sayfada 'Geçici ve dağıtılmış takımlarım' bölümü var", has(home, "Geçici ve dağıtılmış takımlarım · 1"));
-  await nP.goto(`${BASE}/g/${T}`);
-  check("takım sayfasında 'Geçici takım' şeridi ve kaptana 'Kalıcı yap'", has(await body(nP), "Geçici takım") && has(await body(nP), "Kalıcı yap"));
-  await nP.goto(`${BASE}/kesfet?il=&q=${encodeURIComponent("Cuma Ekibi " + stamp)}`);
-  check("geçici takım Keşfet aramasında çıkmaz", !has(await body(nP), `Cuma Ekibi ${stamp}`));
-
-  // 4) Ödünç oyuncuya takım daveti
-  await nP.goto(`${BASE}/g/${T}/players`);
-  await nP.locator('button:has-text("Takıma davet et")').first().click();
-  await nP.waitForURL(/davet=1/, { timeout: 20000 });
-  await nP.locator("text=Takım daveti gönderildi").waitFor({ timeout: 15000 }).catch(() => {});
-  check("davet gönderildi mesajı", has(await body(nP), "Takım daveti gönderildi"));
-  const { count: inv } = await admin.from("group_invites").select("*", { count: "exact", head: true }).eq("group_id", T).eq("status", "pending");
-  check("ödünç oyuncuya bekleyen takım daveti oluştu", inv === 1);
-
-  // 5) Sessize alma: Sena sessize alır; yeni çağrıda Ali'ye duyuru gider, Sena'ya gitmez
+  // 3) Sessize alma: Sena sessize alır; yeni maç duyurusu Ali'ye gider, Sena'ya gitmez
   await sP.goto(`${BASE}/g/${C}`);
   await sP.click('button:has-text("Sessize al")');
   await sP.waitForLoadState("networkidle");
   const { data: m } = await admin.from("group_players").select("muted").eq("group_id", C).eq("user_id", S.id).single();
   check("üye grubu sessize aldı", m.muted === true);
   const since = new Date().toISOString();
-  await oP.goto(`${BASE}/g/${C}/cagri/yeni`);
+  await oP.goto(`${BASE}/mac-ayarla?grup=${C}`, { waitUntil: "networkidle" });
   await oP.fill('input[name="day"]', trDate(3));
-  await oP.click('button:has-text("Çağrıyı aç")');
-  await oP.waitForURL(/cagri\/[0-9a-f-]{36}$/, { timeout: 20000 });
+  await oP.check("text=Saat belli değil");
+  await oP.click('button:has-text("Maçı ayarla")');
+  await oP.waitForURL(/\/m\/[0-9a-f-]{36}/, { timeout: 20000 });
   await sleep(4000);
-  const got = async (u) => ((await admin.from("notifications").select("*", { count: "exact", head: true }).eq("user_id", u.id).eq("type", "poll").like("title", "%Maç çağrısı%").gt("created_at", since)).count ?? 0) > 0;
-  check("sessize almayan üyeye yeni çağrı duyurusu gitti", await got(A));
+  const got = async (u) => ((await admin.from("notifications").select("*", { count: "exact", head: true }).eq("user_id", u.id).eq("type", "match").like("title", "%Maç ayarlanıyor%").gt("created_at", since)).count ?? 0) > 0;
+  check("sessize almayan üyeye yeni maç duyurusu gitti", await got(A));
   check("sessize alan üyeye toplu duyuru gitmedi", !(await got(S)));
 } catch (e) {
   console.log("  ✗ ÇÖKTÜ:", e?.message ?? e);

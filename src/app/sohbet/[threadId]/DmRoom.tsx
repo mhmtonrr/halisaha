@@ -9,7 +9,7 @@ import { cancelGroupInvite, notifyDm, respondDmRequest, respondGroupInvite } fro
 import { Avatar } from "@/components/Avatar";
 import { BackLink } from "@/components/NavHistory";
 import { cx } from "@/components/ui";
-import { MatchCardView, type MatchCard } from "./MatchCardView";
+import { MatchCardView, type LiveMatch, type MatchCard } from "./MatchCardView";
 
 export interface DmMessage {
   id: number;
@@ -82,6 +82,7 @@ export function DmRoom({
   hasMore: initialHasMore,
   invites,
   refStatus,
+  live: liveCards = {},
   memberGroupIds,
 }: {
   threadId: string;
@@ -93,6 +94,8 @@ export function DmRoom({
   hasMore: boolean;
   invites: InviteInfo[];
   refStatus: Record<string, string>;
+  /** Maç kartlarının canlı özeti (maç id → sayaç/durum) */
+  live?: Record<string, LiveMatch>;
   memberGroupIds: string[];
 }) {
   const supabase = useMemo(() => createClient(), []);
@@ -336,6 +339,7 @@ export function DmRoom({
                   refId={m.poll_id ?? m.match_id ?? null}
                   status={refStatus[`${m.card.type}:${m.poll_id ?? m.match_id}`]}
                   isMember={memberGroupIds.includes(m.card.group_id)}
+                  live={m.match_id ? liveCards[m.match_id] : undefined}
                   mine={mine}
                   time={time(m.created_at)}
                 />

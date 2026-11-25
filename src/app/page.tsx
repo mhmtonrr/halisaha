@@ -3,10 +3,8 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { requireUser } from "@/lib/supabase/server";
 import { finalizeExpired } from "@/lib/finalize";
-import { callWhen, decisionDue, istanbulDate } from "@/lib/call-rules";
-import { myOpenGatherCalls } from "@/lib/calls-data";
-import { respondPoll } from "@/lib/call-actions";
-import { formatDate } from "@/lib/data";
+import { respondMatch } from "@/lib/match-actions";
+import { formatDate, POSITION_NAME, type Position } from "@/lib/data";
 import { formatRegion } from "@/lib/regions";
 import { DEFAULT_OVERALL } from "@/lib/rating";
 import { daysLeftLabel, rosterCapacity, tierProgress } from "@/lib/home";
@@ -39,15 +37,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
 
   const groupIds = memberships.map((m) => m.group.id);
   await Promise.all(groupIds.map((id) => finalizeExpired(id)));
-  // Günü geçen açık çağrılar kapanır (cron yok)
-  await Promise.all(groupIds.map((id) => supabase.rpc("close_stale_polls", { p_group: id })));
-
-  const today = istanbulDate();
-  const [{ data: active }, { data: myVotes }, myCalls, { data: openPolls }, { data: unreadRows }, { data: myWaiting }] = await Promise.all([
+  const [{ data: active }, { data: myVotes }, { data: unreadRows }, { data: myEntryRows }, { data: listingRows }] = await Promise.all([
     groupIds.length
       ? supabase
           .from("matches")
-          .select("id, group_id, played_at, status, kind, opponent_name, venue, team_size, voting_deadline, capacity, time_tbd, match_players(player_id)")
+          .select("id, group_id, played_at, status, kind, opponent_name, venue, team_size, voting_deadline, capacity, time_tbd, open_to_members, created_by, roster_count, match_players(player_id)")
           .in("group_id", groupIds)
           .in("status", ["gathering", "planned", "played", "voting"])
           .order("played_at")
@@ -57,28 +51,18 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
       .from("votes")
       .select("match_id")
       .in("voter_id", memberships.map((m) => m.playerId)),
-    myOpenGatherCalls(supabase, user.id),
-    groupIds.length
-      ? supabase
-          .from("match_polls")
-          .select("id, group_id, purpose, play_on, starts_at, venue, capacity, poll_responses(user_id, answer)")
-          .in("group_id", groupIds)
-          .eq("status", "open")
-          .gte("play_on", today)
-          .order("play_on")
-          .limit(10)
-      : Promise.resolve({ data: [] as never[] }),
     supabase.rpc("unread_counts"),
-    // "Geliyorum" dediğim ve organizatörün kararını beklediğim / yedekte olduğum çağrılar
+    // Maç kayıtlarım (yeni yapı): yedek, başvuru, davet; açık maçlarda
     supabase
-      .from("poll_responses")
-      .select("status, match_polls!inner(id, group_id, purpose, status, play_on, starts_at, groups(name))")
+      .from("match_entries")
+      .select("match_id, status, matches!inner(id, group_id, played_at, time_tbd, status, groups!matches_group_id_fkey(name))")
       .eq("user_id", user.id)
-      .eq("answer", "yes")
-      .or("status.is.null,status.eq.reserve")
-      .in("match_polls.status", ["open", "filled", "converted"])
-      .gte("match_polls.play_on", today)
-      .limit(10),
+      .in("matches.status", ["gathering", "planned"])
+      .limit(40),
+    // Üyesi olduğum gruplara açılmış ilanlar (Keşfet ilanları ana sayfada yok: kullanıcı kararı 2026-11-25)
+    groupIds.length
+      ? supabase.from("match_listings").select("id, match_id, positions").in("target_group_id", groupIds).eq("status", "active").limit(10)
+      : Promise.resolve({ data: [] as never[] }),
   ]);
   const unread = new Map(((unreadRows ?? []) as { group_id: string; unread: number }[]).map((u) => [u.group_id, u.unread]));
 
@@ -118,17 +102,31 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
     group: byGroup.get(m.group_id)!.group,
     inRoster: m.match_players.some((p: { player_id: string }) => myPlayerIds.has(p.player_id)),
   }));
-  // Yanıt vermediğim açık çağrılar
-  const toAnswer = (openPolls ?? []).filter((p) => !p.poll_responses.some((r: { user_id: string }) => r.user_id === user.id));
-  type WaitingCall = { id: string; group_id: string; purpose: string; status: string; play_on: string; starts_at: string | null; groups: { name: string } | { name: string }[] | null };
-  const waiting = (myWaiting ?? []).flatMap((w) => {
-    const c = (Array.isArray(w.match_polls) ? w.match_polls[0] : w.match_polls) as WaitingCall | null;
-    // Açık toplama çağrısında beklemek olağan (organizatör kesinleştirecek); sadece yedek ve adam arama başvurusu gösterilir
-    if (!c || (c.purpose === "gather" && c.status === "open")) return [];
-    const g = Array.isArray(c.groups) ? c.groups[0] : c.groups;
-    return [{ ...c, reserve: w.status === "reserve", groupName: g?.name ?? "" }];
+
+  // Yeni maç yapısı: kayıtlarım, yanıt bekleyen toplanan maçlar, kesinleştirilecekler, gruplarıma açılan ilanlar
+  type EntryMatch = { id: string; group_id: string; played_at: string; time_tbd: boolean; status: string; groups: { name: string } | { name: string }[] | null };
+  const myEntries = (myEntryRows ?? []).flatMap((e) => {
+    const m = (Array.isArray(e.matches) ? e.matches[0] : e.matches) as EntryMatch | null;
+    if (!m) return [];
+    const g = Array.isArray(m.groups) ? m.groups[0] : m.groups;
+    return [{ ...m, entry: e.status as string, groupName: g?.name ?? "" }];
   });
-  const dueCalls = myCalls.filter((c) => decisionDue(c));
+  const entryOf = new Map(myEntries.map((e) => [e.id, e.entry]));
+  const isManager = (m: { group_id: string; created_by: string | null }) => m.created_by === user.id || ["captain", "admin"].includes(byGroup.get(m.group_id)?.role ?? "");
+  const nowMs = Date.now();
+  const notPassed = (m: { played_at: string; time_tbd: boolean }) =>
+    m.time_tbd ? new Date(m.played_at).toISOString().slice(0, 10) >= new Date(nowMs).toISOString().slice(0, 10) : new Date(m.played_at).getTime() > nowMs;
+  const toAnswer = matches.filter((m) => m.status === "gathering" && m.open_to_members && !entryOf.has(m.id) && !m.inRoster && notPassed(m));
+  const invited = myEntries.filter((e) => e.entry === "invited");
+  const waiting = myEntries.filter((e) => e.entry === "reserve" || e.entry === "pending");
+  const dueConfirm = matches.filter(
+    (m) => m.status === "gathering" && isManager(m) && ((m.capacity && m.roster_count >= m.capacity) || matchWhen(m.played_at, true) === matchWhen(new Date(nowMs).toISOString(), true)),
+  );
+  const listingIds = [...new Set((listingRows ?? []).map((l) => l.match_id as string))].filter((id) => !entryOf.has(id) && !matches.some((m) => m.id === id && m.inRoster));
+  const { data: listingOverview } = listingIds.length ? await supabase.rpc("match_overview", { p_ids: listingIds }) : { data: [] };
+  type Overview = { match_id: string; group_id: string; group_name: string; played_at: string; time_tbd: boolean; capacity: number | null; roster_count: number; positions: string[]; my_status: string | null };
+  const lookingFor = ((listingOverview ?? []) as Overview[]).filter((o) => !o.my_status && (o.capacity ?? 0) > o.roster_count);
+
   const toVote = matches.filter((m) => m.status === "voting" && m.inRoster && !voted.has(m.id));
   const upcoming = matches.filter((m) => !toVote.includes(m));
   // Grup satırında "sıradaki maç": grubun ilk planlı maçı
@@ -144,9 +142,19 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
   const tier = tierProgress(best);
   const totalMatches = memberships.reduce((a, m) => a + m.matchesPlayed, 0);
   const firstName = (profile?.display_name ?? "").split(" ")[0];
-  const vsText = (m: { kind: string; opponent_name: string | null }) => (m.kind === "external" ? `vs ${m.opponent_name}` : "kendi aramızda");
+  const vsText = (m: { kind: string; opponent_name: string | null }) => (m.kind === "external" ? `vs ${m.opponent_name ?? "?"}` : "kendi aramızda");
+  const quick = (groupId: string, matchId: string) => (
+    // Ana sayfadan hızlı yanıt; mevki/not için maç ekranı
+    <form action={respondMatch} className="flex gap-2">
+      <input type="hidden" name="groupId" value={groupId} />
+      <input type="hidden" name="matchId" value={matchId} />
+      <input type="hidden" name="returnTo" value="/" />
+      <SubmitButton name="answer" value="yes" pendingLabel="…" className="min-h-10 flex-1">Geliyorum</SubmitButton>
+      <SubmitButton name="answer" value="no" variant="secondary" pendingLabel="…" className="min-h-10 flex-1">Gelemem</SubmitButton>
+    </form>
+  );
 
-  // Yapılacaklar: önem sırasıyla (oy > kadro kararı > teklif > çağrı > bekleyiş)
+  // Yapılacaklar: önem sırasıyla (oy > kesinleştir > teklif > çağrıldın > geliyor musun > adam aranıyor > bekleyiş)
   const actions: { key: string; node: ReactNode }[] = [
     ...[...loanToVote.map((m) => ({ ...m, groupName: m.teamName })), ...toVote.map((m) => ({ ...m, groupName: m.group.name }))].map((m) => ({
       key: `v${m.id}`,
@@ -154,41 +162,67 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
         <ActionItem href={`/g/${m.group_id}/m/${m.id}`} icon="how_to_vote" tone="amber" cta="Oy ver" title="Oyunu bekliyorlar!" sub={`${m.groupName} · ${vsText(m)} · ${formatDate(m.played_at)}`} />
       ),
     })),
-    ...dueCalls.map((c) => ({
-      key: `d${c.id}`,
-      node: <ActionItem href={`/g/${c.group_id}/cagri/${c.id}?kesinlestir=1`} icon="alarm" tone="amber" title="Kadroyu kesinleştir" sub={`${c.group_name} · ${callWhen(c)}`} />,
+    ...dueConfirm.map((m) => ({
+      key: `d${m.id}`,
+      node: (
+        <ActionItem
+          href={`/g/${m.group_id}/m/${m.id}`}
+          icon="alarm"
+          tone="amber"
+          title={m.capacity && m.roster_count >= m.capacity ? "Kadro tamam, maçı kesinleştir" : "Maç bugün, kadro eksik"}
+          sub={`${m.group.name} · ${m.roster_count}/${m.capacity ?? "?"} · ${matchWhen(m.played_at, m.time_tbd)}`}
+        />
+      ),
     })),
     ...[...incoming].map(([groupId, count]) => ({
       key: `t${groupId}`,
       node: <ActionItem href={`/g/${groupId}/teklifler`} icon="handshake" tone="blue" title={`${count} maç teklifi yanıtını bekliyor`} sub={byGroup.get(groupId)?.group.name} />,
     })),
-    ...toAnswer.map((p) => {
-      const g = byGroup.get(p.group_id)!.group;
-      const yes = p.poll_responses.filter((r: { answer: string }) => r.answer === "yes").length;
-      const fill = p.purpose === "fill";
-      const sub = `${g.name} · ${callWhen(p)}${p.venue ? ` · ${p.venue}` : ""} · ${yes} geliyor`;
-      return {
-        key: `p${p.id}`,
-        node: fill ? (
-          <ActionItem href={`/g/${p.group_id}/cagri/${p.id}`} icon="person_search" tone="green" cta="Başvur" title={`${p.capacity} oyuncu aranıyor`} sub={sub} />
-        ) : (
-          <ActionItem href={`/g/${p.group_id}/cagri/${p.id}`} icon="campaign" tone="green" title="Maça geliyor musun?" sub={sub}>
-            {/* Ana sayfadan hızlı yanıt; mevki/not için çağrı sayfası */}
-            <form action={respondPoll} className="flex gap-2">
-              <input type="hidden" name="groupId" value={p.group_id} />
-              <input type="hidden" name="pollId" value={p.id} />
-              <input type="hidden" name="returnTo" value="/" />
-              <SubmitButton name="answer" value="yes" pendingLabel="…" className="min-h-10 flex-1">Geliyorum</SubmitButton>
-              <SubmitButton name="answer" value="no" variant="secondary" pendingLabel="…" className="min-h-10 flex-1">Gelemem</SubmitButton>
-            </form>
-          </ActionItem>
-        ),
-      };
-    }),
+    ...invited.map((e) => ({
+      key: `i${e.id}`,
+      node: (
+        <ActionItem href={`/g/${e.group_id}/m/${e.id}`} icon="mail" tone="green" title="Maça çağrıldın" sub={`${e.groupName} · ${matchWhen(e.played_at, e.time_tbd)}`}>
+          {quick(e.group_id, e.id)}
+        </ActionItem>
+      ),
+    })),
+    ...toAnswer.map((m) => ({
+      key: `a${m.id}`,
+      node: (
+        <ActionItem
+          href={`/g/${m.group_id}/m/${m.id}`}
+          icon="campaign"
+          tone="green"
+          title="Maça geliyor musun?"
+          sub={`${m.group.name} · ${matchWhen(m.played_at, m.time_tbd)}${m.venue ? ` · ${m.venue}` : ""} · ${m.roster_count}/${m.capacity ?? "?"}`}
+        >
+          {quick(m.group_id, m.id)}
+        </ActionItem>
+      ),
+    })),
+    ...lookingFor.map((o) => ({
+      key: `l${o.match_id}`,
+      node: (
+        <ActionItem
+          href={`/g/${o.group_id}/m/${o.match_id}`}
+          icon="person_search"
+          tone="green"
+          cta="Başvur"
+          title={`${(o.capacity ?? 0) - o.roster_count} oyuncu aranıyor`}
+          sub={`${o.group_name} · ${matchWhen(o.played_at, o.time_tbd)}${o.positions.length ? ` · ${o.positions.map((p) => POSITION_NAME[p as Position]).join(", ")}` : ""}`}
+        />
+      ),
+    })),
     ...waiting.map((w) => ({
       key: `w${w.id}`,
       node: (
-        <ActionItem href={`/g/${w.group_id}/cagri/${w.id}`} icon="hourglass_top" tone="neutral" title={w.reserve ? "Yedektesin" : "Başvurun organizatörün kararını bekliyor"} sub={`${w.groupName} · ${callWhen(w)}`} />
+        <ActionItem
+          href={`/g/${w.group_id}/m/${w.id}`}
+          icon="hourglass_top"
+          tone="neutral"
+          title={w.entry === "reserve" ? "Yedektesin" : "Başvurun onay bekliyor"}
+          sub={`${w.groupName} · ${matchWhen(w.played_at, w.time_tbd)}`}
+        />
       ),
     })),
   ];
@@ -202,11 +236,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
       </div>
       <LiveRefresh
         watches={[
-          { table: "poll_responses", filter: `user_id=eq.${user.id}` },
+          { table: "match_entries", filter: `user_id=eq.${user.id}` },
           ...(groupIds.length
             ? [
                 { table: "matches", filter: inList("group_id", groupIds) },
-                { table: "match_polls", filter: inList("group_id", groupIds) },
+                { table: "match_listings", filter: inList("target_group_id", groupIds) },
               ]
             : []),
           ...(adminTeamIds.length

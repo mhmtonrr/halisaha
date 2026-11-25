@@ -3,6 +3,9 @@ import { requireUser } from "@/lib/supabase/server";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { getMemberships } from "@/lib/teams-data";
 import { DmRoom, type DmMessage, type InviteInfo } from "./DmRoom";
+import type { LiveMatch } from "./MatchCardView";
+import { matchOverview } from "@/lib/listings-data";
+import { inList } from "@/lib/live";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PAGE_SIZE = 50;
@@ -41,20 +44,31 @@ export default async function DmPage({ params }: { params: Promise<{ threadId: s
   // Kartlar: güncel durum (açık/kapalı) ve görüntüleyenin üye olduğu gruplar
   const msgs = (messages ?? []) as DmMessage[];
   const ids = (k: "poll_id" | "match_id") => [...new Set(msgs.map((m) => m[k]).filter(Boolean))] as string[];
-  const [pol, mat, memberships] = await Promise.all([
+  const [pol, over, memberships] = await Promise.all([
     ids("poll_id").length ? supabase.from("match_polls").select("id, status").in("id", ids("poll_id")) : { data: [] },
-    ids("match_id").length ? supabase.from("matches").select("id, status").in("id", ids("match_id")) : { data: [] },
+    // Maç kartı canlı: sayaç, durum, benim durumum (0043 match_overview; davetli görebilir)
+    matchOverview(supabase, ids("match_id")),
     msgs.some((m) => m.kind === "match") ? getMemberships(supabase, user.id) : Promise.resolve([]),
   ]);
   const refStatus: Record<string, string> = {};
   for (const r of (pol.data ?? []) as { id: string; status: string }[]) refStatus[`poll:${r.id}`] = r.status;
-  for (const r of (mat.data ?? []) as { id: string; status: string }[]) refStatus[`match:${r.id}`] = r.status;
+  const live: Record<string, LiveMatch> = {};
+  for (const o of over.values()) {
+    refStatus[`match:${o.match_id}`] = o.status;
+    live[o.match_id] = { status: o.status, roster: o.roster_count, capacity: o.capacity, myStatus: o.my_status, playedAt: o.played_at, timeTbd: o.time_tbd };
+  }
 
   await supabase.rpc("mark_dm_read", { p_thread_id: threadId });
 
   return (
     <>
-      <LiveRefresh watches={[{ table: "dm_threads", filter: `id=eq.${threadId}` }, { table: "group_invites", filter: `invitee_id=eq.${user.id}` }]} />
+      <LiveRefresh
+        watches={[
+          { table: "dm_threads", filter: `id=eq.${threadId}` },
+          { table: "group_invites", filter: `invitee_id=eq.${user.id}` },
+          ...(ids("match_id").length ? [{ table: "matches", filter: inList("id", ids("match_id")) }] : []),
+        ]}
+      />
       <DmRoom
         threadId={threadId}
         meId={user.id}
@@ -65,6 +79,7 @@ export default async function DmPage({ params }: { params: Promise<{ threadId: s
         hasMore={(messages?.length ?? 0) === PAGE_SIZE}
         invites={(invites ?? []) as InviteInfo[]}
         refStatus={refStatus}
+        live={live}
         memberGroupIds={memberships.map((m) => m.group.id)}
       />
     </>
