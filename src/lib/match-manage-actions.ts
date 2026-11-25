@@ -95,13 +95,15 @@ export async function removeGuest(fd: FormData) {
   done(back, "cikarildi");
 }
 
-/** Maça katıl: yazılan kod (veya yapıştırılan bağlantı) geçerliyse maç davet sayfasına götürür */
-export async function openMatchByCode(fd: FormData) {
+export type JoinMatchState = { error?: string; code?: string; at?: number };
+
+/** Maça katıl: yazılan kod (veya yapıştırılan bağlantı) geçerliyse maç davet sayfasına götürür; değilse pencerede hata */
+export async function openMatchByCode(_prev: JoinMatchState, fd: FormData): Promise<JoinMatchState> {
   const { supabase } = await requireUser();
   const code = extractInviteCode(str(fd, "code"));
-  if (!code) fail("/mac-katil", "Davet kodunu yaz");
+  if (!code) return { error: "Davet kodunu yaz", at: Date.now() };
   const { data, error } = await supabase.rpc("match_by_code", { p_code: code });
-  if (error || !data) fail(`/mac-katil?kod=${encodeURIComponent(code)}`, "Bu koda ait maç bulunamadı. Seni çağıran kişiden güncel kodu iste.");
+  if (error || !data) return { error: "Bu koda ait maç bulunamadı. Seni çağıran kişiden güncel kodu iste.", code, at: Date.now() };
   redirect(`/davet/m/${encodeURIComponent(code)}`);
 }
 

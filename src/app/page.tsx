@@ -13,7 +13,7 @@ import { ROLE_LABEL, canCreateMatch, getMemberships, type Membership } from "@/l
 import { countIncoming } from "@/lib/challenges-data";
 import { FeaturedSections } from "@/components/FeaturedSections";
 import { ErrorNote, LinkButton, SectionTitle, cx } from "@/components/ui";
-import { JoinMatchCard } from "@/components/JoinMatchCard";
+import { JoinMatchCard, JoinMatchPopup } from "@/components/JoinMatchCard";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { inList } from "@/lib/live";
 import { OvrBadge, initials, tierOf } from "@/components/PlayerCard";
@@ -388,10 +388,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
       <SectionTitle
         action={
           upcoming.length > 0 && (
-            <Link href="/mac-katil" className="flex min-h-9 shrink-0 items-center gap-1 rounded-full border border-primary/40 px-3 text-xs font-bold text-primary">
-              <Icon name="add" className="text-[16px]" />
-              Maça katıl
-            </Link>
+            <JoinMatchPopup />
           )
         }
       >
