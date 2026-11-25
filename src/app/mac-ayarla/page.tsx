@@ -71,7 +71,6 @@ export default async function MatchSetupPage({ searchParams }: { searchParams: P
         homeCity={home?.city ?? ""}
         error={error}
         today={istanbulDate()}
-        maxDay={istanbulDate(Date.now() + 60 * 86400_000)}
         rival={rival && rival.id !== group.id ? { id: rival.id, name: rival.name } : null}
       />
     </main>

@@ -83,7 +83,6 @@ export function MatchSetupForm({
   friends,
   homeCity,
   today,
-  maxDay,
   rival,
   error,
 }: {
@@ -94,7 +93,6 @@ export function MatchSetupForm({
   friends: Friend[];
   homeCity: string;
   today: string;
-  maxDay: string;
   rival: { id: string; name: string } | null;
   error?: string;
 }) {
@@ -103,7 +101,6 @@ export function MatchSetupForm({
   const steps: StepKey[] = team ? ["info", "rival", "roster", "review"] : ["info", "roster", "review"];
 
   const [day, setDay] = useState(today);
-  const [otherDay, setOtherDay] = useState(false);
   const [timeMode, setTimeMode] = useState<"quick" | "other" | "tbd" | null>(null);
   const [time, setTime] = useState("");
   const [size, setSize] = useState(7);
@@ -135,8 +132,8 @@ export function MatchSetupForm({
   // Her adımın "İleri" koşulu ve neden pasif olduğu
   const problem: Record<StepKey, string | null> = {
     info:
-      !day || day < today || day > maxDay
-        ? "Maç gününü seç"
+      !day || day < today
+        ? "Bugün veya sonrası bir gün seç"
         : timeMode === "tbd"
           ? null
           : !hasTime
@@ -181,7 +178,7 @@ export function MatchSetupForm({
     setGuestPos("");
   };
 
-  const quickDays = Array.from({ length: 14 }, (_, i) => addDays(today, i)).filter((d) => d <= maxDay);
+  const quickDays = Array.from({ length: 14 }, (_, i) => addDays(today, i));
   const friendRe = new RegExp(trPattern(friendQuery), "i");
   const shownFriends = friends.filter((f) => selected.has(f.userId) || friendRe.test(f.name));
   const names = [...members, ...friends].filter((p) => selected.has(p.userId)).map((p) => p.name).concat(guests.map((g) => g.name));
@@ -273,15 +270,12 @@ export function MatchSetupForm({
               <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
                 {quickDays.map((d, i) => {
                   const p = dayParts(d);
-                  const on = !otherDay && day === d;
+                  const on = day === d;
                   return (
                     <Chip
                       key={d}
                       on={on}
-                      onClick={() => {
-                        setDay(d);
-                        setOtherDay(false);
-                      }}
+                      onClick={() => setDay(d)}
                       className="flex min-w-16 shrink-0 flex-col items-center justify-center py-2 leading-tight"
                     >
                       <span className="text-[11px] font-medium">{i === 0 ? "Bugün" : i === 1 ? "Yarın" : p.week}</span>
@@ -290,11 +284,9 @@ export function MatchSetupForm({
                     </Chip>
                   );
                 })}
-                <Chip on={otherDay} onClick={() => setOtherDay(true)} className="shrink-0">
-                  Başka gün
-                </Chip>
               </div>
-              {otherDay && <Input type="date" value={day} min={today} max={maxDay} onChange={(e) => setDay(e.target.value)} aria-label="Maç günü" className="mt-2" />}
+              {/* Kartlarda olmayan (daha ileri) bir gün buradan girilir */}
+              <Input type="date" value={day} min={today} onChange={(e) => setDay(e.target.value)} aria-label="Maç günü" className="mt-2" />
             </Group>
 
             <Group label="Saat">

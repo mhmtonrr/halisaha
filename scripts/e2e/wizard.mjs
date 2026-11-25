@@ -8,7 +8,6 @@ const heading = (page, t) => page.waitForSelector(`h2:text-is("${t}")`);
  */
 export async function fillSetup(page, { day, time, size, venue, fee, opponent, appRival, pick = [], guest, submit = true, shot } = {}) {
   await heading(page, "Maç bilgileri");
-  await page.click('button:text-is("Başka gün")');
   await page.fill('input[aria-label="Maç günü"]', day ?? new Date(Date.now() + 3 * 3600e3 + 864e5).toISOString().slice(0, 10));
   if (!time) await page.click('button:text-is("Belli değil")');
   else if (["19:00", "20:00", "21:00", "22:00", "23:00"].includes(time)) await page.click(`button:text-is("${time}")`);
