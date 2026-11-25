@@ -104,7 +104,7 @@ try {
     await page.goto(`${BASE}/g/${gid}/m/${mid}`);
     const boxes = page.locator('input[name="playerId"]');
     // Kadro boşken bölüm zaten açık gelir; doluysa özete tıklayıp aç
-    if (!(await boxes.first().isVisible())) await page.locator("summary:has-text('Kadroya oyuncu ekle')").click();
+    if (!(await boxes.first().isVisible())) await page.locator("summary:has-text('Üye ekle / kadrodan çıkar')").click();
     const n = await boxes.count();
     for (let i = 0; i < n; i++) await boxes.nth(i).check({ force: true });
     await page.click('button:has-text("Seçilenleri ekle")'); await page.waitForLoadState("networkidle");

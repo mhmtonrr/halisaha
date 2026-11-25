@@ -177,11 +177,11 @@ try {
   const memA = await gp(A, mem);
   const kadrodasin = async () => (await notifs(mem, "match")).filter((n) => n.title.includes("Kadrodasın")).length;
   await capP.goto(`${BASE}/g/${A}/m/${mid2}`);
-  await capP.locator("summary:has-text('Kadroya oyuncu ekle')").click();
+  await capP.locator("summary:has-text('Üye ekle / kadrodan çıkar')").click();
   await capP.locator(`form:has(input[name="playerId"][value="${memA}"]) button:has-text("Çıkar")`).click();
   check("elle çıkarılana 'kadrosundan çıkarıldın'", !!(await until(async () => (await notifs(mem, "match")).some((n) => n.title.includes("kadrosundan çıkarıldın")))));
   await capP.goto(`${BASE}/g/${A}/m/${mid2}`);
-  await capP.locator("summary:has-text('Kadroya oyuncu ekle')").click();
+  await capP.locator("summary:has-text('Üye ekle / kadrodan çıkar')").click();
   await capP.locator(`label:has(input[value="${memA}"])`).click();
   await capP.click('button:has-text("Seçilenleri ekle")');
   check("elle eklenene '⚽ Kadrodasın'", !!(await until(async () => (await kadrodasin()) === 1)));

@@ -13,6 +13,7 @@ import { ROLE_LABEL, canCreateMatch, getMemberships, type Membership } from "@/l
 import { countIncoming } from "@/lib/challenges-data";
 import { FeaturedSections } from "@/components/FeaturedSections";
 import { ErrorNote, LinkButton, SectionTitle, cx } from "@/components/ui";
+import { JoinMatchCard } from "@/components/JoinMatchCard";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { inList } from "@/lib/live";
 import { OvrBadge, initials, tierOf } from "@/components/PlayerCard";
@@ -384,9 +385,21 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
         </section>
       )}
 
-      {upcoming.length > 0 && (
-        <>
-          <SectionTitle>Yaklaşan maçlar</SectionTitle>
+      <SectionTitle
+        action={
+          upcoming.length > 0 && (
+            <Link href="/mac-katil" className="flex min-h-9 shrink-0 items-center gap-1 rounded-full border border-primary/40 px-3 text-xs font-bold text-primary">
+              <Icon name="add" className="text-[16px]" />
+              Maça katıl
+            </Link>
+          )
+        }
+      >
+        Yaklaşan maçlar
+      </SectionTitle>
+      {upcoming.length === 0 ? (
+        <JoinMatchCard />
+      ) : (
           <div className="no-scrollbar -mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1">
             {upcoming.map((m) => {
               const days = daysLeftLabel(m.played_at);
@@ -469,7 +482,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
               );
             })}
           </div>
-        </>
       )}
 
       {/* Takımlarım / Gruplarım */}

@@ -85,7 +85,7 @@ try {
   check("A'nın maç ekranında rakip kadro henüz boş", (await A1.locator("text=Buse O.").count()) === 0);
   await B1.goto(`${BASE}/g/${teamB}/m/${mB}`);
   const boxes = B1.locator('input[name="playerId"]');
-  if (!(await boxes.first().isVisible())) await B1.locator("summary:has-text('Kadroya oyuncu ekle')").click();
+  if (!(await boxes.first().isVisible())) await B1.locator("summary:has-text('Üye ekle / kadrodan çıkar')").click();
   for (let i = 0; i < (await boxes.count()); i++) await boxes.nth(i).check();
   await B1.click('button:has-text("Seçilenleri ekle")');
   check("A'nın açık maç ekranında rakip oyuncu yenilenmeden göründü", await appears(A1, "Buse O."));

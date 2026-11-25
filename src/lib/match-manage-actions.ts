@@ -10,6 +10,7 @@ import { groupMemberIds, groupName } from "@/lib/recipients";
 import { POSITIONS, type Position } from "@/lib/data";
 import { matchWhen } from "@/lib/match-rules";
 import { splitTeams } from "@/lib/actions";
+import { extractInviteCode } from "@/lib/invite";
 
 // Yeniden tasarım 4b: maç ekranı yönetimi (kadro, başvuru, ilan, bağlantı, rakip, kesinleştir/ertele/iptal).
 // Yetki hep RPC'de (0042-0044); burada form okunur, bildirim gönderilir.
@@ -92,6 +93,16 @@ export async function removeGuest(fd: FormData) {
   const { error } = await supabase.rpc("remove_match_guest", { p_match: matchId, p_player: str(fd, "playerId") });
   if (error) fail(back, rpcMessage(error, "Misafir çıkarılamadı"));
   done(back, "cikarildi");
+}
+
+/** Maça katıl: yazılan kod (veya yapıştırılan bağlantı) geçerliyse maç davet sayfasına götürür */
+export async function openMatchByCode(fd: FormData) {
+  const { supabase } = await requireUser();
+  const code = extractInviteCode(str(fd, "code"));
+  if (!code) fail("/mac-katil", "Davet kodunu yaz");
+  const { data, error } = await supabase.rpc("match_by_code", { p_code: code });
+  if (error || !data) fail(`/mac-katil?kod=${encodeURIComponent(code)}`, "Bu koda ait maç bulunamadı. Seni çağıran kişiden güncel kodu iste.");
+  redirect(`/davet/m/${encodeURIComponent(code)}`);
 }
 
 /** Yöneten: başvuruyu kabul (yer varsa kadro, yoksa yedek) / ret */

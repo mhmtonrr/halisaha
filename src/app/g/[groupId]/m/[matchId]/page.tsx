@@ -885,7 +885,7 @@ async function PlannedView({
           </details>
 
           <details className="mt-1" open={linked && all.length === 0}>
-            <summary className="cursor-pointer py-2 text-sm text-muted">Kadroya oyuncu ekle / çıkar</summary>
+            <summary className="cursor-pointer py-2 text-sm text-muted">Üye ekle / kadrodan çıkar</summary>
             <Card className="mt-2 space-y-3">
               <ul className="space-y-1">
                 {all.map((p) => (
