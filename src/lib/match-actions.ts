@@ -32,7 +32,7 @@ export async function setupMatch(fd: FormData) {
   const { supabase, user } = await requireUser();
   const groupId = str(fd, "groupId");
   const back = `/mac-ayarla?grup=${encodeURIComponent(groupId)}`;
-  if (!UUID_RE.test(groupId)) fail("/mac-ayarla", "Takım veya grup seç");
+  if (!UUID_RE.test(groupId)) fail("/", "Takım veya grup seç");
   const day = str(fd, "day");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) fail(back, "Maç gününü seç");
   const tbd = str(fd, "timeMode") === "tbd";

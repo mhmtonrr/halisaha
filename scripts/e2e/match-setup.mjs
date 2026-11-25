@@ -116,6 +116,10 @@ try {
   // --- Üye formu açamaz
   await PB.goto(`${BASE}/mac-ayarla?grup=${team}`, { waitUntil: "networkidle" });
   check("yetkisi olmayan üye formdan ana sayfaya yönlenir", !PB.url().includes("/mac-ayarla"));
+
+  // --- Grup parametresi yoksa form açılmaz (ortak sayfa yok)
+  await PO.goto(`${BASE}/mac-ayarla`, { waitUntil: "networkidle" });
+  check("?grup= olmadan ana sayfaya yönlenir", !PO.url().includes("/mac-ayarla"));
 } catch (e) {
   console.log("  ✗ ÇÖKTÜ:", e.message.split("\n")[0]);
   failed++;

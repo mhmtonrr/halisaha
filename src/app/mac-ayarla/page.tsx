@@ -11,7 +11,7 @@ interface ManagedRow {
   groups: G | G[] | null;
 }
 
-/** Tek "Maç ayarla" formu (yeniden tasarım 4a): takım/grup sayfadan gelir (?grup=), maç toplanmaya açılır veya kadro tamsa direkt kurulur */
+/** Tek "Maç ayarla" formu (yeniden tasarım 4a): takım/grup sayfadan gelir (?grup=, yoksa ana sayfaya), maç toplanmaya açılır veya kadro tamsa direkt kurulur */
 export default async function MatchSetupPage({ searchParams }: { searchParams: Promise<{ grup?: string; rakip?: string; error?: string }> }) {
   const { grup, rakip, error } = await searchParams;
   const { supabase, user } = await requireUser();
@@ -30,9 +30,10 @@ export default async function MatchSetupPage({ searchParams }: { searchParams: P
     .sort((a, b) => a.group.name.localeCompare(b.group.name, "tr"));
   if (!managed.length) redirect(`/?error=${encodeURIComponent("Maç ayarlamak için bir takımda veya grupta kaptan, yetkili ya da organizatör olmalısın")}`);
 
-  // Rakip teklifinden gelindiyse sadece takımlar; seçili yer yoksa ilki
-  const pool = rakip ? managed.filter((m) => m.group.kind === "team") : managed;
-  const current = pool.find((m) => m.group.id === grup) ?? pool[0] ?? managed[0];
+  // Sayfa hep bir takım/grup için açılır (?grup=); yoksa veya yetkim yoksa ana sayfaya
+  if (!grup) redirect("/");
+  const current = managed.find((m) => m.group.id === grup);
+  if (!current) redirect(`/?error=${encodeURIComponent("Bu takımda veya grupta maç ayarlama yetkin yok")}`);
   const group = current.group;
   const isAdmin = current.role === "captain" || current.role === "admin";
 
