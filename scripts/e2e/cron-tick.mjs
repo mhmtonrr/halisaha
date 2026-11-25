@@ -40,6 +40,8 @@ try {
   must(await admin.from("match_players").insert({ match_id: M2, player_id: gp[B], team: "A" }));
   // M3: kesin, 3 saat önce oynandı, skor yok → kaptana skor hatırlatması
   const M3 = await mk({ played_at: at(-3 * 3600e3), capacity: 5, status: "planned" });
+  // M4: 3 gün önce oynanmış, skor girilmemiş kesin maç → sonuçsuz kapanır, yönetene haber
+  const M4 = await mk({ played_at: at(-3 * 86400e3), capacity: 5, status: "planned" });
 
   const tick = (auth) => fetch(BASE + "/api/cron/tick", { method: "POST", headers: auth ? { Authorization: `Bearer ${auth}` } : {} });
   check("anahtarsız çağrı reddedilir (401)", (await tick(null)).status === 401);
@@ -54,6 +56,8 @@ try {
   check("yedeğe 'Kadroya alındın' bildirimi", (await tags(C)).includes(`promoted:${M1}`));
   check("saati geçen toplanan maç iptal", must(await admin.from("matches").select("status, cancel_reason").eq("id", M2).single()).status === "cancelled");
   check("iptal kadroya bildirildi", (await tags(B)).includes(`match-cancel:${M2}`));
+  check("2 gün skorsuz maç sonuçsuz kapandı", must(await admin.from("matches").select("status").eq("id", M4).single()).status === "no_result");
+  check("kaptana 'sonuçsuz kapandı' bildirimi", (await tags(A)).includes(`match-no-result:${M4}`));
   check("kaptana skor hatırlatması", (await tags(A)).includes(`score-reminder:1:${M3}`));
   const istHour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Istanbul", hour: "2-digit", hourCycle: "h23" }).format(new Date()));
   const sameDay = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10) === new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10);

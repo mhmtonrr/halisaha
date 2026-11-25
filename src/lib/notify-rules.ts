@@ -297,6 +297,13 @@ export const text = {
     url: `/g/${groupId}`,
     tag: `match-cancel:${matchId}`,
   }),
+  /** Maçı yönetenlere: 2 gün skor girilmedi, maç sonuçsuz kapandı */
+  matchNoResult: (groupName: string, groupId: string, matchId: string, when: string): Content => ({
+    title: "⌛ Maç sonuçsuz kapandı",
+    body: truncate(join(groupName, when, "2 gün içinde skor girilmediği için puanlama yapılmadı"), 300),
+    url: `/g/${groupId}/m/${matchId}`,
+    tag: `match-no-result:${matchId}`,
+  }),
   /** Elle kadrodan çıkarılan oyuncuya */
   removedFromMatch: (groupName: string, groupId: string, matchId: string, when: string): Content => ({
     title: "Maç kadrosundan çıkarıldın",

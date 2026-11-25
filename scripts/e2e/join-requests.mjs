@@ -142,6 +142,14 @@ try {
   await RP.click('button:has-text("Takıma katılma isteği gönder")');
   await RP.waitForURL(/istek=gonderildi/, { timeout: 20000 }); await RP.waitForLoadState("networkidle");
   check("takım sayfasından istek gönderildi", (await body(RP)).includes("İsteğin onay bekliyor") && !!(await admin.from("group_join_requests").select("id").eq("group_id", T).eq("user_id", R.id).eq("status", "pending").maybeSingle()).data);
+
+  // 9) Canlı güncelleme (0048): kaptan İstekler sayfasındayken gelen istek sayfayı yeniler
+  await KP.goto(`${BASE}/g/${T}/istekler`); await KP.waitForLoadState("networkidle"); await sleep(2000);
+  check("takım istekler sayfasında bir istek", (await body(KP)).includes("Rıza Reddedilen") && !(await body(KP)).includes("İsa İstekli"));
+  r = await ci.rpc("request_join", { p_group: T });
+  check("ikinci kişi takıma istek gönderdi", !r.error);
+  await KP.waitForSelector("text=İsa İstekli", { timeout: 15000 }).catch(() => null);
+  check("istekler sayfası yenilemeden güncellendi (Realtime)", (await body(KP)).includes("İsa İstekli"));
   await browser.close();
 } finally {
   for (const id of groupIds) await admin.from("groups").delete().eq("id", id);

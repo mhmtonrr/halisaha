@@ -43,6 +43,8 @@ export async function setupDb() {
     grant select on storage.buckets to authenticated, anon;
   `);
   await db.exec(allMigrations());
+  // Kontrollerdeki current_date İstanbul günü olsun (sunucu istanbul_today() ile karşılaştırır; yoksa 21-24 UTC arası kontroller çöker)
+  await db.exec(`set time zone 'Europe/Istanbul'`);
   return db;
 }
 

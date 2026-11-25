@@ -20,6 +20,7 @@ import { SkillQueueBanner } from "@/components/SkillQueueBanner";
 import { MenuControls } from "@/components/AppMenu";
 import { Icon } from "@/components/Icon";
 import { SubmitButton } from "@/components/SubmitButton";
+import { istanbulDate } from "@/lib/call-rules";
 import { ActionItem } from "@/components/home/ActionItem";
 import { HomeTabs } from "@/components/home/HomeTabs";
 
@@ -67,10 +68,12 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
   const unread = new Map(((unreadRows ?? []) as { group_id: string; unread: number }[]).map((u) => [u.group_id, u.unread]));
 
   const adminTeamIds = memberships.filter((m) => m.group.kind === "team" && m.role !== "member").map((m) => m.group.id);
-  const incoming = await countIncoming(supabase, adminTeamIds);
-  // Yönettiğim gruplardaki bekleyen istekler (katılma, ilan onayı, öneri, başvuru; 0044)
-  const managesAny = memberships.some((m) => m.role !== "member");
-  const { data: pendingRows } = managesAny ? await supabase.rpc("my_pending_counts") : { data: [] };
+  // Yönettiğim gruplardaki bekleyen istekler (katılma, ilan onayı, öneri, başvuru; 0044); teklif sayısıyla aynı anda
+  const managedIds = memberships.filter((m) => m.role !== "member").map((m) => m.group.id);
+  const [incoming, { data: pendingRows }] = await Promise.all([
+    countIncoming(supabase, adminTeamIds),
+    managedIds.length ? supabase.rpc("my_pending_counts") : Promise.resolve({ data: [] }),
+  ]);
   const pendingByGroup = ((pendingRows ?? []) as { group_id: string; group_name: string; joins: number; listings: number; proposals: number; applications: number }[])
     .map((r) => ({
       ...r,
@@ -129,12 +132,12 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
   const isManager = (m: { group_id: string; created_by: string | null }) => m.created_by === user.id || ["captain", "admin"].includes(byGroup.get(m.group_id)?.role ?? "");
   const nowMs = Date.now();
   const notPassed = (m: { played_at: string; time_tbd: boolean }) =>
-    m.time_tbd ? new Date(m.played_at).toISOString().slice(0, 10) >= new Date(nowMs).toISOString().slice(0, 10) : new Date(m.played_at).getTime() > nowMs;
+    m.time_tbd ? istanbulDate(new Date(m.played_at).getTime()) >= istanbulDate(nowMs) : new Date(m.played_at).getTime() > nowMs;
   const toAnswer = matches.filter((m) => m.status === "gathering" && m.open_to_members && !entryOf.has(m.id) && !m.inRoster && notPassed(m));
   const invited = myEntries.filter((e) => e.entry === "invited");
   const waiting = myEntries.filter((e) => e.entry === "reserve" || e.entry === "pending");
   const dueConfirm = matches.filter(
-    (m) => m.status === "gathering" && isManager(m) && ((m.capacity && m.roster_count >= m.capacity) || matchWhen(m.played_at, true) === matchWhen(new Date(nowMs).toISOString(), true)),
+    (m) => m.status === "gathering" && isManager(m) && ((m.capacity && m.roster_count >= m.capacity) || istanbulDate(new Date(m.played_at).getTime()) === istanbulDate(nowMs)),
   );
   const listingIds = [...new Set((listingRows ?? []).map((l) => l.match_id as string))].filter((id) => !entryOf.has(id) && !matches.some((m) => m.id === id && m.inRoster));
   const { data: listingOverview } = listingIds.length ? await supabase.rpc("match_overview", { p_ids: listingIds }) : { data: [] };
@@ -259,6 +262,13 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
             ? [
                 { table: "matches", filter: inList("group_id", groupIds) },
                 { table: "match_listings", filter: inList("target_group_id", groupIds) },
+              ]
+            : []),
+          // Yönettiğim gruplara gelen katılma istekleri ve maç önerileri (yapılacaklar sayacı; 0048)
+          ...(managedIds.length
+            ? [
+                { table: "group_join_requests", filter: inList("group_id", managedIds) },
+                { table: "match_proposals", filter: inList("group_id", managedIds) },
               ]
             : []),
           ...(adminTeamIds.length

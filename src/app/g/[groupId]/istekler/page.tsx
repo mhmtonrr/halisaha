@@ -7,6 +7,7 @@ import { matchWhen } from "@/lib/match-rules";
 import { POSITION_NAME, type Position } from "@/lib/data";
 import { formatRegion } from "@/lib/regions";
 import { Avatar } from "@/components/Avatar";
+import { LiveRefresh } from "@/components/LiveRefresh";
 import { Icon } from "@/components/Icon";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Card, ErrorNote, Header, cx } from "@/components/ui";
@@ -88,6 +89,14 @@ export default async function PendingPage({
 
   return (
     <main>
+      <LiveRefresh
+        watches={[
+          { table: "group_join_requests", filter: `group_id=eq.${groupId}` },
+          { table: "match_listings", filter: `target_group_id=eq.${groupId}` },
+          { table: "match_proposals", filter: `group_id=eq.${groupId}` },
+          { table: "matches", filter: `group_id=eq.${groupId}` },
+        ]}
+      />
       <Header title="İstekler" back={`/g/${groupId}`} />
       <ErrorNote message={error} />
 

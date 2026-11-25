@@ -73,9 +73,17 @@ export async function runTick(now = Date.now()) {
     out.cancelled++;
   }
 
-  // 4) 2 gün skor girilmeyen kesin maç sonuçsuz kapanır (bildirim yok)
+  // 4) 2 gün skor girilmeyen kesin maç sonuçsuz kapanır; maçı yönetenlere (kaptan/yetkili + kuran) haber
   const { data: voided } = await admin.rpc("cron_no_result");
   out.noResult = (voided ?? []).length;
+  const voidedIds = ((voided ?? []) as { match_id: string }[]).map((v) => v.match_id);
+  if (voidedIds.length) {
+    const { data: rows } = await admin.from("matches").select("id, group_id, created_by, played_at, time_tbd").in("id", voidedIds);
+    for (const m of rows ?? []) {
+      const ids = await managers(admin, m.group_id, m.created_by);
+      await notify(ids, "match", text.matchNoResult(await groupName(admin, m.group_id), m.group_id, m.id, whenText(m.played_at, m.time_tbd)));
+    }
+  }
 
   // 5) Maç günü 10:00'dan sonra: kesin maçın kadrosuna "bugün maç var", hâlâ toplanan maçı yönetenlere uyarı
   const ist = istanbulNow(now);
