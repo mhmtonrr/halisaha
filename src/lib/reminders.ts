@@ -4,17 +4,17 @@ import { notify } from "@/lib/notify";
 import { text } from "@/lib/notify-rules";
 
 /**
- * Oylaması önümüzdeki 24 saat içinde kapanacak maçlarda henüz oy vermemiş hesap sahiplerine hatırlatma gönderir.
+ * Oylaması önümüzdeki `windowHours` (varsayılan 6) saat içinde kapanacak maçlarda henüz oy vermemiş hesap sahiplerine hatırlatma gönderir.
  * Her kullanıcı her maç için en fazla 1 hatırlatma alır (aynı etiketli bildirim varsa atlanır).
  */
-export async function sendVoteReminders(now = Date.now()): Promise<{ matches: number; reminded: number }> {
+export async function sendVoteReminders(now = Date.now(), windowHours = 6): Promise<{ matches: number; reminded: number }> {
   const admin = createAdminClient();
   const { data: matches } = await admin
     .from("matches")
     .select("id, group_id, voting_deadline")
     .eq("status", "voting")
     .gt("voting_deadline", new Date(now).toISOString())
-    .lt("voting_deadline", new Date(now + 24 * 3600_000).toISOString())
+    .lt("voting_deadline", new Date(now + windowHours * 3600_000).toISOString())
     .limit(500);
 
   let reminded = 0;

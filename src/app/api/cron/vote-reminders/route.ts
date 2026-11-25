@@ -14,5 +14,5 @@ export async function GET(request: Request) {
     return new Response("Yetkisiz", { status: 401 });
   }
   const finalized = await finalizeExpired();
-  return Response.json({ finalized, ...(await sendVoteReminders()) });
+  return Response.json({ finalized, ...(await sendVoteReminders(Date.now(), 24)) });
 }

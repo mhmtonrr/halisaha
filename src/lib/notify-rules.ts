@@ -218,6 +218,41 @@ export const text = {
     url: `/g/${groupId}`,
     tag: `match-cancel:${matchId}`,
   }),
+  /** Maça 3 saat kala yedekten otomatik kadroya alınana */
+  autoPromoted: (groupName: string, groupId: string, matchId: string, when: string): Content => ({
+    title: "✅ Kadroya alındın",
+    body: truncate(join(groupName, when, "yedekteydin, yer açıldı"), 300),
+    url: `/g/${groupId}/m/${matchId}`,
+    tag: `promoted:${matchId}`,
+  }),
+  /** Maç günü sabahı kadroya */
+  matchToday: (groupName: string, groupId: string, matchId: string, when: string, opponent?: string | null): Content => ({
+    title: "⚽ Bugün maç var",
+    body: truncate(join(groupName, opponent ? `vs ${opponent}` : null, when), 300),
+    url: `/g/${groupId}/m/${matchId}`,
+    tag: `today:${matchId}`,
+  }),
+  /** Maç günü sabahı hâlâ toplanan maçı yönetenlere */
+  gatheringWarning: (groupName: string, groupId: string, matchId: string, roster: number, capacity: number): Content => ({
+    title: "⚠️ Maç bugün ama kadro eksik",
+    body: truncate(join(groupName, `kadro ${roster}/${capacity}`, "kesinleştir, ertele veya iptal et; saat geçerse maç iptal olur"), 300),
+    url: `/g/${groupId}/m/${matchId}`,
+    tag: `gather-warn:${matchId}`,
+  }),
+  /** Skor girilmemiş kesin maçı yönetenlere (maçtan 2 saat sonra ve ertesi gün) */
+  scoreReminder: (groupName: string, groupId: string, matchId: string, second: boolean): Content => ({
+    title: "📝 Maçın skorunu gir",
+    body: truncate(join(groupName, second ? "skor yarın girilmezse maç sonuçsuz kapanır" : "skoru girince oylama açılır"), 300),
+    url: `/g/${groupId}/m/${matchId}`,
+    tag: `score-reminder:${second ? 2 : 1}:${matchId}`,
+  }),
+  /** Kadro tamamlanmadan saati geçen toplanan maç iptal oldu */
+  gatheringExpired: (groupName: string, groupId: string, matchId: string, when: string): Content => ({
+    title: "❌ Maç iptal oldu",
+    body: truncate(join(groupName, when, "kadro tamamlanmadan maç zamanı geçti"), 300),
+    url: `/g/${groupId}`,
+    tag: `match-cancel:${matchId}`,
+  }),
   /** Elle kadrodan çıkarılan oyuncuya */
   removedFromMatch: (groupName: string, groupId: string, matchId: string, when: string): Content => ({
     title: "Maç kadrosundan çıkarıldın",

@@ -18,7 +18,8 @@ src/lib/reliability.ts   Güvenilirlik: oynadığı / (oynadığı + gelmediği)
 src/lib/notify-rules.ts  Bildirim kuralları: kategori/tercih, alıcı planı, sohbet birleştirme, metinler, push sonucu (saf, testli)
 src/lib/notify.ts        notify(): kutuya yaz + web push gönder (service role; asla fırlatmaz); later(): yanıttan sonra çalıştır
 src/lib/recipients.ts    Alıcı bulma: grup üyeleri/yetkilileri, maç kadrosu, bağlı maçlar
-src/lib/reminders.ts     Oylama hatırlatması (cron): kapanmasına <24 saat kalan maçlarda oy vermeyenlere, kişi başı 1
+src/lib/cron-tick.ts     Zamanlanmış işler (/api/cron/tick, 15 dk): yedekten otomatik kadro, toplanan maç iptal, sonuçsuz, bugün maç var, skor/oylama hatırlatması
+src/lib/reminders.ts     Oylama hatırlatması (cron): kapanmasına <6 saat (eski günlük yol 24) kalan maçlarda oy vermeyenlere, kişi başı 1
 src/lib/push-client.ts   Tarayıcı tarafı abonelik yardımcıları; components/PushControls.tsx (izin kartı + profil ayarı)
 public/sw.js             Service worker: push'u gösterir, tıklayınca aynı site içi adresi açar (önbellek yok)
 src/lib/skills.ts        Yetenek itibarı: 12 kategori (saha HIZ/ŞUT/PAS/DRİ/DEF/FİZ, kaleci REF/ATL/HAV/YER/DAĞ/İLT), 1-10 puanlardan 40-99 değer (saf, testli)
@@ -67,8 +68,9 @@ src/lib/authErrors.ts    Supabase Auth hatalarının Türkçesi
 src/lib/supabase/        server.ts (requireUser + karşılama yönlendirmesi), client.ts, admin.ts
 src/middleware.ts        Oturum yenileme, girişsiz yönlendirme, x-pathname başlığı
 src/app/                 Sayfalar (aşağıda)
-supabase/migrations/     0001..0044 SQL (sırayla; hepsi canlıya uygulandı)
+supabase/migrations/     0001..0045 SQL (sırayla; hepsi canlıya uygulandı)
 scripts/db-checks/       PGlite ile RLS/yetki kontrolleri (npm run db:check)
+scripts/setup-cron.mjs   Supabase pg_cron+pg_net ile /api/cron/tick'i 15 dakikada bir çağıran işi kurar/kaldırır (Vault'ta CRON_SECRET)
 scripts/e2e/             Canlı veritabanına karşı Playwright akış testleri
 scripts/perf/ttfb.mjs   Sayfa yanıt süresi ölçümü (geçici kullanıcıyla canlı site, TTFB)
 scripts/recompute-all.ts Tüm ratingleri baştan hesaplar (vite-node ile, aşağıda)
