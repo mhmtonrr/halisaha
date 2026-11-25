@@ -1,0 +1,139 @@
+// 0044: katılma isteği + Keşfet grup listesi + bekleyen istekler + maçtan teklif / karşı teklif / tarih değişikliği.
+import { setupDb } from "./migrations.mjs";
+const db = await setupDb();
+const U = (n) => `0000000${n}-0000-0000-0000-000000000000`;
+for (const n of [1, 2, 3, 4, 5, 6, 7]) await db.exec(`insert into auth.users values ('${U(n)}','u${n}@x','{"full_name":"U${n}"}')`);
+const as = async (n) => { await db.exec(`reset role; delete from auth.current; insert into auth.current values ('${U(n)}'); set role authenticated`); };
+const ok = (l, c) => console.log((c ? "✓ " : "✗ HATA: ") + l);
+const fails = async (sql, args) => { try { await db.query(sql, args); return false; } catch { return true; } };
+const q = async (sql, args) => (await db.query(sql, args)).rows;
+const one = async (sql, args) => (await q(sql, args))[0];
+const role = async (g, n, r) => db.query(`select set_member_role((select id from group_players where group_id=$1 and user_id=$2), $3)`, [g, U(n), r]);
+
+// Topluluk C (u1 kurucu, u2 organizatör), takım T (u3 kaptan, u4 üye), takım R (u5 kaptan); u6, u7 yabancı
+await as(1);
+const C = (await one(`insert into groups (name, created_by, city, district) values ('Lüleburgaz HS','${U(1)}','Kırklareli','Lüleburgaz') returning id`)).id;
+const cc = (await one(`select group_invite_code($1) c`, [C])).c;
+await as(2); await db.query(`select join_group($1)`, [cc]);
+await as(1); await role(C, 2, "organizer");
+await as(3);
+const T = (await one(`insert into groups (name, created_by, kind, city) values ('Kartallar','${U(3)}','team','Kırklareli') returning id`)).id;
+const tc = (await one(`select group_invite_code($1) c`, [T])).c;
+await as(4); await db.query(`select join_group($1)`, [tc]);
+await as(5);
+const R = (await one(`insert into groups (name, created_by, kind, city) values ('Aslanlar','${U(5)}','team','Kırklareli') returning id`)).id;
+
+// --- Keşfet / ayarlar
+await as(6);
+ok("topluluk varsayılan Keşfet'te görünmez", !(await q(`select * from discover_groups()`)).some((r) => r.group_id === C));
+ok("takımlar Keşfet'te listelenir", (await q(`select * from discover_groups(null, null, 'team')`)).length === 2);
+ok("takım varsayılan katılma isteği almaz", (await one(`select accepts_requests from discover_groups() where group_id=$1`, [T])).accepts_requests === false);
+ok("görünmeyen topluluğa istek gönderilemez", await fails(`select request_join($1)`, [C]));
+ok("kapalı takıma istek gönderilemez", await fails(`select request_join($1)`, [T]));
+await as(2);
+ok("organizatör ayarı değiştiremez", await fails(`select set_group_discovery($1, true, null)`, [C]));
+await as(1);
+await db.query(`select set_group_discovery($1, true, null)`, [C]);
+await as(6);
+const disc = await one(`select * from discover_groups('Kırklareli', 'Lüleburgaz') where group_id=$1`, [C]);
+ok("topluluk açılınca listelenir, varsayılan istek alır, üye sayısı 2", !!disc && disc.accepts_requests === true && disc.member_count === 2);
+ok("liste davet kodu vermez", disc.invite_code === undefined);
+ok("ilçe süzgeci çalışır", (await q(`select * from discover_groups('Kırklareli', 'Babaeski')`)).length === 0);
+ok("Keşfet'te görünse de grup tablosu açılmaz", (await q(`select 1 from groups where id=$1`, [C])).length === 0);
+
+// --- İstek
+const RQ = (await one(`select request_join($1, 'Merhaba, katılabilir miyim?') id`, [C])).id;
+ok("ikinci bekleyen istek gönderilemez", await fails(`select request_join($1)`, [C]));
+ok("istek sahibi isteğini görür", (await q(`select 1 from group_join_requests where id=$1`, [RQ])).length === 1);
+await as(7);
+ok("başkası isteği görmez", (await q(`select 1 from group_join_requests where id=$1`, [RQ])).length === 0);
+await as(2);
+ok("organizatör katılma isteğine karar veremez", await fails(`select decide_join_request($1, true)`, [RQ]));
+ok("organizatör bekleyenlerde katılma isteğini görmez", (await one(`select pending_requests($1) j`, [C])).j.joins.length === 0);
+await as(1);
+ok("kurucu bekleyenlerde isteği görür", (await one(`select pending_requests($1) j`, [C])).j.joins[0].message.startsWith("Merhaba"));
+ok("ana sayfa sayacı 1", (await one(`select joins from my_pending_counts() where group_id=$1`, [C])).joins === 1);
+await db.query(`select decide_join_request($1, true)`, [RQ]);
+await as(6);
+ok("kabul → üye", (await one(`select is_group_member($1) m`, [C])).m === true);
+ok("üye olunca tekrar istek gönderilemez", await fails(`select request_join($1)`, [C]));
+await as(7);
+const RQ2 = (await one(`select request_join($1) id`, [C])).id;
+await as(1);
+await db.query(`select decide_join_request($1, false)`, [RQ2]);
+await as(7);
+ok("reddedilen bir hafta tekrar gönderemez", await fails(`select request_join($1)`, [C]));
+ok("doğrudan yazma yok", await fails(`insert into group_join_requests (group_id, user_id) values ($1, $2)`, [C, U(7)]));
+await as(3);
+await db.query(`select set_group_discovery($1, null, true)`, [T]);
+await as(7);
+const RQ3 = (await one(`select request_join($1) id`, [T])).id;
+await db.query(`select cancel_join_request($1)`, [RQ3]);
+ok("istek geri çekilir", (await one(`select status from group_join_requests where id=$1`, [RQ3])).status === "cancelled");
+
+// --- Bekleyen istekler: ilan onayı + başvurular
+await as(2);
+const M = (await one(`select create_match_v2($1, current_date + 3, null, 5::smallint, 'internal', null, null, null, 4::smallint) id`, [C])).id;
+await as(1);
+await db.query(`select join_group($1)`, [tc]);
+await as(3);
+const TM = (await one(`select create_match_v2($1, current_date + 3, null, 5::smallint, 'external') id`, [T])).id;
+await as(1);
+// u1 T'de sıradan üye; T'nin maçı için C'ye ilan açamaz (T'de yetkisi yok) — u3 C üyesi değil; u2 organizatörle C'de ilan
+ok("maçın takımında yetkisi olmayan ilan açamaz", await fails(`select create_listing($1, $2)`, [TM, C]));
+await as(1);
+const L = (await one(`select create_listing($1) id`, [M])).id;
+await as(6);
+await db.exec(`reset role`);
+await db.query(`update group_players set left_at = now() where group_id=$1 and user_id=$2`, [C, U(6)]);
+await as(6);
+await db.query(`select apply_match($1, $2)`, [M, L]);
+await as(2);
+ok("maçı kuran organizatör başvuruyu bekleyenlerde görür", (await one(`select pending_requests($1) j`, [C])).j.applications.length === 1);
+ok("organizatörün sayacında başvuru 1", (await one(`select applications from my_pending_counts() where group_id=$1`, [C])).applications === 1);
+await as(4);
+ok("sıradan üye bekleyenleri göremez", await fails(`select pending_requests($1)`, [T]));
+
+// --- Teklif: maçtan, karşı teklif, kabul
+await as(4);
+ok("sıradan üye teklif gönderemez", await fails(`select create_challenge_v2($1, $2)`, [TM, R]));
+await as(3);
+ok("kendi takımına teklif gönderilemez", await fails(`select create_challenge_v2($1, $2)`, [TM, T]));
+const CH = (await one(`select create_challenge_v2($1, $2, 'Cuma maç?') id`, [TM, R])).id;
+ok("teklif maçın tarihini alır, sıra rakipte", (await one(`select awaiting_group_id, proposed_tbd from match_challenges where id=$1`, [CH])).awaiting_group_id === R);
+ok("aynı maçtan ikinci teklif gönderilemez", await fails(`select create_challenge_v2($1, $2)`, [TM, R]));
+ok("sırası olmayan gönderen kabul edemez", await fails(`select respond_challenge($1, true)`, [CH]));
+await as(5);
+await db.query(`select counter_challenge($1, current_date + 4, time '21:00', 'Yeni Saha')`, [CH]);
+ok("karşı teklif: sıra gönderende, saat belli", (await one(`select awaiting_group_id, proposed_tbd, venue from match_challenges where id=$1`, [CH])).awaiting_group_id === T);
+ok("karşı teklif yapan artık kabul edemez", await fails(`select respond_challenge($1, true)`, [CH]));
+await as(3);
+const myM = (await one(`select respond_challenge($1, true) id`, [CH])).id;
+ok("gönderen karşı teklifi kabul eder → kendi maçı döner", myM === TM);
+await db.exec("reset role");
+const tm = await one(`select opponent_group_id, opponent_name, challenge_id, time_tbd, venue from matches where id=$1`, [TM]);
+ok("bizim maça rakip bağlandı ve yeni tarih yazıldı", tm.opponent_group_id === R && tm.opponent_name === "Aslanlar" && tm.time_tbd === false && tm.venue === "Yeni Saha");
+const rm = await one(`select status::text s, created_by, capacity, open_to_members from matches where challenge_id=$1 and group_id=$2`, [CH, R]);
+ok("rakibe toplanan maç açıldı (karşı teklifi yapan adına)", rm.s === "gathering" && rm.created_by === U(5) && rm.capacity === 5 && rm.open_to_members === true);
+
+// --- Kesinleştirme ve tarih değişikliği
+await as(4);
+await db.query(`select respond_match($1, 'yes')`, [TM]);
+await as(3);
+const at = (await one(`select played_at from matches where id=$1`, [TM])).played_at;
+ok("bağlı maç farklı saatle kesinleşmez", await fails(`select confirm_match($1, $2::timestamptz + interval '1 hour')`, [TM, at]));
+await db.query(`select confirm_match($1, $2)`, [TM, at]);
+ok("bağlı maç anlaşılan saatle kesinleşir", (await one(`select status::text s from matches where id=$1`, [TM])).s === "planned");
+ok("bağlı maç tek taraflı ertelenemez", await fails(`select reschedule_match($1, current_date + 5, time '20:00')`, [TM]));
+ok("kesin maç saatsiz tarihe çekilemez", await fails(`select propose_reschedule($1, current_date + 5, null)`, [CH]));
+await db.query(`select propose_reschedule($1, current_date + 5, time '20:00')`, [CH]);
+ok("öneren kendi önerisini onaylayamaz", await fails(`select respond_reschedule($1, true)`, [CH]));
+await as(4);
+ok("sıradan üye tarih değişikliği öneremez", await fails(`select propose_reschedule($1, current_date + 6, time '20:00')`, [CH]));
+await as(5);
+await db.query(`select respond_reschedule($1, true)`, [CH]);
+await db.exec("reset role");
+const both = await q(`select (played_at at time zone 'Europe/Istanbul')::time t, free_withdraw_until, status::text s from matches where challenge_id=$1`, [CH]);
+ok("onaylanınca iki maçın saati değişir", both.length === 2 && both.every((r) => r.t === "20:00:00"));
+ok("kesin maçta 24 saat serbest çekilme başlar, toplanan maçta başlamaz", both.find((r) => r.s === "planned").free_withdraw_until !== null && both.find((r) => r.s === "gathering").free_withdraw_until === null);
+ok("bekleyen değişiklik temizlenir", (await one(`select pending_at from match_challenges where id=$1`, [CH])).pending_at === null);

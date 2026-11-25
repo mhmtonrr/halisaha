@@ -59,7 +59,7 @@ export async function getChallenges(supabase: SupabaseClient, groupId: string): 
       `id, proposed_at, venue, fee_note, message, team_size, status, created_at,
        from_group:groups!match_challenges_from_group_id_fkey(${TEAM_COLS}),
        to_group:groups!match_challenges_to_group_id_fkey(${TEAM_COLS}),
-       matches(id, group_id, status)`,
+       matches!matches_challenge_id_fkey(id, group_id, status)`,
     )
     .or(`from_group_id.eq.${groupId},to_group_id.eq.${groupId}`)
     .order("created_at", { ascending: false })
