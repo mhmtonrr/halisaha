@@ -3,6 +3,7 @@
 import { createRequire } from "module";
 import fs from "fs";
 import { removeTestUsers } from "./cleanup.mjs";
+import { fillSetup } from "./wizard.mjs";
 import os from "os";
 import path from "path";
 const PROJ = process.cwd();
@@ -102,10 +103,7 @@ try {
   check("üye grubu sessize aldı", m.muted === true);
   const since = new Date().toISOString();
   await oP.goto(`${BASE}/mac-ayarla?grup=${C}`, { waitUntil: "networkidle" });
-  await oP.fill('input[name="day"]', trDate(3));
-  await oP.check("text=Saat belli değil");
-  await oP.click('button:has-text("Maçı ayarla")');
-  await oP.waitForURL(/\/m\/[0-9a-f-]{36}/, { timeout: 20000 });
+  await fillSetup(oP, { day: trDate(3) });
   await sleep(4000);
   const got = async (u) => ((await admin.from("notifications").select("*", { count: "exact", head: true }).eq("user_id", u.id).eq("type", "match").like("title", "%Maç ayarlanıyor%").gt("created_at", since)).count ?? 0) > 0;
   check("sessize almayan üyeye yeni maç duyurusu gitti", await got(A));

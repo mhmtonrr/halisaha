@@ -1,6 +1,7 @@
 import { createRequire } from "module";
 import fs from "fs";
 import { removeTestUsers } from "./cleanup.mjs";
+import { fillSetup } from "./wizard.mjs";
 const PROJ = process.cwd();
 const require = createRequire(PROJ + "/package.json");
 const { createClient } = require("@supabase/supabase-js");
@@ -59,7 +60,7 @@ try {
   // Etkinlik kartı: kurucu maç ayarlayınca sohbete düşer (0042: "📣 Maç ayarlanıyor: <tarih>")
   const A2 = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
   await A2.context().addCookies(await A.context().cookies());
-  await A2.goto(`${BASE}/mac-ayarla?grup=${gid}`); await A2.check("text=Saat belli değil"); await A2.fill('input[name="venue"]', "Petroller"); await A2.click('button:has-text("Maçı ayarla")'); await A2.waitForURL(/\/m\/[0-9a-f-]+/);
+  await A2.goto(`${BASE}/mac-ayarla?grup=${gid}`); await fillSetup(A2, { venue: "Petroller" });
   await B.waitForSelector("text=📣 Maç ayarlanıyor:", { timeout: 10000 });
   log("maç ayarlanınca sohbete etkinlik kartı düştü ✓ (B canlı gördü)");
 

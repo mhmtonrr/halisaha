@@ -21,6 +21,7 @@ export function RegionSelect({
   anyLabel,
   showLabels = true,
   onChangeSubmit,
+  onValue,
 }: {
   defaultCity?: string | null;
   defaultDistrict?: string | null;
@@ -32,6 +33,8 @@ export function RegionSelect({
   showLabels?: boolean;
   /** Seçim değişince formu gönder (filtreler için) */
   onChangeSubmit?: boolean;
+  /** Seçim değişince değerleri bildir (formsuz, istemci tarafı arama) */
+  onValue?: (city: string, district: string) => void;
 }) {
   const [city, setCity] = useState(defaultCity ?? "");
   // Eski serbest metin kayıtlar ("kadıköy") listedeki resmi yazımla eşleştirilir
@@ -53,6 +56,7 @@ export function RegionSelect({
           onChange={(e) => {
             setCity(e.target.value);
             setDistrict("");
+            onValue?.(e.target.value, "");
             submit(e.target);
           }}
           className={select}
@@ -81,6 +85,7 @@ export function RegionSelect({
           disabled={!city}
           onChange={(e) => {
             setDistrict(e.target.value);
+            onValue?.(city, e.target.value);
             submit(e.target);
           }}
           className={cx(select)}

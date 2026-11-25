@@ -64,10 +64,12 @@ export function SectionTitle({ children, action }: { children: ReactNode; action
   );
 }
 
-export function Header({ title, back, right }: { title: ReactNode; back?: string; right?: ReactNode }) {
+/** `leading`: geri okunun yerine geçen özel düğme (ör. sihirbazda önceki adım) */
+export function Header({ title, back, right, leading }: { title: ReactNode; back?: string; right?: ReactNode; leading?: ReactNode }) {
   return (
     <header className="flex items-center gap-3 py-4">
-      {back && (
+      {leading}
+      {back && !leading && (
         <BackLink fallback={back}>
           <Icon name="arrow_back" className="text-[22px]" />
         </BackLink>

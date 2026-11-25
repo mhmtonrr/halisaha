@@ -5,6 +5,7 @@
 import { createRequire } from "module";
 import fs from "fs";
 import { removeTestUsers } from "./cleanup.mjs";
+import { fillSetup } from "./wizard.mjs";
 import os from "os";
 import path from "path";
 const PROJ = process.cwd();
@@ -94,10 +95,7 @@ try {
 
   // 5) Maç ayarla (0042): gruba duyurulan toplanan maç → üyelere "Maç ayarlanıyor" (açan hariç)
   await capP.goto(`${BASE}/mac-ayarla?grup=${G}`);
-  await capP.fill('input[name="day"]', trDate(2));
-  await capP.check("text=Saat belli değil");
-  await capP.fill('input[name="venue"]', "Bildirim Sahası");
-  await capP.click('button:has-text("Maçı ayarla")'); await capP.waitForURL(/\/m\/[0-9a-f-]+/);
+  await fillSetup(capP, { day: trDate(2), venue: "Bildirim Sahası" });
   const gathering = async (u) => (await notifs(u, "match")).filter((n) => n.title.includes("Maç ayarlanıyor"));
   check("maç ayarla: iki üyeye 'Maç ayarlanıyor' bildirimi", !!(await until(async () => (await gathering(mem)).length === 1 && (await gathering(apl)).length === 1)));
   check("maçı ayarlayana bildirim yok", (await gathering(cap)).length === 0);

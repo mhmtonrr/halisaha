@@ -4,6 +4,7 @@
 import { createRequire } from "module";
 import fs from "fs";
 import { removeTestUsers } from "./cleanup.mjs";
+import { fillSetup, submitSetup } from "./wizard.mjs";
 const PROJ = process.cwd();
 const require = createRequire(PROJ + "/package.json");
 const { createClient } = require("@supabase/supabase-js");
@@ -18,16 +19,22 @@ const check = (label, cond) => { console.log(cond ? "  ✓" : "  ✗ HATA:", lab
 const must = ({ data, error }) => { if (error) throw new Error(error.message); return data; };
 const users = []; let browser;
 try {
-  for (const [i, n] of ["Onur Kaptan", "Cagatay Kesin", "Berk Uye", "Atakan Uye", "Bartu Uye"].entries()) {
+  for (const [i, n] of ["Onur Kaptan", "Cagatay Kesin", "Berk Uye", "Atakan Uye", "Bartu Uye", "Faruk Arkadas", "Rakip Kaptan"].entries()) {
     const email = `e2e-setup-${Date.now()}-${i}@example.com`, password = "Sifre-" + Math.random().toString(36).slice(2, 8) + "9";
     const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name: n } });
     if (error) throw error;
     await admin.from("profiles").update({ city: "Kırklareli", preferred_position: "MID", onboarded_at: new Date().toISOString() }).eq("id", data.user.id);
     users.push({ id: data.user.id, email, password, name: n });
   }
-  const [O, C, B, A, T] = users;
+  const [O, C, B, A, T, F, R] = users;
   const team = must(await admin.from("groups").insert({ name: "Setup Takimi", kind: "team", created_by: O.id, city: "Kırklareli" }).select("id").single()).id;
   for (const u of [C, B, A, T]) must(await admin.from("group_players").insert({ group_id: team, user_id: u.id, display_name: u.name, role: "member" }));
+
+  // Faruk takım dışı arkadaş; Rakip Kaptan uygulamadaki rakip takımın kurucusu
+  const [ua, ub] = [O.id, F.id].sort();
+  must(await admin.from("friendships").insert({ user_a: ua, user_b: ub, requested_by: O.id, status: "accepted" }).select("id"));
+  const rivalName = `Rakip Takim ${Date.now()}`;
+  const rivalId = must(await admin.from("groups").insert({ name: rivalName, kind: "team", created_by: R.id, city: "Kırklareli" }).select("id").single()).id;
 
   browser = await chromium.launch();
   const login = async (u) => {
@@ -44,22 +51,23 @@ try {
   await PO.goto(`${BASE}/g/${team}/matches/new`, { waitUntil: "networkidle" });
   check("eski 'Maç kur' adresi yeni forma yönlenir", PO.url().includes("/mac-ayarla?grup=" + team));
 
-  // --- Form: 5v5 (kadro 5), saat belli değil, kendisi + Çağatay kesin + misafir, takıma duyur
-  await PO.check('text=Saat belli değil');
-  await PO.selectOption('select[name="size"]', "5");
-  await PO.fill('input[name="venue"]', "Petroller");
-  await PO.click(`button:has-text("${C.name}")`);
-  await PO.fill('input[aria-label="Misafir adı"]', "Çağatayın Arkadaşı");
-  await PO.selectOption('select[aria-label="Misafir mevkisi"]', "FWD");
-  await PO.click('button:has-text("Ekle")');
-  check("sayaç 3/5, 2 kişi eksik", (await PO.locator("text=Kadro 3/5").count()) === 1 && (await PO.locator("text=2 kişi eksik").count()) === 1);
-  check("düğme 'Maçı ayarla' (toplanmaya açılır)", (await PO.locator('button:has-text("Maçı ayarla")').count()) === 1);
-  await PO.screenshot({ path: `${SHOTS}/setup-form.png`, fullPage: true });
-  await PO.click('button:has-text("Maçı ayarla")');
-  await PO.waitForURL(/\/m\//, { timeout: 30000 });
+  // --- Sihirbaz: 5v5 (kadro 5), saat belli değil, kendisi + Çağatay + misafir, takıma duyur
+  await PO.goto(`${BASE}/mac-ayarla?grup=${team}`, { waitUntil: "networkidle" });
+  const next = PO.locator('button:text-is("İleri")');
+  check("saat seçilmeden 'İleri' pasif", await next.isDisabled());
+  check("alt menü gizli", (await PO.locator('nav a[href="/kesfet"]').count()) === 0);
+  await PO.click('button:text-is("Belli değil")');
+  await next.click();
+  await PO.waitForSelector('h2:text-is("Rakip")');
+  await PO.goBack();
+  await PO.waitForSelector('h2:text-is("Maç bilgileri")');
+  check("telefonun geri tuşu önceki adıma döner, seçim korunur", (await PO.locator('button:text-is("Belli değil")').getAttribute("aria-pressed")) === "true");
+  await fillSetup(PO, { size: 5, venue: "Petroller", fee: 150, pick: [C.name], guest: { name: "Çağatayın Arkadaşı", position: "FWD" }, submit: false, shot: (n) => PO.screenshot({ path: `${SHOTS}/setup-${n}.png` }) });
+  check("özet: 3/5, rakip belli değil, kişi başı ücret", (await PO.locator("text=Gelenler 3/5").count()) === 1 && (await PO.locator("text=Kişi başı 150 TL").count()) === 1);
+  await submitSetup(PO);
   const matchId = PO.url().split("/m/")[1].split("?")[0];
-  const m = must(await admin.from("matches").select("status, capacity, roster_count, time_tbd, open_to_members, venue").eq("id", matchId).single());
-  check("maç toplanıyor açıldı (3/5, saat belli değil, duyurulu)", m.status === "gathering" && m.capacity === 5 && m.roster_count === 3 && m.time_tbd && m.open_to_members && m.venue === "Petroller");
+  const m = must(await admin.from("matches").select("status, capacity, roster_count, time_tbd, open_to_members, venue, fee_per_person").eq("id", matchId).single());
+  check("maç toplanıyor açıldı (3/5, saat belli değil, duyurulu)", m.status === "gathering" && m.capacity === 5 && m.roster_count === 3 && m.time_tbd && m.open_to_members && m.venue === "Petroller" && m.fee_per_person === 150);
   check("maç ekranında 'Toplanıyor' ve 3/5", (await PO.locator("text=Toplanıyor").count()) >= 1 && (await PO.locator("text=3/5").count()) >= 1);
   check("maç ekranında 'Maça çağır' arkadaş listesine gider", (await PO.locator(`a[href="/davet/gonder?tur=match&ref=${matchId}"]`).count()) === 1);
   await PO.screenshot({ path: `${SHOTS}/setup-gathering.png`, fullPage: true });
@@ -98,20 +106,29 @@ try {
   await PO.goto(`${BASE}/`, { waitUntil: "networkidle" });
   check("ana sayfa yaklaşan maçlarda listelenir", (await PO.locator(`a[href="/g/${team}/m/${matchId}"]`).count()) >= 1);
 
-  // --- Direkt kesin: kadro 2, kendisi + Çağatay, saat ve rakip belli
+  // --- Direkt kesin: 5 kişi (takım dışı arkadaş dahil), saat ve rakip adı belli
   await PO.goto(`${BASE}/mac-ayarla?grup=${team}`, { waitUntil: "networkidle" });
-  await PO.fill('input[aria-label="Saat"]', "21:00");
-  const tomorrow = new Date(Date.now() + 3 * 3600e3 + 864e5).toISOString().slice(0, 10);
-  await PO.fill('input[name="day"]', tomorrow);
-  await PO.fill('input[aria-label="Kadro sayısı"]', "2");
-  await PO.click('label:has-text("İsim yaz")');
-  await PO.fill('input[aria-label="Rakip adı"]', "Yıldızspor");
-  await PO.click(`button:has-text("${C.name}")`);
-  check("kadro tam + saat + rakip → düğme 'Maçı kur'", (await PO.locator('button:has-text("Maçı kur")').count()) === 1);
-  await PO.click('button:has-text("Maçı kur")');
-  await PO.waitForURL(/\/m\//, { timeout: 30000 });
-  const d = must(await admin.from("matches").select("status, opponent_name").eq("id", PO.url().split("/m/")[1].split("?")[0]).single());
-  check("anlaşılmış maç direkt kesin açıldı", d.status === "planned" && d.opponent_name === "Yıldızspor");
+  await fillSetup(PO, { time: "21:00", size: 5, opponent: "Yıldızspor", pick: [C.name, B.name, A.name, F.name], submit: false });
+  check("kadro tam + saat + rakip → düğme 'Maçı kur'", (await PO.locator('button:text-is("Maçı kur")').count()) === 1);
+  await submitSetup(PO);
+  const directId = PO.url().split("/m/")[1].split("?")[0];
+  const d = must(await admin.from("matches").select("status, opponent_name, roster_count").eq("id", directId).single());
+  check("anlaşılmış maç direkt kesin açıldı", d.status === "planned" && d.opponent_name === "Yıldızspor" && d.roster_count === 5);
+  check("takım dışı arkadaş kadroda", must(await admin.from("match_entries").select("status").eq("match_id", directId).eq("user_id", F.id))[0]?.status === "in");
+
+  // --- Uygulamadaki rakip: aramayla seç → teklif gider
+  await PO.goto(`${BASE}/mac-ayarla?grup=${team}`, { waitUntil: "networkidle" });
+  await fillSetup(PO, { time: "20:00", fee: 200, appRival: rivalName, shot: (n) => PO.screenshot({ path: `${SHOTS}/setup-app-${n}.png` }) });
+  const offerMatch = PO.url().split("/m/")[1].split("?")[0];
+  const ch = must(await admin.from("match_challenges").select("to_group_id, status, fee_note").eq("from_match_id", offerMatch).single());
+  check("uygulamadaki rakibe teklif gitti (ücret notuyla)", ch.to_group_id === rivalId && ch.status === "pending" && ch.fee_note === "Kişi başı 200 TL");
+
+  // --- Keşfet "Meydan Oku": rakip hazır seçili gelir
+  await PO.goto(`${BASE}/mac-ayarla?grup=${team}&rakip=${rivalId}`, { waitUntil: "networkidle" });
+  await PO.click('button:text-is("Belli değil")');
+  await PO.click('button:text-is("İleri")');
+  await PO.waitForSelector('h2:text-is("Rakip")');
+  check("Meydan Oku ile rakip seçili gelir", (await PO.locator(`text=${rivalName}`).count()) === 1 && (await PO.locator('button:text-is("Değiştir")').count()) === 1);
 
   // --- Üye formu açamaz
   await PB.goto(`${BASE}/mac-ayarla?grup=${team}`, { waitUntil: "networkidle" });

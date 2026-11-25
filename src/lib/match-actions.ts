@@ -40,9 +40,12 @@ export async function setupMatch(fd: FormData) {
   if (!tbd && !/^\d{2}:\d{2}$/.test(time)) fail(back, "Saati seç veya \"Sonra belirlenecek\"i işaretle");
   const size = Number(fd.get("size"));
   if (!isValidSize(size)) fail(back, "Kaç kişilik olduğunu seç");
-  const capRaw = Number(fd.get("capacity"));
+  const feeRaw = str(fd, "fee");
+  const fee = feeRaw ? Number(feeRaw) : null;
+  if (fee !== null && !(Number.isInteger(fee) && fee >= 1 && fee <= 100000)) fail(back, "Saha ücreti 1 ile 100000 TL arasında olmalı");
   const kind = str(fd, "kind") === "internal" ? "internal" : "external";
   const rival = str(fd, "rivalTeam");
+  // Üyeler + takım dışı arkadaşlar; kendim ayrıca withMe ile
   const confirmed = fd.getAll("confirmed").map(String).filter((id) => UUID_RE.test(id) && id !== user.id);
   const guestNames = fd.getAll("guestName").map((v) => String(v).trim());
   const guestPositions = fd.getAll("guestPos").map(String);
@@ -59,11 +62,12 @@ export async function setupMatch(fd: FormData) {
     p_opponent: kind === "external" && !rival ? str(fd, "opponent").slice(0, 60) || null : null,
     p_venue: str(fd, "venue").slice(0, 80) || null,
     p_note: str(fd, "note").slice(0, 300) || null,
-    p_capacity: Number.isInteger(capRaw) && capRaw >= 2 && capRaw <= 30 ? capRaw : null,
+    // Kadro sayısı formattan gelir (takım: her taraf, grup: iki taraf) → p_capacity gönderilmez
     p_with_me: fd.get("withMe") === "1",
     p_confirmed: confirmed,
     p_guests: guests,
     p_announce: fd.get("announce") === "1",
+    p_fee: fee,
   });
   if (error || !matchId) fail(back, rpcMessage(error, "Maç ayarlanamadı"));
   const id = matchId as string;
@@ -77,7 +81,7 @@ export async function setupMatch(fd: FormData) {
 
   let challengeError: string | null = null;
   if (kind === "external" && UUID_RE.test(rival)) {
-    const { error: chErr } = await supabase.rpc("create_challenge_v2", { p_match: id, p_to: rival, p_message: null, p_fee: null });
+    const { error: chErr } = await supabase.rpc("create_challenge_v2", { p_match: id, p_to: rival, p_message: null, p_fee: fee ? `Kişi başı ${fee} TL` : null });
     if (chErr) challengeError = rpcMessage(chErr, "Teklif gönderilemedi");
   }
 

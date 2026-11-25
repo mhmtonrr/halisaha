@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { cx } from "./ui";
 import { NotificationBadge } from "./NotificationBadge";
 
-const HIDDEN = ["/login", "/auth", "/hosgeldin", "/privacy", "/sifre-yenile"];
+const HIDDEN = ["/login", "/auth", "/hosgeldin", "/privacy", "/sifre-yenile", "/mac-ayarla"];
 
 const items = [
   {
@@ -56,7 +56,7 @@ const items = [
 
 export function BottomNav() {
   const path = usePathname();
-  // Sohbet ekranında yazma kutusu alt kısmı kullanır
+  // Sohbette yazma kutusu, Maç ayarla'da Geri/İleri çubuğu alt kısmı kullanır
   if (HIDDEN.some((h) => path.startsWith(h)) || (path.endsWith("/sohbet") && path !== "/sohbet") || /^\/sohbet\/[^/]+/.test(path)) return null;
   return (
     <nav className="fixed inset-x-0 bottom-0 z-20 bg-pitch-950/85 pb-[env(safe-area-inset-bottom)] shadow-[0_-2px_12px_rgba(0,0,0,0.35)] backdrop-blur-xl">

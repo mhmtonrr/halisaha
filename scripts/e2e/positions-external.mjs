@@ -1,6 +1,7 @@
 import { createRequire } from "module";
 import fs from "fs";
 import { removeTestUsers } from "./cleanup.mjs";
+import { fillSetup } from "./wizard.mjs";
 const PROJ = process.cwd();
 const require = createRequire(PROJ + "/package.json");
 const { createClient } = require("@supabase/supabase-js");
@@ -74,15 +75,13 @@ try {
   const { data: gp } = await admin.from("group_players").select("display_name, position").eq("group_id", groupId);
   log("katılınca mevkiler gruba geldi:", gp.map((p) => `${p.display_name}=${p.position}`).join(", "));
 
-  // "Maç ayarla" formu (yeniden tasarım 4a): yarın 21:00, kadro = seçilenler + ben → kadro tam: "Maçı kur" (direkt kesin)
+  // Maç ayarla sihirbazı: yarın 21:00, seçilenler + ben; kadro formattan geldiği için eksik açılır, sonra kesinleştirilir
   const setup = async (gid, others, opponent) => {
     await A.page.goto(`${BASE}/mac-ayarla?grup=${gid}`, { waitUntil: "networkidle" });
-    await A.page.fill('input[name="day"]', new Date(Date.now() + 3 * 3600e3 + 864e5).toISOString().slice(0, 10));
-    await A.page.fill('input[aria-label="Saat"]', "21:00");
-    await A.page.fill('input[aria-label="Kadro sayısı"]', String(others.length + 1));
-    if (opponent) { await A.page.click('label:has-text("İsim yaz")'); await A.page.fill('input[aria-label="Rakip adı"]', opponent); }
-    for (const n of others) await A.page.locator(`li button:has-text("${n}")`).first().click();
-    await A.page.click('button:has-text("Maçı kur")'); await A.page.waitForURL(/\/m\//);
+    await fillSetup(A.page, { time: "21:00", opponent, pick: others });
+    await A.page.click('button:has-text("Maçı kesinleştir")');
+    await A.page.waitForURL(/ok=kesin/, { timeout: 30000 });
+    await A.page.goto(A.page.url().split("?")[0], { waitUntil: "networkidle" });
   };
 
   // 1) Kendi aramızda maç + maça özel mevki (kesinleşince taraflar dengelenir)

@@ -20,6 +20,7 @@ const IDX = "__hsIdx";
 const TRANSIENT_PATHS = [
   /^\/(grup-kur|takim-kur|katil|sifre-yenile|hosgeldin|login|auth)(\/|$)/,
   /^\/join\//,
+  /^\/mac-ayarla$/,
   /^\/g\/[^/]+\/(matches\/new|cagri\/yeni|teklif)$/,
 ];
 
