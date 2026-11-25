@@ -68,7 +68,10 @@ try {
   check("gruba ilan onay bekliyor", (await PO.locator("text=onay bekliyor").count()) >= 1);
   const PL = await login(L);
   await go(PL, `${BASE}/g/${C}`);
-  check("grubun kurucusu 'Onay bekleyen ilanlar'ı görür", (await PL.locator("text=Onay bekleyen ilanlar").count()) === 1);
+  check("grubun kurucusu grup sayfasında 'Bekleyen istekler'i görür", (await PL.locator("text=Bekleyen istekler").count()) === 1);
+  await go(PL, `${BASE}/g/${C}/istekler`);
+  check("istekler sayfasında ilan onayı sekmesi", (await PL.locator("text=İlan onayı").count()) === 1 && (await PL.locator("text=maçı için adam arıyor").count()) === 1);
+  await PL.screenshot({ path: `${SHOTS}/manage-istekler.png`, fullPage: true });
   await PL.click('button:has-text("Grupta yayınla")'); for (let i = 0; i < 40 && (await admin.from("match_listings").select("status").eq("match_id", MID).eq("target_group_id", C).single()).data.status !== "active"; i++) await new Promise((r) => setTimeout(r, 500));
   check("ilan grupta yayında", (await admin.from("match_listings").select("status").eq("match_id", MID).eq("target_group_id", C).single()).data.status === "active");
   await go(PL, url);

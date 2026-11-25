@@ -15,10 +15,12 @@ src/app/g/[groupId]/m/[matchId]/ManageSections.tsx  Maç ekranı yönetim bölü
 src/app/g/[groupId]/m/[matchId]/GatheringPanel.tsx  Toplanan/kesin maç şeridi: sayaç, benim durumum, Geliyorum/Gelemem
 src/lib/listings-data.ts Maç özeti (match_overview) ve Keşfet "Adam arayan" ilanları (open_listings, engellenen süzülür)
 src/lib/match-rules.ts   Maç kuralları (saf, testli): varsayılan kadro, saat belli değil metni, direkt kesin mi
+src/lib/join-actions.ts  Katılma isteği kararı (kabul/ret) + bildirim
 src/lib/proposal-actions.ts  Üye maç önerisi eylemleri (öner, onayla → toplanan maç, geri çek) + bildirimler
 src/lib/match-notify.ts  Kadroda yer açılınca (yedek varsa) maçı yönetenlere bildirim (service role)
 src/lib/membership-notify.ts  Üye katıldı (yetkililere) ve rol değişti (kişiye) bildirimleri
-src/app/g/[groupId]/GroupExtras.tsx  Grup sayfası ekleri: geçici/dağıtılmış takım şeridi, sessize al, maç önerileri
+src/app/g/[groupId]/GroupExtras.tsx  Grup sayfası ekleri: geçici/dağıtılmış takım şeridi, sessize al, maç önerisi formu, öneri kararları (ProposalDecisions)
+src/app/g/[groupId]/istekler/page.tsx  Bekleyen istekler (6a): katılma, ilan onayı, öneri, başvuru sekmeleri (pending_requests)
 src/lib/reliability.ts   Güvenilirlik: oynadığı / (oynadığı + gelmediği) (saf, testli)
 src/lib/notify-rules.ts  Bildirim kuralları: kategori/tercih, alıcı planı, sohbet birleştirme, metinler, push sonucu (saf, testli)
 src/lib/notify.ts        notify(): kutuya yaz + web push gönder (service role; asla fırlatmaz); later(): yanıttan sonra çalıştır

@@ -59,7 +59,7 @@ export async function decideProposal(fd: FormData) {
   // 0046: onaylanan öneri toplanan maç açar; formatı onaylayan seçer
   const size = Number(fd.get("size"));
   const { data: matchId, error } = await supabase.rpc("decide_proposal", { p_id: id, p_accept: accept, p_team_size: isValidSize(size) ? size : 7 });
-  if (error) fail(`${back}#oneriler`, rpcMessage(error, "Karar kaydedilemedi"));
+  if (error) fail(`${back}/istekler?sekme=oneri`, rpcMessage(error, "Karar kaydedilemedi"));
   later(async () => {
     const admin = createAdminClient();
     const [{ data: p }, name] = await Promise.all([
@@ -76,8 +76,8 @@ export async function decideProposal(fd: FormData) {
       await notify(ids, "match", text.matchGathering(name, groupId, matchId as string, matchWhen(m.played_at, m.time_tbd), m.roster_count, m.capacity ?? m.roster_count), { excludeUserId: user.id });
     }
   });
-  revalidatePath(back);
-  redirect(accept && matchId ? `/g/${groupId}/m/${matchId as string}` : `${back}#oneriler`);
+  revalidatePath(back, "layout");
+  redirect(accept && matchId ? `/g/${groupId}/m/${matchId as string}` : `${back}/istekler?sekme=oneri`);
 }
 
 export async function cancelProposal(fd: FormData) {

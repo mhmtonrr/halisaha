@@ -1,6 +1,4 @@
 import Link from "next/link";
-import { SubmitButton } from "@/components/SubmitButton";
-import { decideListing } from "@/lib/match-manage-actions";
 import { matchWhen } from "@/lib/match-rules";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
@@ -27,18 +25,6 @@ const STATUS: Record<string, { label: string; tone: "default" | "accent" | "warn
   voting: { label: "Oylama açık", tone: "warn" },
   closed: { label: "Tamamlandı", tone: "accent" },
 };
-
-interface PendingListing {
-  id: string;
-  group_name: string;
-  played_at: string;
-  time_tbd: boolean;
-  venue: string | null;
-  capacity: number | null;
-  roster_count: number;
-  note: string | null;
-  by: string | null;
-}
 
 export default async function GroupPage({
   params,
@@ -85,16 +71,15 @@ export default async function GroupPage({
   // Öneriler (RLS: kendi önerim veya maç açabiliyorsam hepsi) ve sessize alma durumu
   const [{ data: proposalRows }, { data: myRow }] = me
     ? await Promise.all([
-        supabase.from("match_proposals").select("id, proposed_by, play_on, starts_at, venue, note").eq("group_id", groupId).eq("status", "pending").order("created_at"),
+        supabase.from("match_proposals").select("id, proposed_by, play_on, starts_at, venue, note").eq("group_id", groupId).eq("proposed_by", user.id).eq("status", "pending").order("created_at"),
         supabase.from("group_players").select("muted").eq("group_id", groupId).eq("user_id", user.id).is("left_at", null).maybeSingle(),
       ])
     : [{ data: [] }, { data: null }];
   const proposals = (proposalRows ?? []) as Proposal[];
-  // Başka grupların bu gruba gönderdiği, kaptan/yetkili onayı bekleyen ilanlar (0043/0044; tam sayfa: Parça 6)
-  const pendingListings = canManage
-    ? (((await supabase.rpc("pending_requests", { p_group: groupId })).data as { listings?: PendingListing[] } | null)?.listings ?? [])
-    : [];
-  const nameOf = new Map(players.filter((p) => p.user_id).map((p) => [p.user_id as string, p.display_name]));
+  // Bekleyen istekler (katılma, ilan onayı, öneri, başvuru; 0044): yetkiliye ve maç açabilene sayı, karar /istekler sayfasında
+  const pendingCount = canCreate
+    ? Object.values(((await supabase.rpc("pending_requests", { p_group: groupId })).data ?? {}) as Record<string, unknown[]>).reduce((n, a) => n + (a?.length ?? 0), 0)
+    : 0;
   // Asıl kadro hesabı olan üyelerdir; misafirler ayrı sekmede (istatistikleri orada görünür)
   const members = players.filter(isSquadMember);
   const guests = players.filter(isGuestLike);
@@ -243,34 +228,16 @@ export default async function GroupPage({
         ) : null;
       })()}
 
-      {pendingListings.length > 0 && (
-        <section id="bekleyen-ilanlar" className="mb-4 space-y-2">
-          <SectionTitle>Onay bekleyen ilanlar · {pendingListings.length}</SectionTitle>
-          {pendingListings.map((l) => (
-            <Card key={l.id} className="space-y-2">
-              <div className="text-sm">
-                <b>{l.group_name}</b> maçı için adam arıyor · {matchWhen(l.played_at, l.time_tbd)}
-                {l.venue ? ` · ${l.venue}` : ""}
-              </div>
-              <div className="text-xs text-muted">
-                Paylaşan: {l.by ?? "bir üye"} · kadro {l.roster_count}/{l.capacity ?? "?"}
-                {l.note ? ` · "${l.note}"` : ""}
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {(["1", "0"] as const).map((a) => (
-                  <form key={a} action={decideListing}>
-                    <input type="hidden" name="groupId" value={groupId} />
-                    <input type="hidden" name="listingId" value={l.id} />
-                    <input type="hidden" name="accept" value={a} />
-                    <SubmitButton variant={a === "1" ? "primary" : "secondary"} className="w-full" pendingLabel="…">
-                      {a === "1" ? "Grupta yayınla" : "Reddet"}
-                    </SubmitButton>
-                  </form>
-                ))}
-              </div>
-            </Card>
-          ))}
-        </section>
+      {pendingCount > 0 && (
+        <Link
+          href={`/g/${groupId}/istekler`}
+          className="mb-3 flex min-h-12 items-center gap-3 rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 py-2.5 transition hover:border-amber-400/70"
+        >
+          <Icon name="inbox" className="shrink-0 text-[22px] text-amber-300" />
+          <span className="min-w-0 flex-1 text-sm font-semibold">Bekleyen istekler</span>
+          <span className="shrink-0 rounded-full bg-amber-400 px-2 py-0.5 text-[11px] font-bold text-pitch-950">{pendingCount}</span>
+          <Icon name="chevron_right" className="shrink-0 text-[18px] text-on-surface-variant" />
+        </Link>
       )}
 
       {canCreate && (
@@ -296,7 +263,6 @@ export default async function GroupPage({
         canCreate={canCreate}
         isMember={!!me && !group.archived_at}
         proposals={proposals}
-        names={nameOf}
         userId={user.id}
         openForm={!!oner}
         sent={oneri === "gonderildi"}

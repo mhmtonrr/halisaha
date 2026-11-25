@@ -183,12 +183,12 @@ export async function createListing(fd: FormData) {
   done(back, "ilan");
 }
 
-/** Hedef grubun kaptan/yetkilisi: bekleyen ilanı yayınla / reddet (grup sayfasından) */
+/** Hedef grubun kaptan/yetkilisi: bekleyen ilanı yayınla / reddet (bekleyen istekler sayfasından) */
 export async function decideListing(fd: FormData) {
   const { supabase, user } = await requireUser();
   const listingId = str(fd, "listingId");
   const target = str(fd, "groupId");
-  const back = `/g/${target}`;
+  const back = `/g/${target}/istekler`;
   const accept = str(fd, "accept") === "1";
   const { error } = await supabase.rpc("decide_listing", { p_listing: listingId, p_accept: accept });
   if (error) fail(back, rpcMessage(error, "Karar kaydedilemedi"));
@@ -204,8 +204,8 @@ export async function decideListing(fd: FormData) {
       await notify(members, "listing", text.listingOpened(fromName, targetName, m.group_id, m.id, needed, matchWhen(m.played_at, m.time_tbd)), { excludeUserId: user.id });
     });
   }
-  revalidatePath(back);
-  redirect(`${back}#bekleyen-ilanlar`);
+  revalidatePath(`/g/${target}`, "layout");
+  redirect(`${back}?sekme=ilan`);
 }
 
 export async function closeListing(fd: FormData) {

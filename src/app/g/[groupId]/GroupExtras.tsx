@@ -1,7 +1,7 @@
 import { cancelProposal, decideProposal, proposeMatch } from "@/lib/proposal-actions";
 import { setGroupMuted, teamLifecycle } from "@/lib/actions";
 import { callWhen, istanbulDate } from "@/lib/call-rules";
-import { Card, Input, Label, SectionTitle } from "@/components/ui";
+import { Card, Input, Label } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Icon } from "@/components/Icon";
 import { SIZES } from "@/lib/formations";
@@ -66,14 +66,13 @@ export function MuteToggle({ groupId, muted }: { groupId: string; muted: boolean
 }
 
 /**
- * Maç önerileri. Üye: "Maç öner" formu ve bekleyen kendi önerisi. Maç açabilen: bekleyen öneriler (onayla → öneren adına çağrı).
+ * Maç önerileri (grup sayfası). Üye: "Maç öner" formu ve bekleyen kendi önerisi. Maç açabilenin kararı: ProposalDecisions (istekler sayfası).
  */
 export function Proposals({
   groupId,
   canCreate,
   isMember,
   proposals,
-  names,
   userId,
   openForm,
   sent,
@@ -82,59 +81,16 @@ export function Proposals({
   canCreate: boolean;
   isMember: boolean;
   proposals: Proposal[];
-  names: Map<string, string>;
   userId: string;
   openForm: boolean;
   sent: boolean;
 }) {
   const mine = proposals.find((p) => p.proposed_by === userId);
-  const others = canCreate ? proposals : [];
   if (!isMember) return null;
   const today = istanbulDate();
   const max = istanbulDate(Date.now() + 30 * 86400_000);
   return (
     <div id="oneriler">
-      {others.length > 0 && (
-        <>
-          <SectionTitle>Maç önerileri · {others.length}</SectionTitle>
-          <div className="space-y-2">
-            {others.map((p) => (
-              <Card key={p.id} className="space-y-2 p-3">
-                <div className="text-sm">
-                  <b>{names.get(p.proposed_by) ?? "Bir üye"}</b> öneriyor: {callWhen(p)}
-                  {p.venue ? ` · ${p.venue}` : ""}
-                </div>
-                {p.note && <p className="rounded-lg bg-surface-low p-2 text-xs text-on-surface-variant">“{p.note}”</p>}
-                <form action={decideProposal} className="flex gap-2">
-                  <Hidden groupId={groupId} />
-                  <input type="hidden" name="proposalId" value={p.id} />
-                  <input type="hidden" name="accept" value="1" />
-                  <select name="size" defaultValue={7} aria-label="Format" className="min-h-10 rounded-xl border border-line bg-pitch-950 px-2 text-sm">
-                    {SIZES.map((n) => (
-                      <option key={n} value={n}>
-                        {n}v{n}
-                      </option>
-                    ))}
-                  </select>
-                  <SubmitButton className="min-h-10 flex-1 text-sm" pendingLabel="…">
-                    Onayla, maçı ayarla
-                  </SubmitButton>
-                </form>
-                <form action={decideProposal}>
-                  <Hidden groupId={groupId} />
-                  <input type="hidden" name="proposalId" value={p.id} />
-                  <input type="hidden" name="accept" value="0" />
-                  <SubmitButton variant="secondary" className="min-h-10 w-full text-sm" pendingLabel="…">
-                    Reddet
-                  </SubmitButton>
-                </form>
-                <p className="text-[11px] text-on-surface-variant">Onaylarsan maç öneren adına açılır, gruba duyurulur; kadro toplanınca o kesinleştirir.</p>
-              </Card>
-            ))}
-          </div>
-        </>
-      )}
-
       {!canCreate && mine && (
         <Card className="mb-2 flex items-center gap-3 border-primary/30 p-3 text-sm">
           <Icon name="lightbulb" fill className="text-[22px] text-primary" />
@@ -183,6 +139,56 @@ export function Proposals({
           </form>
         </details>
       )}
+    </div>
+  );
+}
+
+export interface PendingProposal {
+  id: string;
+  by: string | null;
+  play_on: string;
+  starts_at: string | null;
+  venue: string | null;
+  note: string | null;
+}
+
+/** Bekleyen maç önerilerine karar (maç açabilenler; onayla → öneren adına toplanan maç) */
+export function ProposalDecisions({ groupId, proposals }: { groupId: string; proposals: PendingProposal[] }) {
+  return (
+    <div className="space-y-2">
+      {proposals.map((p) => (
+        <Card key={p.id} className="space-y-2 p-3">
+          <div className="text-sm">
+            <b>{p.by ?? "Bir üye"}</b> öneriyor: {callWhen(p)}
+            {p.venue ? ` · ${p.venue}` : ""}
+          </div>
+          {p.note && <p className="rounded-lg bg-surface-low p-2 text-xs text-on-surface-variant">“{p.note}”</p>}
+          <form action={decideProposal} className="flex gap-2">
+            <Hidden groupId={groupId} />
+            <input type="hidden" name="proposalId" value={p.id} />
+            <input type="hidden" name="accept" value="1" />
+            <select name="size" defaultValue={7} aria-label="Format" className="min-h-10 rounded-xl border border-line bg-pitch-950 px-2 text-sm">
+              {SIZES.map((n) => (
+                <option key={n} value={n}>
+                  {n}v{n}
+                </option>
+              ))}
+            </select>
+            <SubmitButton className="min-h-10 flex-1 text-sm" pendingLabel="…">
+              Onayla, maçı ayarla
+            </SubmitButton>
+          </form>
+          <form action={decideProposal}>
+            <Hidden groupId={groupId} />
+            <input type="hidden" name="proposalId" value={p.id} />
+            <input type="hidden" name="accept" value="0" />
+            <SubmitButton variant="secondary" className="min-h-10 w-full text-sm" pendingLabel="…">
+              Reddet
+            </SubmitButton>
+          </form>
+          <p className="text-[11px] text-on-surface-variant">Onaylarsan maç öneren adına açılır, gruba duyurulur; kadro toplanınca o kesinleştirir.</p>
+        </Card>
+      ))}
     </div>
   );
 }

@@ -63,7 +63,7 @@ export default async function ManagePage({
 
   const { data: group } = await supabase
     .from("groups")
-    .select("id, name, kind, city, district, color, description, archived_at")
+    .select("id, name, kind, city, district, color, description, archived_at, discoverable, join_requests_open")
     .eq("id", groupId)
     .maybeSingle();
   if (!group) notFound();
@@ -238,6 +238,28 @@ export default async function ManagePage({
             <input type="hidden" name="groupId" value={groupId} />
             <Card className="space-y-4">
               <TeamFields values={group} kind={kind} />
+            </Card>
+            {/* Keşfet ve katılma isteği (0044); takımlar Keşfet'te zaten görünür */}
+            <Card className="space-y-3">
+              <input type="hidden" name="discovery" value="1" />
+              {!isTeam && (
+                <label className="flex items-start gap-3 text-sm">
+                  <input type="checkbox" name="discoverable" defaultChecked={group.discoverable} className="mt-1 accent-accent" />
+                  <span>
+                    <span className="font-semibold">Keşfet&apos;te görünsün</span>
+                    <span className="block text-xs text-on-surface-variant">Bölgendeki oyuncular grubu Keşfet&apos;te görür (üyeler ve sohbet görünmez).</span>
+                  </span>
+                </label>
+              )}
+              <label className="flex items-start gap-3 text-sm">
+                <input type="checkbox" name="requestsOpen" defaultChecked={group.join_requests_open ?? !isTeam} className="mt-1 accent-accent" />
+                <span>
+                  <span className="font-semibold">Katılma isteği alınsın</span>
+                  <span className="block text-xs text-on-surface-variant">
+                    {isTeam ? "Oyuncular Keşfet'ten ve takım sayfasından istek gönderir" : "Keşfet'te görünüyorsa oyuncular istek gönderir"}; kabul ya da ret senin elinde. Davet bağlantısı yine çalışır.
+                  </span>
+                </span>
+              </label>
             </Card>
             <Button variant="secondary" className="w-full">
               Kaydet

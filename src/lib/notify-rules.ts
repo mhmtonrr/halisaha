@@ -108,6 +108,17 @@ export const text = {
     url: `/g/${groupId}/players`,
     tag: `member-joined:${groupId}`,
   }),
+  joinDecided: (groupName: string, groupId: string, kind: "team" | "community", accepted: boolean): Content => ({
+    title: accepted ? "✅ Katılma isteğin kabul edildi" : "Katılma isteğin reddedildi",
+    body: truncate(
+      accepted
+        ? `Artık “${oneLine(groupName)}” ${kind === "team" ? "takımının oyuncususun" : "grubunun üyesisin"}`
+        : `“${oneLine(groupName)}” isteğini kabul etmedi`,
+      300,
+    ),
+    url: accepted ? `/g/${groupId}` : "/kesfet?sekme=grup",
+    tag: `join-decided:${groupId}`,
+  }),
   roleChanged: (groupName: string, groupId: string, roleLabel: string): Content => ({
     title: "🎖️ Rolün değişti",
     body: truncate(`${oneLine(groupName)}: artık ${roleLabel}`, 300),
@@ -144,7 +155,7 @@ export const text = {
   proposalReceived: (who: string, groupName: string, groupId: string, when: string): Content => ({
     title: "💡 Maç önerisi",
     body: truncate(join(`${who} maç öneriyor`, groupName, when), 300),
-    url: `/g/${groupId}#oneriler`,
+    url: `/g/${groupId}/istekler?sekme=oneri`,
     tag: `proposal:${groupId}`,
   }),
   /** Önerene: onaylandı (çağrı açıldı, sen yönetiyorsun) veya reddedildi */
@@ -227,7 +238,7 @@ export const text = {
   listingNeedsApproval: (who: string, fromName: string, targetGroupId: string, when: string): Content => ({
     title: "📋 Onay bekleyen ilan",
     body: truncate(join(`${who}, ${fromName} maçı için grubunda adam arıyor`, when, "yayınlamak için onayla"), 300),
-    url: `/g/${targetGroupId}#bekleyen-ilanlar`,
+    url: `/g/${targetGroupId}/istekler?sekme=ilan`,
     tag: `listing-approval:${targetGroupId}`,
   }),
   /** Grupta ilan yayında: o grubun üyelerine */

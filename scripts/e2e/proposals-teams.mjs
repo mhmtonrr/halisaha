@@ -65,7 +65,9 @@ try {
   for (let i = 0; i < 10 && !notif; i++) { notif = (await admin.from("notifications").select("title").eq("user_id", O.id).like("title", "%Maç önerisi%")).data?.[0]; if (!notif) await sleep(1000); }
   check("organizatöre 'Maç önerisi' bildirimi gitti", !!notif);
   await oP.goto(`${BASE}/g/${C}`);
-  check("organizatör öneriyi görür", has(await body(oP), "Maç önerileri · 1") && has(await body(oP), "Onur Öneren"));
+  check("organizatör grup sayfasında 'Bekleyen istekler'i görür", has(await body(oP), "Bekleyen istekler"));
+  await oP.goto(`${BASE}/g/${C}/istekler?sekme=oneri`);
+  check("organizatör öneriyi istekler sayfasında görür", has(await body(oP), "Öneri") && has(await body(oP), "Onur Öneren"));
   await oP.screenshot({ path: `${SHOTS}/p01-oneriler.png`, fullPage: true });
   // 0046: onayda format seçilir, öneren adına toplanan maç açılır
   await oP.selectOption('select[aria-label="Format"]', "6");

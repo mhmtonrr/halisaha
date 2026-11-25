@@ -403,6 +403,15 @@ export async function updateTeam(fd: FormData) {
   if (isTeam && !fields.city) fail(back, "Takımın ilini seç");
   const { data, error } = await supabase.from("groups").update(fields).eq("id", groupId).select("id");
   if (error || !data?.length) fail(back, `${word} bilgilerini sadece ${isTeam ? "kaptan" : "kurucu"} ve yetkililer değiştirebilir`);
+  // Keşfet / katılma isteği anahtarları (0044); işaretsiz kutu formda gelmez
+  if (fd.get("discovery")) {
+    const { error: dErr } = await supabase.rpc("set_group_discovery", {
+      p_group: groupId,
+      p_discoverable: fd.get("discoverable") === "on",
+      p_requests_open: fd.get("requestsOpen") === "on",
+    });
+    if (dErr) fail(back, rpcMessage(dErr, "Keşfet ayarı kaydedilemedi"));
+  }
   revalidatePath(`/g/${groupId}`, "layout");
   redirect(`${back}?saved=1`);
 }

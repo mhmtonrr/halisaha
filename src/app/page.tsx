@@ -68,6 +68,20 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
 
   const adminTeamIds = memberships.filter((m) => m.group.kind === "team" && m.role !== "member").map((m) => m.group.id);
   const incoming = await countIncoming(supabase, adminTeamIds);
+  // Yönettiğim gruplardaki bekleyen istekler (katılma, ilan onayı, öneri, başvuru; 0044)
+  const managesAny = memberships.some((m) => m.role !== "member");
+  const { data: pendingRows } = managesAny ? await supabase.rpc("my_pending_counts") : { data: [] };
+  const pendingByGroup = ((pendingRows ?? []) as { group_id: string; group_name: string; joins: number; listings: number; proposals: number; applications: number }[])
+    .map((r) => ({
+      ...r,
+      parts: [
+        r.joins && `${r.joins} katılma isteği`,
+        r.listings && `${r.listings} ilan onayı`,
+        r.proposals && `${r.proposals} maç önerisi`,
+        r.applications && `${r.applications} başvuru`,
+      ].filter(Boolean) as string[],
+    }))
+    .filter((r) => r.parts.length > 0);
 
   // Ödünç oynadığım maçlar (takımın üyesi değilim, ama maçın kadrosundayım): oylamaya geçince oy vermem gerekir
   const { data: loanRows } = await supabase.from("group_players").select("id, group_id, groups(name)").eq("user_id", user.id).eq("is_loan", true);
@@ -154,7 +168,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
     </form>
   );
 
-  // Yapılacaklar: önem sırasıyla (oy > kesinleştir > teklif > çağrıldın > geliyor musun > adam aranıyor > bekleyiş)
+  // Yapılacaklar: önem sırasıyla (oy > kesinleştir > teklif > bekleyen istekler > çağrıldın > geliyor musun > adam aranıyor > bekleyiş)
   const actions: { key: string; node: ReactNode }[] = [
     ...[...loanToVote.map((m) => ({ ...m, groupName: m.teamName })), ...toVote.map((m) => ({ ...m, groupName: m.group.name }))].map((m) => ({
       key: `v${m.id}`,
@@ -177,6 +191,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
     ...[...incoming].map(([groupId, count]) => ({
       key: `t${groupId}`,
       node: <ActionItem href={`/g/${groupId}/teklifler`} icon="handshake" tone="blue" title={`${count} maç teklifi yanıtını bekliyor`} sub={byGroup.get(groupId)?.group.name} />,
+    })),
+    ...pendingByGroup.map((r) => ({
+      key: `p${r.group_id}`,
+      node: <ActionItem href={`/g/${r.group_id}/istekler`} icon="inbox" tone="blue" title={r.parts.join(", ")} sub={r.group_name} />,
     })),
     ...invited.map((e) => ({
       key: `i${e.id}`,
