@@ -2,7 +2,8 @@ import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { shareMatchCard } from "@/lib/actions";
 import { one } from "@/lib/data";
-import { matchWhen } from "@/lib/match-rules";
+import { feeText, matchWhen, opponentLabel } from "@/lib/match-rules";
+import { trPattern } from "@/lib/search";
 import { Avatar } from "@/components/Avatar";
 import { Card, ErrorNote, Header } from "@/components/ui";
 
@@ -17,8 +18,9 @@ interface Person {
 
 /** Kartın başlığı + grubu; kaynak yoksa/uygun değilse null */
 async function loadSource(supabase: Awaited<ReturnType<typeof requireUser>>["supabase"], ref: string) {
-  const { data } = await supabase.from("matches").select("group_id, status, played_at, time_tbd, venue, groups!matches_group_id_fkey(name)").eq("id", ref).maybeSingle();
+  const { data } = await supabase.from("matches").select("group_id, status, played_at, time_tbd, venue, opponent_name, fee_per_person, groups!matches_group_id_fkey(name)").eq("id", ref).maybeSingle();
   const g = one(data?.groups as { name: string } | { name: string }[] | null);
+  const pending = data && !data.opponent_name ? (((await supabase.rpc("match_pending_rivals", { p_ids: [ref] })).data ?? []) as { name: string }[])[0]?.name : null;
   return data && g
     ? {
         groupId: data.group_id as string,
@@ -26,6 +28,7 @@ async function loadSource(supabase: Awaited<ReturnType<typeof requireUser>>["sup
         title: `Maç · ${g.name}`,
         when: matchWhen(data.played_at as string, !!data.time_tbd),
         venue: data.venue as string | null,
+        extra: [opponentLabel(data.opponent_name as string | null, pending), data.fee_per_person ? feeText(data.fee_per_person as number) : null].filter(Boolean).join(" · "),
       }
     : null;
 }
@@ -45,7 +48,7 @@ export default async function SendCardPage({ searchParams }: { searchParams: Pro
   ]);
   if (!canManage && !inRoster) redirect("/");
 
-  const needle = q.trim().replace(/[%_,()]/g, " ");
+  const needle = q.trim();
   const [{ data: rows }, { data: found }, { data: invited }] = await Promise.all([
     supabase.from("friendships").select("user_a, user_b").eq("status", "accepted").limit(300),
     // Aramada sadece profilini aramaya açanlar (Keşfet oyuncu aramasıyla aynı kural); arkadaşlar her zaman listede
@@ -55,7 +58,7 @@ export default async function SendCardPage({ searchParams }: { searchParams: Pro
           .select("id, display_name, photo_url, city")
           .eq("discoverable", true)
           .is("frozen_at", null)
-          .ilike("display_name", `%${needle}%`)
+          .filter("display_name", "imatch", trPattern(needle))
           .neq("id", user.id)
           .limit(15)
       : Promise.resolve({ data: [] as Person[] }),

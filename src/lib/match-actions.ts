@@ -9,7 +9,7 @@ import { text } from "@/lib/notify-rules";
 import { groupMemberIds, groupName } from "@/lib/recipients";
 import { isValidSize } from "@/lib/formations";
 import { POSITIONS, type Position } from "@/lib/data";
-import { matchWhen } from "@/lib/match-rules";
+import { feeText, matchWhen } from "@/lib/match-rules";
 import { splitTeams } from "@/lib/actions";
 import { notifySpotOpened } from "@/lib/match-notify";
 
@@ -81,7 +81,7 @@ export async function setupMatch(fd: FormData) {
 
   let challengeError: string | null = null;
   if (kind === "external" && UUID_RE.test(rival)) {
-    const { error: chErr } = await supabase.rpc("create_challenge_v2", { p_match: id, p_to: rival, p_message: null, p_fee: fee ? `Kişi başı ${fee} TL` : null });
+    const { error: chErr } = await supabase.rpc("create_challenge_v2", { p_match: id, p_to: rival, p_message: null, p_fee: fee ? feeText(fee) : null });
     if (chErr) challengeError = rpcMessage(chErr, "Teklif gönderilemedi");
   }
 

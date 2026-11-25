@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { matchWhen } from "@/lib/match-rules";
+import { matchWhen, opponentLabel } from "@/lib/match-rules";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { finalizeExpired } from "@/lib/finalize";
@@ -53,7 +53,7 @@ export default async function GroupPage({
     getGroupSummaries(supabase, groupId),
     supabase
       .from("matches")
-      .select("id, played_at, venue, status, score_a, score_b, kind, opponent_name, time_tbd, capacity, roster_count, match_players(count)")
+      .select("id, played_at, venue, status, score_a, score_b, kind, opponent_name, time_tbd, capacity, roster_count, fee_per_person, match_players(count)")
       .eq("group_id", groupId)
       .order("played_at", { ascending: false })
       .limit(50),
@@ -97,6 +97,10 @@ export default async function GroupPage({
   const guestRanked = [...guests].sort(byRanking);
   // İptal edilen ve sonuçsuz kapanan maçlar listelenmez (maç ekranında durur)
   const active = (matches ?? []).filter((m) => m.status in STATUS && m.status !== "closed");
+  const waitingIds = active.filter((m) => m.kind === "external" && !m.opponent_name).map((m) => m.id as string);
+  const pendingRivals = new Map(
+    (waitingIds.length ? (((await supabase.rpc("match_pending_rivals", { p_ids: waitingIds })).data ?? []) as { match_id: string; name: string }[]) : []).map((r) => [r.match_id, r.name]),
+  );
   const recent = (matches ?? []).filter((m) => m.status === "closed").slice(0, 8);
   const rating = teamRating(members.map((p) => p.overall));
 
@@ -326,12 +330,13 @@ export default async function GroupPage({
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-semibold">
-                      {m.kind === "external" ? (m.opponent_name ? `vs ${m.opponent_name}` : "Rakip belli değil") : m.time_tbd ? matchWhen(m.played_at, true) : formatDate(m.played_at)}
+                      {m.kind === "external" ? (opponentLabel(m.opponent_name, pendingRivals.get(m.id)) ?? "Rakip belli değil") : m.time_tbd ? matchWhen(m.played_at, true) : formatDate(m.played_at)}
                     </div>
                     <div className="truncate text-xs text-on-surface-variant">
                       {m.kind === "external" && `${m.time_tbd ? matchWhen(m.played_at, true) : formatDate(m.played_at)} · `}
                       {m.venue ?? "Saha belirtilmedi"} ·{" "}
                       {m.capacity ? `${m.roster_count}/${m.capacity} kadro` : `${m.match_players[0]?.count ?? 0} oyuncu`}
+                      {m.fee_per_person ? ` · ${m.fee_per_person} TL` : ""}
                     </div>
                   </div>
                   <Badge tone={STATUS[m.status].tone}>{STATUS[m.status].label}</Badge>

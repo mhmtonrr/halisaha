@@ -11,8 +11,8 @@ import { Badge, Button, Card, ErrorNote, Header, Input, LinkButton, SectionTitle
 import { OvrBadge } from "@/components/PlayerCard";
 import { TeamBadge } from "@/components/TeamBadge";
 import { Icon } from "@/components/Icon";
-import { openListings } from "@/lib/listings-data";
-import { matchWhen } from "@/lib/match-rules";
+import { matchExtras, openListings } from "@/lib/listings-data";
+import { feeText, matchWhen, opponentLabel } from "@/lib/match-rules";
 import { POSITION_NAME, type Position } from "@/lib/data";
 import { JoinRequest } from "@/components/JoinRequest";
 
@@ -254,6 +254,7 @@ async function GroupsTab({ sp, city, district }: { sp: Record<string, string | u
 async function FillCallsTab({ city, district }: { city: string; district?: string }) {
   const { supabase } = await requireUser();
   const calls = await openListings(supabase, city || undefined, district);
+  const extras = await matchExtras(supabase, calls.map((c) => c.match_id));
   return (
     <main>
       <Header title="Keşfet" />
@@ -301,10 +302,10 @@ async function FillCallsTab({ city, district }: { city: string; district?: strin
                       <div className="font-semibold">{matchWhen(c.played_at, c.time_tbd)}</div>
                       <div className="truncate text-xs text-on-surface-variant">
                         {c.group_kind === "team" ? "Takım" : "Grup"} · {c.group_name}
-                        {c.opponent_name ? ` vs ${c.opponent_name}` : ""}
+                        {opponentLabel(c.opponent_name, extras.get(c.match_id)?.pendingRival) ? ` ${opponentLabel(c.opponent_name, extras.get(c.match_id)?.pendingRival)}` : ""}
                       </div>
                       <div className="truncate text-xs text-muted">
-                        {[c.venue, [c.district, c.city].filter(Boolean).join(", "), c.team_size ? `${c.team_size}v${c.team_size}` : null]
+                        {[c.venue, [c.district, c.city].filter(Boolean).join(", "), c.team_size ? `${c.team_size}v${c.team_size}` : null, extras.get(c.match_id)?.fee ? feeText(extras.get(c.match_id)!.fee!) : null]
                           .filter(Boolean)
                           .join(" · ")}
                       </div>

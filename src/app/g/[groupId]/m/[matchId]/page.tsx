@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { SendInviteLink } from "@/components/SendInviteLink";
 import { GatheringPanel, type EntryStatus } from "./GatheringPanel";
-import { matchWhen } from "@/lib/match-rules";
+import { matchWhen, feeText } from "@/lib/match-rules";
 import { Icon } from "@/components/Icon";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
@@ -23,8 +23,9 @@ import { getFormation, inferSize } from "@/lib/formations";
 import { LineupPitch, type PitchPlayer } from "@/components/LineupPitch";
 import { LineupEditor } from "./LineupEditor";
 import { LiveRefresh } from "@/components/LiveRefresh";
+import { trPattern } from "@/lib/search";
 import { GuestForm } from "./GuestForm";
-import { ListingManage, RivalManage, RosterManage, ScheduleManage, type EntryRow } from "./ManageSections";
+import { FeeManage, ListingManage, RivalManage, RosterManage, ScheduleManage, type EntryRow } from "./ManageSections";
 import { applyMatch, cancelApplication } from "@/lib/match-manage-actions";
 import { SubmitButton } from "@/components/SubmitButton";
 import { PushPrompt } from "@/components/PushControls";
@@ -57,6 +58,7 @@ const OK_TEXT: Record<string, string> = {
   ertelendi: "Maçın tarihi değişti; kadroya bildirim gitti.",
   kesin: "Maç kesinleşti; kadroya bildirim gitti.",
   iptal: "Maç iptal edildi; herkese bildirim gitti.",
+  ucret: "Saha ücreti kaydedildi.",
 };
 const TEAM = {
   A: { label: "Sarı", text: "text-team-a", bg: "bg-team-a" },
@@ -229,7 +231,7 @@ export default async function MatchPage({
   const [{ data: match }, roster, players, { data: canManage }, { data: myTeam }, { data: isAdmin }, { data: myEntry }, { data: isMember }] = await Promise.all([
     supabase
       .from("matches")
-      .select("id, played_at, venue, status, score_a, score_b, voting_deadline, kind, opponent_name, challenge_id, opponent_group_id, team_size, formation_a, formation_b, time_tbd, capacity, roster_count, reserve_count, open_to_members, cancel_reason")
+      .select("id, played_at, venue, status, score_a, score_b, voting_deadline, kind, opponent_name, challenge_id, opponent_group_id, team_size, formation_a, formation_b, time_tbd, capacity, roster_count, reserve_count, open_to_members, cancel_reason, fee_per_person")
       .eq("id", matchId)
       .single(),
     fetchRoster(supabase, matchId, groupId),
@@ -263,7 +265,7 @@ export default async function MatchPage({
       ? supabase.from("match_challenges").select("id, to_group_id, awaiting_group_id, proposed_at, proposed_tbd, venue").eq("from_match_id", matchId).eq("status", "pending").maybeSingle().then((r) => r.data)
       : Promise.resolve(null),
     manage && match.kind === "external" && !match.challenge_id && rakipAra.trim().length >= 2
-      ? supabase.from("groups").select("id, name, city").eq("kind", "team").is("archived_at", null).neq("id", groupId).ilike("name", `%${rakipAra.trim().replace(/[%_,()]/g, " ")}%`).limit(8).then((r) => r.data ?? [])
+      ? supabase.from("groups").select("id, name, city").eq("kind", "team").is("archived_at", null).neq("id", groupId).filter("name", "imatch", trPattern(rakipAra)).limit(8).then((r) => r.data ?? [])
       : Promise.resolve([]),
     // Üye olmayan, kaydı olmayan ama maçı bir ilandan görüyor: "Başvur"
     open && !isMember && !myEntry
@@ -330,6 +332,11 @@ export default async function MatchPage({
   const external = match.kind === "external";
   const oppName = opp?.team.name ?? match.opponent_name;
   const labels = labelsFor(external, oppName);
+  // Teklif bekleyen rakibi maçı gören herkes görür (teklifin kendisi iki takıma özel)
+  const pendingRival =
+    open && external && !oppName && !linked
+      ? (((await supabase.rpc("match_pending_rivals", { p_ids: [matchId] })).data ?? []) as { name: string }[])[0]?.name ?? null
+      : null;
 
   const me = roster.find((r) => r.userId === user.id);
   // Maçtan çekilme istekleri (RLS: oyuncu kendininkini, yetkili hepsini görür); sadece planlanmış maçta anlamlı
@@ -381,6 +388,7 @@ export default async function MatchPage({
           { table: "match_players", filter: `match_id=eq.${matchId}` },
           { table: "match_results", filter: `match_id=eq.${matchId}` },
           { table: "match_withdrawals", filter: `match_id=eq.${matchId}` },
+          ...(open && external && !match.challenge_id ? [{ table: "match_challenges", filter: `from_match_id=eq.${matchId}` }] : []),
           ...(match.challenge_id
             ? [
                 // Karşı takımın maçı, kadrosu ve sonuçları; teklif iptali (maçlar silinir, teklifin durumu güncellenir)
@@ -396,9 +404,10 @@ export default async function MatchPage({
             : []),
         ]}
       />
-      <Header title={external ? (oppName ? `vs ${oppName}` : "Rakip belli değil") : "Kendi aramızda"} back={isMember || myTeam?.kind === "team" ? `/g/${groupId}` : "/"} />
+      <Header title={external ? (oppName || pendingRival ? `vs ${oppName ?? pendingRival}` : "Rakip belli değil") : "Kendi aramızda"} back={isMember || myTeam?.kind === "team" ? `/g/${groupId}` : "/"} />
       <div className="-mt-3 mb-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-on-surface-variant">
         {statusBadge}
+        {pendingRival && <Badge tone="warn">Rakip onay bekliyor</Badge>}
         <span className="inline-flex items-center gap-1">
           <Icon name="calendar_today" className="text-[16px]" />
           {match.time_tbd ? matchWhen(match.played_at, true) : formatDate(match.played_at)}
@@ -413,6 +422,12 @@ export default async function MatchPage({
           <span className="inline-flex min-w-0 items-center gap-1">
             <Icon name="stadium" className="text-[16px]" />
             <span className="truncate">{match.venue}</span>
+          </span>
+        ) : null}
+        {match.fee_per_person ? (
+          <span className="inline-flex items-center gap-1">
+            <Icon name="payments" className="text-[16px]" />
+            {feeText(match.fee_per_person)}
           </span>
         ) : null}
       </div>
@@ -517,6 +532,7 @@ export default async function MatchPage({
       {manage && planned && entries.some((e) => ["reserve", "pending"].includes(e.status)) && (
         <RosterManage groupId={groupId} matchId={matchId} roster={[]} entries={entries} addable={[]} isAdmin={false} full={full} />
       )}
+      {manage && <FeeManage groupId={groupId} matchId={matchId} fee={match.fee_per_person} />}
       {manage && <ListingManage groupId={groupId} matchId={matchId} listings={listings} targets={targets} code={code} full={full} />}
       {manage && match.kind === "external" && !match.challenge_id && (
         <RivalManage

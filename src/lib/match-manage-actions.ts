@@ -378,6 +378,19 @@ export async function rescheduleMatch(fd: FormData) {
   done(back, "ertelendi");
 }
 
+/** Saha ücreti (kişi başı TL); boş bırakılırsa kaldırılır */
+export async function setMatchFee(fd: FormData) {
+  const { supabase } = await requireUser();
+  const { groupId, matchId, back } = ids(fd);
+  const raw = str(fd, "fee");
+  if (raw && !/^\d{1,6}$/.test(raw)) fail(back, "Ücreti sayı olarak yaz");
+  const { error } = await supabase.rpc("set_match_fee", { p_match: matchId, p_fee: raw ? Number(raw) : null });
+  if (error) fail(back, rpcMessage(error, "Ücret kaydedilemedi"));
+  revalidatePath(`/g/${groupId}`);
+  revalidatePath("/");
+  done(back, "ucret");
+}
+
 /** İptal (silinmez): kadro, yedek, davetli ve başvuranlara; bağlı maçta iki takıma */
 export async function cancelMatch(fd: FormData) {
   const { supabase, user } = await requireUser();

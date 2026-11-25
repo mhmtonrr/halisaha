@@ -1,3 +1,4 @@
+import { trPattern } from "@/lib/search";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { DEFAULT_OVERALL } from "@/lib/rating";
 import { one } from "@/lib/data";
@@ -92,8 +93,8 @@ export async function findTeams(
 ): Promise<TeamSummary[]> {
   let query = supabase.from("groups").select(TEAM_SELECT).eq("kind", "team").eq("is_temporary", false).is("archived_at", null);
   if (filter.city) query = query.eq("city", filter.city);
-  if (filter.district) query = query.ilike("district", filter.district.trim());
-  if (filter.q) query = query.ilike("name", `%${filter.q.trim().replace(/[%_]/g, "")}%`);
+  if (filter.district) query = query.filter("district", "imatch", `^${trPattern(filter.district)}$`);
+  if (filter.q) query = query.filter("name", "imatch", trPattern(filter.q));
   const { data, error } = await query.limit(500);
   if (error) throw error;
   const cards = await loadUserCards(supabase, (data ?? []).flatMap((g) => (g.group_players as GPRow[]).map((p) => p.user_id)));

@@ -3,6 +3,7 @@
 CLAUDE.md'den taşındı. Yeni dosya/sayfa eklenince buraya tek satır ekle.
 
 ```
+src/lib/search.ts          Türkçe i/ı/İ/I ayırmayan ad arama deseni (imatch / RegExp)
 src/lib/rating.ts        Puanlama motoru (saf, testli) — en kritik dosya
 src/lib/teams.ts         Dengeli takım kurma (saf, testli)
 src/lib/attributes.ts    Kart özellikleri FRM/İST/GOL|KRT/AST/GAL/MVP (saf, testli)

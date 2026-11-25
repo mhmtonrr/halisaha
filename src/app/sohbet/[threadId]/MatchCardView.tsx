@@ -2,6 +2,7 @@ import { Icon } from "@/components/Icon";
 import Link from "next/link";
 import { TeamBadge } from "@/components/TeamBadge";
 import { cx } from "@/components/ui";
+import { feeText, opponentLabel } from "@/lib/match-rules";
 
 /** Paylaşım anındaki özet (dm_messages.card) */
 export interface MatchCard {
@@ -29,6 +30,9 @@ export interface LiveMatch {
   myStatus: string | null;
   playedAt: string;
   timeTbd: boolean;
+  opponent?: string | null;
+  pendingRival?: string | null;
+  fee?: number | null;
 }
 
 const MY: Record<string, string> = {
@@ -85,8 +89,10 @@ export function MatchCardView({
   void isMember;
 
   const details = [
-    card.type === "match" && card.opponent ? `vs ${card.opponent}` : null,
+    // Güncel bilgi varsa o; yoksa gönderim anındaki rakip
+    live ? opponentLabel(live.opponent, live.pendingRival) : opponentLabel(card.opponent),
     card.type === "match" && card.team_size ? `${card.team_size}v${card.team_size}` : null,
+    live?.fee ? feeText(live.fee) : null,
   ].filter(Boolean) as string[];
 
   return (

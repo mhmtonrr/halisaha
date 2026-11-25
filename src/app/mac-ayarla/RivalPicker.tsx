@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { trPattern } from "@/lib/search";
 import { Card, Input, cx } from "@/components/ui";
 import { Icon } from "@/components/Icon";
 import { TeamBadge } from "@/components/TeamBadge";
@@ -63,9 +64,8 @@ export function RivalPicker({
         .is("archived_at", null)
         .neq("id", groupId);
       if (city) query = query.eq("city", city);
-      if (district) query = query.ilike("district", district);
-      const needle = q.trim().replace(/[%_,()]/g, "");
-      if (needle) query = query.ilike("name", `%${needle}%`);
+      if (district) query = query.filter("district", "imatch", `^${trPattern(district)}$`);
+      if (q.trim()) query = query.filter("name", "imatch", trPattern(q));
       const { data, error } = await query.order("name").limit(30);
       if (stale) return;
       setFailed(!!error);

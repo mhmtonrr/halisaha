@@ -1,3 +1,4 @@
+import { trPattern } from "@/lib/search";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchIn } from "@/lib/fetch-in";
@@ -94,8 +95,8 @@ export async function loadCandidates(
 ): Promise<PlayerCandidate[]> {
   let query = admin.from("profiles").select(PROFILE_COLS).eq("discoverable", true).is("frozen_at", null).not("onboarded_at", "is", null);
   if (f.city) query = query.eq("city", f.city);
-  if (f.district) query = query.ilike("district", f.district.trim());
-  if (f.q) query = query.ilike("display_name", `%${f.q.trim().replace(/[%_,()]/g, "")}%`);
+  if (f.district) query = query.filter("district", "imatch", `^${trPattern(f.district)}$`);
+  if (f.q) query = query.filter("display_name", "imatch", trPattern(f.q));
   if (f.foot) query = query.eq("preferred_foot", f.foot);
   if (f.position) {
     query = f.includeSecondary

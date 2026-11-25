@@ -4,7 +4,7 @@ import { LiveRefresh } from "@/components/LiveRefresh";
 import { getMemberships } from "@/lib/teams-data";
 import { DmRoom, type DmMessage, type InviteInfo } from "./DmRoom";
 import type { LiveMatch } from "./MatchCardView";
-import { matchOverview } from "@/lib/listings-data";
+import { matchExtras, matchOverview } from "@/lib/listings-data";
 import { inList } from "@/lib/live";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -44,16 +44,17 @@ export default async function DmPage({ params }: { params: Promise<{ threadId: s
   // Kartlar: güncel durum (açık/kapalı) ve görüntüleyenin üye olduğu gruplar
   const msgs = (messages ?? []) as DmMessage[];
   const ids = (k: "match_id") => [...new Set(msgs.map((m) => m[k]).filter(Boolean))] as string[];
-  const [over, memberships] = await Promise.all([
+  const [over, memberships, extras] = await Promise.all([
     // Maç kartı canlı: sayaç, durum, benim durumum (0043 match_overview; davetli görebilir)
     matchOverview(supabase, ids("match_id")),
     msgs.some((m) => m.kind === "match") ? getMemberships(supabase, user.id) : Promise.resolve([]),
+    matchExtras(supabase, ids("match_id")),
   ]);
   const refStatus: Record<string, string> = {};
   const live: Record<string, LiveMatch> = {};
   for (const o of over.values()) {
     refStatus[`match:${o.match_id}`] = o.status;
-    live[o.match_id] = { status: o.status, roster: o.roster_count, capacity: o.capacity, myStatus: o.my_status, playedAt: o.played_at, timeTbd: o.time_tbd };
+    live[o.match_id] = { status: o.status, roster: o.roster_count, capacity: o.capacity, myStatus: o.my_status, playedAt: o.played_at, timeTbd: o.time_tbd, opponent: o.opponent_name, ...extras.get(o.match_id) };
   }
 
   await supabase.rpc("mark_dm_read", { p_thread_id: threadId });

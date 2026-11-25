@@ -20,6 +20,7 @@ import {
   rescheduleMatch,
   respondReschedule,
   sendChallenge,
+  setMatchFee,
   setOpponent,
 } from "@/lib/match-manage-actions";
 
@@ -418,6 +419,29 @@ export function CounterForm({ groupId, challengeId, back, at }: { groupId: strin
         <SubmitButton variant="secondary" className="w-full" pendingLabel="Gönderiliyor…">
           Karşı teklifi gönder
         </SubmitButton>
+      </form>
+    </details>
+  );
+}
+
+/** Saha ücretini sonradan ekle/değiştir/kaldır */
+export function FeeManage({ groupId, matchId, fee }: { groupId: string; matchId: string; fee: number | null }) {
+  return (
+    <details className="mb-4 rounded-2xl border border-line bg-surface-container">
+      <summary className="flex min-h-12 cursor-pointer items-center gap-2 px-4 font-semibold">
+        <Icon name="payments" className="text-[20px]" />
+        Saha ücreti
+        <span className="ml-auto text-sm font-normal text-muted">{fee ? `${fee} TL` : "belirtilmedi"}</span>
+      </summary>
+      <form action={setMatchFee} className="space-y-2 px-4 pb-4">
+        <Hidden groupId={groupId} matchId={matchId} />
+        <div className="flex gap-2">
+          <Input key={fee ?? ""} name="fee" inputMode="numeric" pattern="[0-9]*" maxLength={6} defaultValue={fee ?? ""} placeholder="Kişi başı TL" aria-label="Kişi başı saha ücreti" />
+          <SubmitButton variant="secondary" className="shrink-0" pendingLabel="…">
+            Kaydet
+          </SubmitButton>
+        </div>
+        <p className="text-xs text-muted">Kişi başı tutar. Boş bırakıp kaydedersen ücret kaldırılır.</p>
       </form>
     </details>
   );

@@ -40,3 +40,18 @@ const p = await q(`select name from match_pending_rivals($1::uuid[])`, [[M]]);
 ok("maçı gören bekleyen rakibin adını görür", p.length === 1 && p[0].name === "Aslanlar");
 await as(4);
 ok("herkese açık takımın maçında yabancı da rakip adını görür", (await q(`select name from match_pending_rivals($1::uuid[])`, [[M]])).length === 1);
+
+// 0050: ücreti sonradan değiştirme ve davet bağlantısı
+await as(2);
+ok("üye saha ücretini değiştiremez", await fails(`select set_match_fee($1, 200)`, [M]));
+await as(1);
+ok("geçersiz ücrete güncellenemez", await fails(`select set_match_fee($1, 0)`, [M]));
+await db.query(`select set_match_fee($1, 200)`, [M]);
+ok("yöneten ücreti değiştirir, bekleyen teklif notu da güncellenir", (await one(`select fee_per_person f from matches where id=$1`, [M])).f === 200 && (await one(`select fee_note n from match_challenges where from_match_id=$1`, [M])).n === "Kişi başı 200 TL");
+const link = (await one(`select match_invite_code($1) c`, [M])).c;
+await as(4);
+const bc = (await one(`select match_by_code($1) j`, [link])).j;
+ok("bağlantıyı açan ücreti ve bekleyen rakibi görür", bc.fee_per_person === 200 && bc.pending_rival === "Aslanlar");
+await as(1);
+await db.query(`select set_match_fee($1, null)`, [M]);
+ok("ücret kaldırılabilir", (await one(`select fee_per_person f from matches where id=$1`, [M])).f === null);

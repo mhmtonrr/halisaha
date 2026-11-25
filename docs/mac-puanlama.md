@@ -76,3 +76,5 @@ karar → oyuncu, yetkili çıkışı → diğer yetkililer. UI: `m/[matchId]/Wi
 Onaydan sonra çağrının yedeği organizatöre bildirilir, organizatör çağrı sayfasından "Kadroya al" der (otomatik girmez). Test: `db-checks/withdrawals.mjs`, `e2e/withdrawal.mjs`.
 
 **Sihirbaz verisi (0049)**: `matches.fee_per_person` (kişi başı TL, isteğe bağlı; `create_match_v2(p_fee)`). `p_confirmed` üyeler + takım dışından yalnızca kabul edilmiş arkadaşlar (ödünç olarak doğrudan kadroya, bildirim alır, "Gelemem" diyebilir). Teklif bekleyen rakibin adı maçı gören herkese `match_pending_rivals(ids)` ile. Kontrol: `db-checks/wizard-setup.mjs`.
+
+**Ücret ve bekleyen rakip gösterimi (0050)**: maç ekranı (başlık "vs X" + "Rakip onay bekliyor"), davet bağlantısı, "Maça çağır" önizlemesi, sohbet kartı, ana sayfa, grup maç listesi, Keşfet "Adam arayan" (`matchExtras`, `opponentLabel`, `feeText`). Yöneten ücreti maç ekranında değiştirir (`FeeManage` → `set_match_fee`; bekleyen teklifin ücret notu da güncellenir; rakibin kabulde açılan maçına ücret kopyalanmaz). Ad aramaları `trPattern` + `imatch` ile i/ı/İ/I ayırmaz (`src/lib/search.ts`).

@@ -20,6 +20,7 @@ export function ActionItem({
   tone,
   title,
   sub,
+  note,
   cta,
   children,
   className,
@@ -29,6 +30,8 @@ export function ActionItem({
   tone: ActionTone;
   title: ReactNode;
   sub?: ReactNode;
+  /** Kesilmeden gösterilen ek satır (ör. rakip ve ücret) */
+  note?: ReactNode;
   cta?: string;
   children?: ReactNode;
   className?: string;
@@ -43,6 +46,7 @@ export function ActionItem({
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="font-semibold">{title}</span>
           {sub && <span className="truncate text-xs text-on-surface-variant">{sub}</span>}
+          {note && <span className="text-xs text-on-surface">{note}</span>}
         </span>
         {cta ? (
           <span className={cx("shrink-0 rounded-full px-3.5 py-2 font-display text-[13px] font-bold", t.pill)}>{cta}</span>

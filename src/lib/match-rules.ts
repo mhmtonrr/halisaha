@@ -16,6 +16,14 @@ export function matchWhen(iso: string, timeTbd: boolean): string {
   return d.toLocaleString("tr-TR", { timeZone: "Europe/Istanbul", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
+export const feeText = (fee: number) => `Kişi başı ${fee} TL`;
+
+/** "vs Yıldızspor" · teklif bekliyorsa "vs Yıldızspor (onay bekliyor)" · rakip yoksa null */
+export function opponentLabel(opponent: string | null | undefined, pending?: string | null): string | null {
+  if (opponent) return `vs ${opponent}`;
+  return pending ? `vs ${pending} (onay bekliyor)` : null;
+}
+
 /** Maç açılınca direkt kesin mi: kadro dolu, saat belli, rakibe karşıysa rakip belli (create_match_v2 ile aynı kural) */
 export function opensConfirmed(o: { count: number; capacity: number; hasTime: boolean; kind: MatchKind; hasOpponent: boolean }): boolean {
   return o.count >= o.capacity && o.hasTime && (o.kind === "internal" || o.hasOpponent);

@@ -32,6 +32,25 @@ export async function matchOverview(supabase: SupabaseClient, ids: string[]): Pr
   return new Map(((data ?? []) as MatchOverview[]).map((o) => [o.match_id, o]));
 }
 
+export interface MatchExtra {
+  fee: number | null;
+  /** Teklif gönderilmiş, henüz kabul etmemiş takım */
+  pendingRival: string | null;
+}
+
+/** match_overview'da olmayan bilgiler: saha ücreti ve onay bekleyen rakip (0049) */
+export async function matchExtras(supabase: SupabaseClient, ids: string[]): Promise<Map<string, MatchExtra>> {
+  const unique = [...new Set(ids)];
+  if (!unique.length) return new Map();
+  const [{ data: rows }, { data: rivals }] = await Promise.all([
+    supabase.from("matches").select("id, fee_per_person").in("id", unique),
+    supabase.rpc("match_pending_rivals", { p_ids: unique }),
+  ]);
+  const pending = new Map(((rivals ?? []) as { match_id: string; name: string }[]).map((r) => [r.match_id, r.name]));
+  const fee = new Map((rows ?? []).map((r) => [r.id as string, r.fee_per_person as number | null]));
+  return new Map(unique.map((id) => [id, { fee: fee.get(id) ?? null, pendingRival: pending.get(id) ?? null }]));
+}
+
 /**
  * Keşfet "Adam arayan": bölgedeki herkese açık ilanların maçları (yer olanlar), engellediğim kişi/takım hariç.
  * Her satırda başvuru için ilan kimliği de döner.

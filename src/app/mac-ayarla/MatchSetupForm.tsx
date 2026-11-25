@@ -3,7 +3,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { setupMatch } from "@/lib/match-actions";
-import { defaultCapacity, matchWhen, opensConfirmed } from "@/lib/match-rules";
+import { defaultCapacity, feeText, matchWhen, opensConfirmed } from "@/lib/match-rules";
+import { trPattern } from "@/lib/search";
 import { SIZES } from "@/lib/formations";
 import { POSITIONS, parseLocalDateTime, type Position } from "@/lib/data";
 import { Button, Card, ErrorNote, Header, Input, Label, cx } from "@/components/ui";
@@ -181,8 +182,8 @@ export function MatchSetupForm({
   };
 
   const quickDays = Array.from({ length: 14 }, (_, i) => addDays(today, i)).filter((d) => d <= maxDay);
-  const needle = friendQuery.trim().toLocaleLowerCase("tr");
-  const shownFriends = friends.filter((f) => selected.has(f.userId) || f.name.toLocaleLowerCase("tr").includes(needle));
+  const friendRe = new RegExp(trPattern(friendQuery), "i");
+  const shownFriends = friends.filter((f) => selected.has(f.userId) || friendRe.test(f.name));
   const names = [...members, ...friends].filter((p) => selected.has(p.userId)).map((p) => p.name).concat(guests.map((g) => g.name));
   const rivalLabel = appRival ? appRival.name : typedRival || "Belli değil";
   const whenLabel = day ? matchWhen(parseLocalDateTime(`${day}T${hasTime ? time : "12:00"}`), !hasTime) : "";
@@ -191,7 +192,7 @@ export function MatchSetupForm({
     { label: "Ne zaman", value: whenLabel, step: "info" },
     { label: "Format", value: `${size}v${size} · ${capacity} kişilik kadro`, step: "info" },
     { label: "Saha", value: venue.trim() || "Belirtilmedi", step: "info" },
-    { label: "Saha ücreti", value: fee ? `Kişi başı ${Number(fee)} TL` : "Belirtilmedi", step: "info" },
+    { label: "Saha ücreti", value: fee ? feeText(Number(fee)) : "Belirtilmedi", step: "info" },
     ...(team ? [{ label: "Rakip", value: appRival ? `${rivalLabel} (teklif gidecek)` : rivalLabel, step: "rival" as const }] : []),
     { label: `Gelenler ${count}/${capacity}`, value: names.join(", ") || "Henüz kimse yok", step: "roster" },
   ];

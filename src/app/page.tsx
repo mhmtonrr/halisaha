@@ -1,4 +1,5 @@
-import { matchWhen } from "@/lib/match-rules";
+import { matchWhen, feeText, opponentLabel } from "@/lib/match-rules";
+import { matchExtras } from "@/lib/listings-data";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { requireUser } from "@/lib/supabase/server";
@@ -144,6 +145,13 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
   type Overview = { match_id: string; group_id: string; group_name: string; played_at: string; time_tbd: boolean; capacity: number | null; roster_count: number; positions: string[]; my_status: string | null };
   const lookingFor = ((listingOverview ?? []) as Overview[]).filter((o) => !o.my_status && (o.capacity ?? 0) > o.roster_count);
 
+  const extras = await matchExtras(supabase, [...matches.map((m) => m.id), ...invited.map((e) => e.id), ...lookingFor.map((o) => o.match_id)]);
+  /** Karar verirken görülsün: rakip (onay bekliyorsa belirtilir) ve ücret */
+  const extraText = (id: string, opponent?: string | null) => {
+    const x = extras.get(id);
+    return [opponentLabel(opponent, x?.pendingRival), x?.fee ? feeText(x.fee) : null].filter(Boolean).join(" · ");
+  };
+
   const toVote = matches.filter((m) => m.status === "voting" && m.inRoster && !voted.has(m.id));
   const upcoming = matches.filter((m) => !toVote.includes(m));
   // Grup satırında "sıradaki maç": grubun ilk planlı maçı
@@ -202,7 +210,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
     ...invited.map((e) => ({
       key: `i${e.id}`,
       node: (
-        <ActionItem href={`/g/${e.group_id}/m/${e.id}`} icon="mail" tone="green" title="Maça çağrıldın" sub={`${e.groupName} · ${matchWhen(e.played_at, e.time_tbd)}`}>
+        <ActionItem href={`/g/${e.group_id}/m/${e.id}`} icon="mail" tone="green" title="Maça çağrıldın" sub={`${e.groupName} · ${matchWhen(e.played_at, e.time_tbd)}`} note={extraText(e.id, matches.find((m) => m.id === e.id)?.opponent_name)}>
           {quick(e.group_id, e.id)}
         </ActionItem>
       ),
@@ -216,6 +224,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
           tone="green"
           title="Maça geliyor musun?"
           sub={`${m.group.name} · ${matchWhen(m.played_at, m.time_tbd)}${m.venue ? ` · ${m.venue}` : ""} · ${m.roster_count}/${m.capacity ?? "?"}`}
+          note={extraText(m.id, m.opponent_name)}
         >
           {quick(m.group_id, m.id)}
         </ActionItem>
@@ -417,7 +426,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
                   <div className="flex items-center gap-2">
                     <TeamBadge name={m.group.name} color={m.group.color} size="sm" />
                     <span className="min-w-0 truncate font-display text-[17px] font-bold leading-snug">
-                      {m.kind === "external" ? `${m.group.name} vs ${m.opponent_name ?? "?"}` : m.group.name}
+                      {m.kind === "external" ? `${m.group.name} vs ${m.opponent_name ?? extras.get(m.id)?.pendingRival ?? "?"}` : m.group.name}
                     </span>
                   </div>
                   <div className="space-y-1 text-[13px] text-on-surface-variant">
@@ -430,6 +439,18 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
                       <div className="flex items-center gap-1.5">
                         <Icon name="stadium" className="text-[16px]" />
                         <span className="truncate">{m.venue}</span>
+                      </div>
+                    )}
+                    {!m.opponent_name && extras.get(m.id)?.pendingRival && (
+                      <div className="flex items-center gap-1.5 text-amber-300">
+                        <Icon name="hourglass_top" className="text-[16px]" />
+                        Rakip onay bekliyor
+                      </div>
+                    )}
+                    {extras.get(m.id)?.fee && (
+                      <div className="flex items-center gap-1.5">
+                        <Icon name="payments" className="text-[16px]" />
+                        {feeText(extras.get(m.id)!.fee!)}
                       </div>
                     )}
                   </div>

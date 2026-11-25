@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/supabase/server";
 import { applyMatch, cancelApplication } from "@/lib/match-manage-actions";
-import { matchWhen } from "@/lib/match-rules";
+import { feeText, matchWhen, opponentLabel } from "@/lib/match-rules";
 import { POSITION_NAME, POSITIONS, type Position } from "@/lib/data";
 import { Icon } from "@/components/Icon";
 import { TeamBadge } from "@/components/TeamBadge";
@@ -27,6 +27,8 @@ interface ByCode {
   roster_count: number;
   reserve_count: number;
   opponent_name: string | null;
+  fee_per_person: number | null;
+  pending_rival: string | null;
   note: string | null;
   my_status: string | null;
   is_member: boolean;
@@ -93,8 +95,14 @@ export default async function MatchInvitePage({
           <dt className="text-muted">Maç</dt>
           <dd>
             {m.team_size ? `${m.team_size}v${m.team_size} · ` : ""}
-            {m.kind === "external" ? (m.opponent_name ? `vs ${m.opponent_name}` : "rakip belli değil") : "kendi aramızda"}
+            {m.kind === "external" ? (opponentLabel(m.opponent_name, m.pending_rival) ?? "rakip belli değil") : "kendi aramızda"}
           </dd>
+          {m.fee_per_person && (
+            <>
+              <dt className="text-muted">Ücret</dt>
+              <dd>{feeText(m.fee_per_person)}</dd>
+            </>
+          )}
         </dl>
         {m.note && <p className="rounded-lg bg-pitch-900 px-3 py-2 text-sm text-on-surface-variant">{m.note}</p>}
         <div>
