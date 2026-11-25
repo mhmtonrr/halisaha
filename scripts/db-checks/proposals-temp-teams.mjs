@@ -52,9 +52,6 @@ for (const n of [1, 2, 4]) { await as(n); await db.query(`select respond_match($
 await as(3);
 await db.query(`select confirm_match($1, (current_date + 2 + time '21:00') at time zone 'Europe/Istanbul')`, [PM]);
 ok("öneren maçı kesinleştirir", (await one(`select status::text s from matches where id=$1`, [PM])).s === "planned");
-// Geçici takım kontrolleri (eski çağrı kesinleştirme; 5b'de kalkar) için yardımcılar
-const roster = (ns, team = "A") => JSON.stringify(ns.map((n, i) => ({ user_id: U(n), team: team === "split" ? (i % 2 ? "B" : "A") : team })));
-const when = `(current_date + 2 + time '21:00') at time zone 'Europe/Istanbul'`;
 await as(4);
 const PR2 = (await one(propose(), [C])).id;
 await as(2);
@@ -67,19 +64,19 @@ ok("öneren bekleyen önerisini geri çeker", (await one(`select status from mat
 await as(3);
 ok("başkasının önerisini geri çekemez", await fails(`select cancel_proposal($1)`, [PR2]));
 
-// --- B) Hızlı (geçici) takım
+// --- B) Geçici takım (0037). Arayüzden ve 5b'den sonra RPC'den kurulmuyor; eski geçici takımların davranışı için doğrudan kurulur
+const tempTeam = async (name) => {
+  await db.exec("reset role");
+  const id = (await one(`insert into groups (name, created_by, kind, city, district, is_temporary) values ($1, $2, 'team', 'İstanbul', 'Kadıköy', true) returning id`, [name, U(2)])).id;
+  for (const n of [3, 4]) await db.query(`insert into group_players (group_id, user_id, display_name, is_loan) values ($1, $2, $3, true)`, [id, U(n), `U${n}`]);
+  return id;
+};
+const extMatch = async (g, status = "planned") =>
+  (await one(`insert into matches (group_id, played_at, created_by, kind, opponent_name, status) values ($1, now() + interval '2 day', $2, 'external', 'Rakip FK', $3) returning id`, [g, U(2), status])).id;
+const T = await tempTeam("Hızlı FC");
+const MX = await extMatch(T);
 await as(2);
-const gather = async () => (await one(`select create_gather_poll($1, current_date + 2) id`, [C])).id;
-const P1 = await gather();
-for (const n of [3, 4]) { await as(n); await db.query(`select respond_poll($1, 'yes')`, [P1]); }
-await as(2);
-ok("1 karakterlik hızlı takım adı reddedilir", await fails(`select finalize_poll($1, ${when}, null, null, 'external', null, 'Rakip FK', $2::jsonb, 'X')`, [P1, roster([3, 4])]));
-const MX = (await one(`select finalize_poll($1, ${when}, null, null, 'external', null, 'Rakip FK', $2::jsonb, 'Hızlı FC') id`, [P1, roster([3, 4])])).id;
-const T = (await one(`select group_id from matches where id=$1`, [MX])).group_id;
-const t = await one(`select name, kind, is_temporary, city, district, archived_at from groups where id=$1`, [T]);
-ok("hızlı takım geçici kurulur, il/ilçe topluluktan gelir", t.kind === "team" && t.is_temporary && t.city === "İstanbul" && t.district === "Kadıköy" && !t.archived_at);
-ok("kuran hızlı takımın kaptanı", (await one(`select role from group_players where group_id=$1 and user_id=$2`, [T, U(2)])).role === "captain");
-ok("seçilenler hızlı takıma ödünç yazılır", (await q(`select 1 from group_players where group_id=$1 and is_loan`, [T])).length === 2);
+ok("kuran geçici takımın kaptanı", (await one(`select role from group_players where group_id=$1 and user_id=$2`, [T, U(2)])).role === "captain");
 const Tcode = (await one(`select group_invite_code($1) c`, [T])).c;
 
 await db.exec("reset role");
@@ -97,12 +94,9 @@ await as(6);
 ok("arşivli takıma teklif gönderilemez", await fails(`insert into match_challenges (from_group_id, to_group_id, created_by, proposed_at) values ($1,$2,$3, now() + interval '3 day')`, [RR, T, U(6)]));
 
 await as(2);
-const P2 = await gather();
-for (const n of [3, 4]) { await as(n); await db.query(`select respond_poll($1, 'yes')`, [P2]); }
+await db.query(`select reopen_team($1)`, [T]);
+const MX2 = await extMatch(T);
 await as(2);
-const MX2 = (await one(`select finalize_poll($1, ${when}, null, null, 'external', $2, 'Rakip FK', $3::jsonb) id`, [P2, T, roster([3, 4])])).id;
-ok("arşivdeki geçici takım seçilince yeniden açılır (yeni takım kurulmaz)",
-  (await one(`select group_id from matches where id=$1`, [MX2])).group_id === T && (await one(`select archived_at from groups where id=$1`, [T])).archived_at === null);
 ok("planlı maçı varken takım dağıtılamaz", await fails(`select disband_team($1)`, [T]));
 await db.query(`delete from matches where id=$1`, [MX2]);
 ok("maç iptal olunca oynanmış maçı olan geçici takım arşivlenir", (await one(`select cleanup_temp_team($1) r`, [T])).r === "archived");
@@ -118,11 +112,8 @@ await db.query(`select disband_team($1)`, [T]);
 ok("oynanmış maçı olan takım dağıtılınca arşivlenir (geçmiş kalır)",
   !!(await one(`select archived_at from groups where id=$1`, [T])).archived_at && (await q(`select 1 from matches where id=$1`, [MX])).length === 1);
 
-const P3 = await gather();
-for (const n of [3, 4]) { await as(n); await db.query(`select respond_poll($1, 'yes')`, [P3]); }
-await as(2);
-const MX3 = (await one(`select finalize_poll($1, ${when}, null, null, 'external', null, 'Rakip FK', $2::jsonb, 'Boş FC') id`, [P3, roster([3, 4])])).id;
-const T3 = (await one(`select group_id from matches where id=$1`, [MX3])).group_id;
+const T3 = await tempTeam("Boş FC");
+const MX3 = await extMatch(T3);
 await as(3);
 ok("üye olmayan (ödünç) temizliği tetikleyemez", (await one(`select cleanup_temp_team($1) r`, [T3])).r === "kept");
 await as(2);

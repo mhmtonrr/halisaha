@@ -20,7 +20,7 @@ export const PREF_OF: Record<NotificationType, PrefKey> = {
 
 export const PREF_LABEL: Record<PrefKey, { title: string; hint: string }> = {
   votes: { title: "Oylama", hint: "Maç bitip oylama açılınca, oylama kapanmadan hatırlatma ve sonuçlar açıklanınca" },
-  matches: { title: "Maç çağrısı ve maç", hint: "Yeni çağrı ve adam arama, kadroya seçilme/yedek/çıkarılma, maç kuruldu/iptal, rakibin skoru, başvuru ve yer açılması (organizatöre), üye katıldı/ayrıldı (yetkililere), rolün değişti" },
+  matches: { title: "Maç", hint: "Maç ayarlandı/kesinleşti/ertelendi/iptal, davet, kadroya alınma/yedek/çıkarılma, ilan ve başvurular, rakibin skoru, yer açılması (yönetene), üye katıldı/ayrıldı (yetkililere), rolün değişti" },
   offers: { title: "Maç teklifi", hint: "Takımlar arası maç teklifleri, yanıtları ve geri çekilmesi" },
   chat: { title: "Sohbet", hint: "Grup/takım ve birebir mesajlar, takıma/gruba davetler (bir sohbette 10 dakikada en fazla 1 bildirim)" },
 };
@@ -133,56 +133,12 @@ export const text = {
     url: `/g/${groupId}/m/${matchId}`,
     tag: `vote-reminder:${matchId}`,
   }),
-  pollOpened: (groupName: string, groupId: string, pollId: string, when: string, venue?: string | null): Content => ({
-    title: "📣 Maç çağrısı",
-    body: truncate(join(groupName, when, venue), 300),
-    url: `/g/${groupId}/cagri/${pollId}`,
-    tag: `poll:${pollId}`,
-  }),
-  fillOpened: (groupName: string, groupId: string, pollId: string, needed: number, when: string, positions: string[]): Content => ({
-    title: `🔎 ${needed} oyuncu aranıyor`,
-    body: truncate(join(groupName, when, positions.length ? positions.join("/") : null), 300),
-    url: `/g/${groupId}/cagri/${pollId}`,
-    tag: `poll:${pollId}`,
-  }),
-  pollUpdated: (groupName: string, groupId: string, pollId: string, when: string, venue?: string | null): Content => ({
-    title: "📣 Çağrı güncellendi",
-    body: truncate(join(groupName, when, venue), 300),
-    url: `/g/${groupId}/cagri/${pollId}`,
-    tag: `poll:${pollId}`,
-  }),
   /** Kesinleştirme sonucu: kadroda veya yedekte (sıra no ile) */
-  pollSelected: (groupName: string, groupId: string, matchId: string, when: string): Content => ({
+  selectedForMatch: (groupName: string, groupId: string, matchId: string, when: string): Content => ({
     title: "⚽ Kadrodasın",
     body: truncate(join(groupName, when), 300),
     url: `/g/${groupId}/m/${matchId}`,
     tag: `match:${matchId}`,
-  }),
-  pollReserve: (groupName: string, groupId: string, pollId: string, when: string, order: number): Content => ({
-    title: "⏳ Yedektesin",
-    body: truncate(join(groupName, when, `sıran: ${order}`, "yer açılırsa organizatör seni kadroya alabilir"), 300),
-    url: `/g/${groupId}/cagri/${pollId}`,
-    tag: `poll:${pollId}`,
-  }),
-  pollRejected: (groupName: string, groupId: string, pollId: string): Content => ({
-    title: "Bu maç için başka oyuncu seçildi",
-    body: truncate(groupName, 300),
-    url: `/g/${groupId}/cagri/${pollId}`,
-    tag: `poll:${pollId}`,
-  }),
-  /** Organizatöre: adam aramaya başvuru geldi */
-  pollApplied: (who: string, groupId: string, pollId: string): Content => ({
-    title: "🔎 Adam aramana başvuru",
-    body: truncate(`${who} geliyor; kadroya almak için çağrıya bak`, 300),
-    url: `/g/${groupId}/cagri/${pollId}`,
-    tag: `poll-apply:${pollId}`,
-  }),
-  /** Organizatöre: dışarıdan çağırdığı (üye olmayan) oyuncu toplama çağrısına "geliyorum"/"belki" dedi */
-  pollInviteeAnswered: (who: string, answer: "yes" | "maybe", groupId: string, pollId: string): Content => ({
-    title: "📨 Çağırdığın oyuncu yanıt verdi",
-    body: truncate(`${who} ${answer === "yes" ? "geliyor" : "belki gelir"}; kadroyu kesinleştirirken seçebilirsin`, 300),
-    url: `/g/${groupId}/cagri/${pollId}`,
-    tag: `poll-invitee:${pollId}`,
   }),
   /** Kurucu/yetkili/organizatörlere: üye maç önerdi */
   proposalReceived: (who: string, groupName: string, groupId: string, when: string): Content => ({
@@ -199,11 +155,11 @@ export const text = {
     tag: `proposal-decision:${groupId}`,
   }),
   /** Organizatöre: kadroda yer açıldı, yedek var */
-  spotOpened: (who: string, groupId: string, pollId: string, reserves: number): Content => ({
+  spotOpened: (who: string, groupId: string, matchId: string, reserves: number): Content => ({
     title: "🔄 Kadroda yer açıldı",
-    body: truncate(`${who} kadrodan çıktı. ${reserves} yedek var; çağrıdan kadroya alabilirsin.`, 300),
-    url: `/g/${groupId}/cagri/${pollId}`,
-    tag: `spot:${pollId}`,
+    body: truncate(`${who} kadrodan çıktı. ${reserves} yedek var; maç ekranından kadroya alabilirsin.`, 300),
+    url: `/g/${groupId}/m/${matchId}`,
+    tag: `spot:${matchId}`,
   }),
   matchCreated: (groupName: string, groupId: string, matchId: string, when: string, opponent?: string | null): Content => ({
     title: "⚽ Maç kuruldu",

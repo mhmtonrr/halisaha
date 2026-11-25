@@ -13,7 +13,7 @@ export default async function ChatPage({ params }: { params: Promise<{ groupId: 
     supabase.from("group_players").select("id, display_name, photo_url, role, user_id, is_loan").eq("group_id", groupId),
     supabase
       .from("group_messages")
-      .select("id, author_id, kind, body, poll_id, match_id, deleted_at, created_at")
+      .select("id, author_id, kind, body, match_id, deleted_at, created_at")
       .eq("group_id", groupId)
       .order("id", { ascending: false })
       .limit(PAGE_SIZE),

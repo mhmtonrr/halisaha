@@ -11,6 +11,7 @@ import { isValidSize } from "@/lib/formations";
 import { POSITIONS, type Position } from "@/lib/data";
 import { matchWhen } from "@/lib/match-rules";
 import { splitTeams } from "@/lib/actions";
+import { notifySpotOpened } from "@/lib/match-notify";
 
 // Yeni maç yapısı (0042-0044) Server Action'ları. Yetki hep RPC'de; burada form okunur, bildirim gönderilir.
 
@@ -134,6 +135,11 @@ export async function respondMatch(fd: FormData) {
       .eq("id", matchId)
       .maybeSingle();
     if (!m || m.status !== "gathering") return;
+    if (result === "declined") {
+      const { data: me } = await admin.from("profiles").select("display_name").eq("id", user.id).maybeSingle();
+      await notifySpotOpened(admin, matchId, (me?.display_name as string | undefined) ?? "Bir oyuncu", user.id);
+      return;
+    }
     const managers = [...new Set([...(await groupMemberIds(admin, m.group_id, { adminsOnly: true })), ...(m.created_by ? [m.created_by] : [])])];
     if (result === "in" && m.capacity && m.roster_count >= m.capacity) {
       await notify(managers, "match", text.rosterFull(await groupName(admin, m.group_id), m.group_id, matchId, m.roster_count), { excludeUserId: user.id });

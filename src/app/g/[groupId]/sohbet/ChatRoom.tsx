@@ -15,7 +15,6 @@ export interface ChatMessage {
   author_id: string | null;
   kind: "text" | "system";
   body: string;
-  poll_id: string | null;
   match_id: string | null;
   deleted_at: string | null;
   created_at: string;
@@ -132,7 +131,7 @@ export function ChatRoom({
   const catchUp = useCallback(async () => {
     const { data } = await supabase
       .from("group_messages")
-      .select("id, author_id, kind, body, poll_id, match_id, deleted_at, created_at")
+      .select("id, author_id, kind, body, match_id, deleted_at, created_at")
       .eq("group_id", groupId)
       .gt("id", lastId.current)
       .order("id")
@@ -209,7 +208,7 @@ export function ChatRoom({
     const before = document.body.scrollHeight;
     const { data } = await supabase
       .from("group_messages")
-      .select("id, author_id, kind, body, poll_id, match_id, deleted_at, created_at")
+      .select("id, author_id, kind, body, match_id, deleted_at, created_at")
       .eq("group_id", groupId)
       .lt("id", oldest.id)
       .order("id", { ascending: false })
@@ -235,7 +234,6 @@ export function ChatRoom({
       author_id: meId,
       kind: "text",
       body,
-      poll_id: null,
       match_id: null,
       deleted_at: null,
       created_at: new Date().toISOString(),
@@ -245,7 +243,7 @@ export function ChatRoom({
     const { data, error } = await supabase
       .from("group_messages")
       .insert({ group_id: groupId, author_id: meId, body })
-      .select("id, author_id, kind, body, poll_id, match_id, deleted_at, created_at")
+      .select("id, author_id, kind, body, match_id, deleted_at, created_at")
       .single();
     if (error || !data) {
       setMessages((prev) => prev.map((m) => (m.id === temp.id ? { ...m, pending: false, failed: true } : m)));
@@ -321,7 +319,7 @@ export function ChatRoom({
               )}
               {m.kind === "system" ? (
                 <Link
-                  href={m.poll_id ? `/g/${groupId}/cagri/${m.poll_id}` : m.match_id ? `/g/${groupId}/m/${m.match_id}` : `/g/${groupId}`}
+                  href={m.match_id ? `/g/${groupId}/m/${m.match_id}` : `/g/${groupId}`}
                   className="mx-auto my-2 block max-w-[90%] rounded-xl border border-accent/30 bg-accent/10 px-3 py-2 text-center text-sm transition hover:border-accent"
                 >
                   {m.body}

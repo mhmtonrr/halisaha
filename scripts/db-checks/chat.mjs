@@ -28,12 +28,12 @@ await as(1);
 ok("okunmamış: kurucuda 20 (silinen hariç)", (await db.query(`select unread from unread_counts()`)).rows[0]?.unread === 20);
 await db.query(`select mark_chat_read($1)`, [g.id]);
 ok("okundu işaretlenince 0", (await db.query(`select count(*)::int c from unread_counts()`)).rows[0].c === 0);
-// çağrıya doğrudan yazma yok (RPC); tetikleyici metnini sınamak için sahibi olarak eklenir
+// Toplanan maç (0042) sohbete "Maç ayarlanıyor" kartı düşer
 await db.exec("reset role");
-await db.query(`insert into match_polls (group_id, created_by, play_on, starts_at, venue, capacity) values ($1,$2,'2026-11-27','2026-11-27 19:00+00','Petroller',14)`, [g.id, U(1)]);
+await db.query(`insert into matches (group_id, played_at, created_by, venue, status, capacity) values ($1,'2026-11-27 19:00+00',$2,'Petroller','gathering',14)`, [g.id, U(1)]);
 await as(1);
 const mt = (await db.query(`insert into matches (group_id, played_at, created_by, venue) values ($1,'2026-11-27 19:00+00',$2,'Petroller') returning id`, [g.id, U(1)])).rows[0];
 await db.query(`update matches set status='voting', score_a=5, score_b=3 where id=$1`, [mt.id]);
 const sys = (await db.query(`select body from group_messages where kind='system' order by id`)).rows.map((r) => r.body);
-ok("etkinlik kartları: " + JSON.stringify(sys), sys.length === 3 && sys[0].includes("27.11 22:00") && sys[2].includes("5-3"));
+ok("etkinlik kartları: " + JSON.stringify(sys), sys.length === 3 && sys[0].includes("Maç ayarlanıyor") && sys[0].includes("27.11 22:00") && sys[2].includes("5-3"));
 await as(3); ok("okunmamışa etkinlik kartları da sayılır (3)", (await db.query(`select unread from unread_counts()`)).rows[0]?.unread === 3);

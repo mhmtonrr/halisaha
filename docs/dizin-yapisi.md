@@ -15,9 +15,8 @@ src/app/g/[groupId]/m/[matchId]/ManageSections.tsx  Maç ekranı yönetim bölü
 src/app/g/[groupId]/m/[matchId]/GatheringPanel.tsx  Toplanan/kesin maç şeridi: sayaç, benim durumum, Geliyorum/Gelemem
 src/lib/listings-data.ts Maç özeti (match_overview) ve Keşfet "Adam arayan" ilanları (open_listings, engellenen süzülür)
 src/lib/match-rules.ts   Maç kuralları (saf, testli): varsayılan kadro, saat belli değil metni, direkt kesin mi
-src/lib/call-actions.ts  Eski çağrı Server Action'ları (düzenle/yanıtla/kesinleştir/kadroya al/adam ara; açma artık /mac-ayarla) + bildirimler
-src/lib/calls-data.ts    Çağrı sorguları (çağrı + yanıtlayanlar, gruptaki/maçtaki çağrılar, yönettiğim takım/topluluklar)
-src/lib/calls-notify.ts  Kadroda yer açılınca organizatöre bildirim (service role)
+src/lib/proposal-actions.ts  Üye maç önerisi eylemleri (öner, onayla → toplanan maç, geri çek) + bildirimler
+src/lib/match-notify.ts  Kadroda yer açılınca (yedek varsa) maçı yönetenlere bildirim (service role)
 src/lib/membership-notify.ts  Üye katıldı (yetkililere) ve rol değişti (kişiye) bildirimleri
 src/app/g/[groupId]/GroupExtras.tsx  Grup sayfası ekleri: geçici/dağıtılmış takım şeridi, sessize al, maç önerileri
 src/lib/reliability.ts   Güvenilirlik: oynadığı / (oynadığı + gelmediği) (saf, testli)
@@ -46,7 +45,7 @@ src/lib/card-name.ts     Karttaki ad: kısaltma ve "kartta görünen ad" doğrul
 src/lib/card-photo.ts    Kart fotoğrafı saf yardımcıları: depo yolu, kırpma/boyut hesapları (testli)
 src/lib/data.ts          Ortak sorgular, mevki/ayak sabitleri, tarih yardımcıları (TR saati)
 src/lib/regions.ts       81 il + src/data/districts.json (973 ilçe, iki kaynakla doğrulandı)
-src/lib/actions.ts       Server Action'lar (çağrılar hariç: call-actions.ts) (yetkiyi RLS yapar; burada sadece çağrı + yönlendirme)
+src/lib/actions.ts       Server Action'lar (maç ayarlama: match-actions/match-manage-actions, öneri: proposal-actions) (yetkiyi RLS yapar; burada sadece çağrı + yönlendirme)
 src/lib/finalize.ts      Oylama kapanışı, hesap bazlı genel rating hesabı ve yazımı (service role)
 src/components/LiveRefresh.tsx  Canlı güncelleme: Realtime dinler, router.refresh() yapar (filtre yardımcısı src/lib/live.ts)
 src/components/SubmitButton.tsx  Form gönderilirken anında "…" durumu (useFormStatus)
@@ -74,7 +73,7 @@ src/lib/authErrors.ts    Supabase Auth hatalarının Türkçesi
 src/lib/supabase/        server.ts (requireUser + karşılama yönlendirmesi), client.ts, admin.ts
 src/middleware.ts        Oturum yenileme, girişsiz yönlendirme, x-pathname başlığı
 src/app/                 Sayfalar (aşağıda)
-supabase/migrations/     0001..0046 SQL (sırayla; hepsi canlıya uygulandı)
+supabase/migrations/     0001..0047 SQL (sırayla; hepsi canlıya uygulandı)
 scripts/db-checks/       PGlite ile RLS/yetki kontrolleri (npm run db:check)
 scripts/setup-cron.mjs   Supabase pg_cron+pg_net ile /api/cron/tick'i 15 dakikada bir çağıran işi kurar/kaldırır (Vault'ta CRON_SECRET)
 scripts/e2e/             Canlı veritabanına karşı Playwright akış testleri
@@ -84,5 +83,5 @@ scripts/recompute-all.ts Tüm ratingleri baştan hesaplar (vite-node ile, aşağ
 
 Sayfalar: `/login` (e-posta+şifre, Google, şifremi unuttum) · `/hosgeldin` (ilk giriş: ad, il/ilçe, mevki…)
 · `/` ana sayfa · `/kesfet` takım sıralaması (`?sekme=oyuncu` oyuncu arama, `?sekme=mac` adam arayan maçlar) · `/profil` · `/takim-kur` · `/grup-kur` · `/sifre-yenile`
-· `/profil/ayarlar/{kisisel,futbolcu,iletisim,guvenlik,gorunurluk,engellenenler}` · `/sohbet` (genel sohbet: takım/grup/kişi; `/sohbet/[threadId]` birebir) · `/sosyal` (arkadaşlar ve istekler, takımlarım, gruplarım) · `/bildirimler` (bildirim kutusu, son 50) · `/davet/gonder` (maç/çağrı kartını sohbetten gönder; `?tur=poll|match&ref=`) · `/privacy` (gizlilik) · `/yardim` · `/geri-bildirim` · `/yetenek` (yetenek değerlendirmesi) · `/oyuncu/[userId]` (başkasının profili) · `/katil` (davet koduyla takıma/gruba katıl; `?tur=takim|grup`) · `/join/[code]` · `/mac-ayarla` (tek Maç ayarla formu; `?grup=&rakip=`) · `/davet/m/[code]` (maç davet bağlantısı: özet, kadro, Başvur) · `/g/[id]` grup/takım · `/g/[id]/{players,kadro,sohbet,cagri/[pollId],m/[matchId],p/[playerId]}` (`matches/new` ve `cagri/yeni` → `/mac-ayarla`)
+· `/profil/ayarlar/{kisisel,futbolcu,iletisim,guvenlik,gorunurluk,engellenenler}` · `/sohbet` (genel sohbet: takım/grup/kişi; `/sohbet/[threadId]` birebir) · `/sosyal` (arkadaşlar ve istekler, takımlarım, gruplarım) · `/bildirimler` (bildirim kutusu, son 50) · `/davet/gonder` (Maça çağır: maç kartını sohbetten gönder; `?tur=match&ref=`) · `/privacy` (gizlilik) · `/yardim` · `/geri-bildirim` · `/yetenek` (yetenek değerlendirmesi) · `/oyuncu/[userId]` (başkasının profili) · `/katil` (davet koduyla takıma/gruba katıl; `?tur=takim|grup`) · `/join/[code]` · `/mac-ayarla` (tek Maç ayarla formu; `?grup=&rakip=`) · `/davet/m/[code]` (maç davet bağlantısı: özet, kadro, Başvur) · `/g/[id]` grup/takım · `/g/[id]/{players,kadro,sohbet,cagri/[pollId],m/[matchId],p/[playerId]}` (`matches/new` ve `cagri/yeni` → `/mac-ayarla`)
 · takımlara özel: `/g/[id]/teklif` (bu takıma maç teklif et) · `/g/[id]/teklifler` (gelen/giden/kabul edilen) · `/g/[id]/istatistik` (herkese açık)

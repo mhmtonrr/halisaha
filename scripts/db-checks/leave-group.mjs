@@ -23,8 +23,8 @@ const past = (await q(`insert into matches (group_id, played_at, created_by, kin
 const fut = (await q(`insert into matches (group_id, played_at, created_by, kind, status) values ($1, now() + interval '3 day', $2, 'internal', 'planned') returning id`, [G, U(1)]))[0].id;
 for (const m of [past, fut]) await db.query(`insert into match_players (match_id, player_id, team) values ($1,$2,'A'),($1,$3,'B')`, [m, p3, p4]);
 await db.query(`insert into match_results (match_id, player_id, performance, match_score, votes_received, weight, rating_before, rating_after) values ($1,$2,0.7,7,3,1,65,67)`, [past, p3]);
-const poll = (await q(`insert into match_polls (group_id, created_by, play_on, capacity, status) values ($1,$2, current_date + 2, 10, 'open') returning id`, [G, U(1)]))[0].id;
-await db.query(`insert into poll_responses (poll_id, user_id, answer) values ($1,$2,'yes')`, [poll, U(3)]);
+const gath = (await q(`insert into matches (group_id, played_at, created_by, kind, status, capacity) values ($1, now() + interval '2 day', $2, 'internal', 'gathering', 10) returning id`, [G, U(1)]))[0].id;
+await db.query(`insert into match_entries (match_id, user_id, status, source, queued_at) values ($1,$2,'reserve','member', now())`, [gath, U(3)]);
 
 // --- ayrılma kuralları
 await as(1);
@@ -39,7 +39,7 @@ const left = (await q(`select left_at, user_id from group_players where id=$1`, 
 ok("ayrılan satır silinmez, left_at dolar, hesap bağı kalır", !!left.left_at && left.user_id === U(3));
 ok("geçmiş maç kadrosu ve sonuçları korunur", (await q(`select count(*)::int c from match_players where player_id=$1 and match_id=$2`, [p3, past]))[0].c === 1 && (await q(`select count(*)::int c from match_results where player_id=$1`, [p3]))[0].c === 1);
 ok("gelecekteki planlanmış maç kadrosundan çıkar", (await q(`select count(*)::int c from match_players where player_id=$1 and match_id=$2`, [p3, fut]))[0].c === 0);
-ok("açık çağrı yanıtı silinir", (await q(`select count(*)::int c from poll_responses where user_id=$1`, [U(3)]))[0].c === 0);
+ok("açık maçtaki yedek kaydı kapanır (left)", (await q(`select status from match_entries where match_id=$1 and user_id=$2`, [gath, U(3)]))[0].status === "left");
 ok("diğer oyuncunun kadro satırı etkilenmez", (await q(`select count(*)::int c from match_players where player_id=$1 and match_id=$2`, [p4, fut]))[0].c === 1);
 
 await as(3);

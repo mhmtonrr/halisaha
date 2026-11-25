@@ -5,23 +5,21 @@ import { cx } from "@/components/ui";
 
 /** Paylaşım anındaki özet (dm_messages.card) */
 export interface MatchCard {
-  type: "poll" | "match";
+  /** Eski çağrı kartları 0047'de silindi; tür hep "match" */
+  type: "match";
   group_id: string;
   group_name: string;
   group_kind: "team" | "community";
   starts_at: string;
   venue: string | null;
-  positions?: string[];
   capacity?: number | null;
-  /** Çağrı: toplama veya adam ara */
-  purpose?: "gather" | "fill";
   /** Çağrının saati belli değil (starts_at sadece günü gösterir) */
   time_tbd?: boolean;
   opponent?: string | null;
   team_size?: number | null;
 }
 
-const title = (card: MatchCard) => (card.type === "match" ? "Maça davet" : card.purpose === "fill" ? "Adam aranıyor" : "Maç çağrısı");
+const title = () => "Maça davet";
 
 /** Maç kartının güncel hali (match_overview): sayaç, durum, alıcının durumu */
 export interface LiveMatch {
@@ -41,7 +39,6 @@ const MY: Record<string, string> = {
   declined: "Gelemem dedin",
   rejected: "Bu maça alınmadın",
 };
-const POS: Record<string, string> = { GK: "Kaleci", DEF: "Defans", MID: "Orta saha", FWD: "Forvet" };
 
 const when = (iso: string, dayOnly?: boolean) =>
   dayOnly
@@ -69,7 +66,7 @@ export function MatchCardView({
   /** Maç kartında güncel bilgi (yoksa kart gönderim anındaki kopyayla çizilir) */
   live?: LiveMatch;
 }) {
-  const closed = status !== undefined && (card.type === "match" ? !["planned", "gathering"].includes(status) : status === "closed");
+  const closed = status !== undefined && !["planned", "gathering"].includes(status);
   const cancelled = status === "cancelled";
   // Saati belli olmayan çağrı gün bitene kadar geçerli
   const expired = new Date(card.starts_at).getTime() + (card.time_tbd ? 24 * 3600_000 : 0) < Date.now();
@@ -79,11 +76,7 @@ export function MatchCardView({
   let label = "";
   let note = "";
   if (!refId) {
-    note = card.type === "poll" ? "Bu çağrı artık yok." : "Bu maç artık yok.";
-  } else if (card.type === "poll") {
-    // Çağrı kartının alıcısı davetlidir (0041): üye olmasa da çağrıyı görür ve yanıt verir
-    href = `/g/${card.group_id}/cagri/${refId}`;
-    label = "Çağrıya yanıt ver";
+    note = "Bu maç artık yok.";
   } else {
     // 0043: kişiye özel davetli üye olmasa da maçı ve kadroyu görür, oradan "Geliyorum" der
     href = `/g/${card.group_id}/m/${refId}`;
@@ -92,9 +85,6 @@ export function MatchCardView({
   void isMember;
 
   const details = [
-    card.type === "poll" && card.purpose === "fill" && card.capacity ? `${card.capacity} oyuncu aranıyor` : null,
-    card.type === "poll" && card.purpose !== "fill" && card.capacity ? `${card.capacity} kişilik kadro` : null,
-    card.type === "poll" && card.positions?.length ? card.positions.map((p) => POS[p] ?? p).join(", ") : null,
     card.type === "match" && card.opponent ? `vs ${card.opponent}` : null,
     card.type === "match" && card.team_size ? `${card.team_size}v${card.team_size}` : null,
   ].filter(Boolean) as string[];
@@ -104,7 +94,7 @@ export function MatchCardView({
       <div className={cx("w-[88%] max-w-sm overflow-hidden rounded-2xl border bg-pitch-900", inactive ? "border-line opacity-80" : "border-accent/40")}>
         <div className="flex items-center gap-2 bg-accent/10 px-3 py-2">
           <Icon name="sports_soccer" fill className="text-[18px] text-primary" />
-          <span className="flex-1 text-xs font-bold uppercase tracking-wide text-accent">{title(card)}</span>
+          <span className="flex-1 text-xs font-bold uppercase tracking-wide text-accent">{title()}</span>
           {inactive && <span className="rounded-full bg-pitch-800 px-2 py-0.5 text-[10px] text-muted">{cancelled ? "İptal edildi" : closed ? "Kapandı" : "Geçti"}</span>}
         </div>
         <div className="space-y-2 px-3 py-3">

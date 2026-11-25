@@ -1,12 +1,12 @@
 import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { shareMatchCard } from "@/lib/actions";
-import { formatDate, one } from "@/lib/data";
+import { one } from "@/lib/data";
+import { matchWhen } from "@/lib/match-rules";
 import { Avatar } from "@/components/Avatar";
 import { Card, ErrorNote, Header } from "@/components/ui";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-type Tur = "poll" | "match";
 
 interface Person {
   id: string;
@@ -16,42 +16,34 @@ interface Person {
 }
 
 /** Kartın başlığı + grubu; kaynak yoksa/uygun değilse null */
-async function loadSource(supabase: Awaited<ReturnType<typeof requireUser>>["supabase"], tur: Tur, ref: string) {
-  if (tur === "poll") {
-    const { data } = await supabase.from("match_polls").select("group_id, status, purpose, play_on, starts_at, venue, groups(name)").eq("id", ref).maybeSingle();
-    const g = one(data?.groups as { name: string } | { name: string }[] | null);
-    // Kesinleşmiş toplama çağrısı da paylaşılır (geç gelen yedek olur); saat belli değilse günün öğleni gösterilir
-    return data && g
-      ? {
-          groupId: data.group_id as string,
-          open: data.status === "open" || data.status === "converted",
-          title: `${data.purpose === "fill" ? "Adam aranıyor" : "Maç çağrısı"} · ${g.name}`,
-          when: (data.starts_at as string | null) ?? new Date(`${data.play_on}T12:00:00+03:00`).toISOString(),
-          venue: data.venue as string | null,
-        }
-      : null;
-  }
-  const { data } = await supabase.from("matches").select("group_id, status, played_at, venue, groups!matches_group_id_fkey(name)").eq("id", ref).maybeSingle();
+async function loadSource(supabase: Awaited<ReturnType<typeof requireUser>>["supabase"], ref: string) {
+  const { data } = await supabase.from("matches").select("group_id, status, played_at, time_tbd, venue, groups!matches_group_id_fkey(name)").eq("id", ref).maybeSingle();
   const g = one(data?.groups as { name: string } | { name: string }[] | null);
-  return data && g ? { groupId: data.group_id as string, open: data.status === "planned" || data.status === "gathering", title: `Maç · ${g.name}`, when: data.played_at as string, venue: data.venue as string | null } : null;
+  return data && g
+    ? {
+        groupId: data.group_id as string,
+        open: data.status === "planned" || data.status === "gathering",
+        title: `Maç · ${g.name}`,
+        when: matchWhen(data.played_at as string, !!data.time_tbd),
+        venue: data.venue as string | null,
+      }
+    : null;
 }
 
-/** Maç/çağrı kartını sohbetten gönderme: arkadaşlar + oyuncu arama */
+/** "Maça çağır": maç kartını sohbetten gönderme (kişiye özel davet, 0043): arkadaşlar + oyuncu arama */
 export default async function SendCardPage({ searchParams }: { searchParams: Promise<{ tur?: string; ref?: string; q?: string; ok?: string; error?: string }> }) {
   const { tur, ref, q = "", ok, error } = await searchParams;
-  if (!["poll", "match"].includes(tur ?? "") || !ref || !UUID.test(ref)) notFound();
+  if (tur !== "match" || !ref || !UUID.test(ref)) notFound();
   const { supabase, user } = await requireUser();
 
-  const source = await loadSource(supabase, tur as Tur, ref);
+  const source = await loadSource(supabase, ref);
   if (!source) notFound();
-  // Kaptan/yetkili her şeyi; organizatör kendi çağrısını ve kendi kurduğu maçı paylaşır (share_match_card ile aynı kural)
-  const { data: canShare } =
-    tur === "poll"
-      ? await supabase.rpc("can_manage_poll", { p_poll_id: ref })
-      : tur === "match"
-        ? await supabase.rpc("can_manage_match", { p_match_id: ref })
-        : await supabase.rpc("is_group_admin", { p_group_id: source.groupId });
-  if (!canShare) redirect("/");
+  // share_match_card ile aynı kural: maçı yöneten (davet onaysız) veya kadrodaki oyuncu (davet onaya düşer)
+  const [{ data: canManage }, { data: inRoster }] = await Promise.all([
+    supabase.rpc("can_manage_match", { p_match_id: ref }),
+    supabase.rpc("is_match_participant", { p_match_id: ref }),
+  ]);
+  if (!canManage && !inRoster) redirect("/");
 
   const needle = q.trim().replace(/[%_,()]/g, " ");
   const [{ data: rows }, { data: found }, { data: invited }] = await Promise.all([
@@ -67,7 +59,8 @@ export default async function SendCardPage({ searchParams }: { searchParams: Pro
           .neq("id", user.id)
           .limit(15)
       : Promise.resolve({ data: [] as Person[] }),
-    tur === "poll" ? supabase.from("poll_invites").select("user_id").eq("poll_id", ref) : Promise.resolve({ data: [] as { user_id: string }[] }),
+    // Zaten çağrılmış/kadroda/başvurmuş olanlar (RLS: yöneten hepsini, kadrodaki oyuncu kadroyu görür)
+    supabase.from("match_entries").select("user_id").eq("match_id", ref).in("status", ["invited", "in", "reserve", "pending"]),
   ]);
   const invitedSet = new Set((invited ?? []).map((r) => r.user_id as string));
   const friendIds = (rows ?? []).map((r) => (r.user_a === user.id ? r.user_b : r.user_a));
@@ -103,20 +96,21 @@ export default async function SendCardPage({ searchParams }: { searchParams: Pro
     <main>
       <Header
         title="Maça çağır"
-        back={tur === "poll" ? `/g/${source.groupId}/cagri/${ref}` : `/g/${source.groupId}/m/${ref}`}
+        back={`/g/${source.groupId}/m/${ref}`}
       />
       <ErrorNote message={error} />
       <Card className="mb-4 space-y-0.5">
         <div className="text-xs text-muted">Gönderilecek kart</div>
         <div className="font-bold">{source.title}</div>
         <div className="text-sm text-muted">
-          {formatDate(source.when)}
+          {source.when}
           {source.venue ? ` · ${source.venue}` : ""}
         </div>
         {!source.open && <p className="pt-1 text-xs text-amber-300">Bu kayıt artık açık değil; gönderilemez.</p>}
-        {tur === "poll" && source.open && (
+        {source.open && (
           <p className="pt-1 text-xs text-muted">
-            Kart sohbetten gider. Çağırdığın kişi üye olmasa da çağrıyı görüp yanıt verir; kadroya alırsan bu maç için ödünç oyuncu olur.
+            Kart sohbetten gider. Çağırdığın kişi üye olmasa da maçı ve kadroyu görür, &quot;Geliyorum&quot; der; bu maç için ödünç oyuncu olur.
+            {!canManage && " Senin çağırdığın kişi maçı ayarlayanın onayına düşer."}
           </p>
         )}
       </Card>

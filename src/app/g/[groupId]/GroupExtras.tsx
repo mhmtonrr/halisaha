@@ -1,4 +1,4 @@
-import { cancelProposal, decideProposal, proposeMatch } from "@/lib/call-actions";
+import { cancelProposal, decideProposal, proposeMatch } from "@/lib/proposal-actions";
 import { setGroupMuted, teamLifecycle } from "@/lib/actions";
 import { callWhen, istanbulDate } from "@/lib/call-rules";
 import { Card, Input, Label, SectionTitle } from "@/components/ui";

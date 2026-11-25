@@ -381,7 +381,6 @@ export default async function MatchPage({
           { table: "match_players", filter: `match_id=eq.${matchId}` },
           { table: "match_results", filter: `match_id=eq.${matchId}` },
           { table: "match_withdrawals", filter: `match_id=eq.${matchId}` },
-          ...(planned ? [{ table: "match_polls", filter: `match_id=eq.${matchId}` }] : []),
           ...(match.challenge_id
             ? [
                 // Karşı takımın maçı, kadrosu ve sonuçları; teklif iptali (maçlar silinir, teklifin durumu güncellenir)
@@ -441,7 +440,7 @@ export default async function MatchPage({
         />
       )}
       {canManage && (match.status === "planned" || match.status === "gathering") && (
-        <SendInviteLink tur="match" refId={matchId} className="mb-4" />
+        <SendInviteLink refId={matchId} className="mb-4" />
       )}
       {match.status === "gathering" && !manage && (
         <>

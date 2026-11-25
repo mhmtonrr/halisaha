@@ -15,7 +15,7 @@ import { text, type Content, type NotificationType } from "@/lib/notify-rules";
 import { loadMenuData } from "@/lib/menu-data";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { groupMemberIds, groupName, linkedMatches, matchAccountIds } from "@/lib/recipients";
-import { notifySpotOpened } from "@/lib/calls-notify";
+import { notifySpotOpened } from "@/lib/match-notify";
 import { announceJoin, announceRole } from "@/lib/membership-notify";
 import { balanceTeams, pickVariant, type TeamCandidate } from "@/lib/teams";
 import { formatDate, getGroupPlayers, parseLocalDateTime, POSITIONS, type Position } from "@/lib/data";
@@ -841,7 +841,7 @@ export async function addToMatch(fd: FormData) {
   if (added.length && match) {
     later(async () => {
       const admin = createAdminClient();
-      await notify(added, "match", text.pollSelected(await groupName(admin, groupId), groupId, matchId, formatDate(match.played_at as string)), { excludeUserId: user.id });
+      await notify(added, "match", text.selectedForMatch(await groupName(admin, groupId), groupId, matchId, formatDate(match.played_at as string)), { excludeUserId: user.id });
     });
   }
   revalidatePath(back);
@@ -1409,7 +1409,7 @@ export async function shareMatchCard(fd: FormData) {
   const userId = str(fd, "userId");
   const q = str(fd, "q");
   const page = `/davet/gonder?tur=${encodeURIComponent(type)}&ref=${encodeURIComponent(ref)}${q ? `&q=${encodeURIComponent(q)}` : ""}`;
-  if (!["poll", "match"].includes(type) || !UUID_RE.test(ref) || !UUID_RE.test(userId)) fail("/", "Geçersiz istek");
+  if (type !== "match" || !UUID_RE.test(ref) || !UUID_RE.test(userId)) fail("/", "Geçersiz istek");
   const { data: messageId, error } = await supabase.rpc("share_match_card", { p_user_id: userId, p_type: type, p_ref: ref });
   if (error || messageId == null) fail(page, rpcMessage(error ?? {}, "Davet gönderilemedi"));
   later(async () => {
@@ -1418,9 +1418,9 @@ export async function shareMatchCard(fd: FormData) {
       admin.from("dm_messages").select("thread_id, card").eq("id", messageId as number).maybeSingle(),
       admin.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
     ]);
-    const card = msg?.card as { group_name?: string; starts_at?: string; purpose?: string; time_tbd?: boolean } | null;
+    const card = msg?.card as { group_name?: string; starts_at?: string; time_tbd?: boolean } | null;
     if (!msg || !card?.group_name) return;
-    const label = type === "poll" ? (card.purpose === "fill" ? "Adam aranıyor" : "Maç çağrısı") : "Maç";
+    const label = "Maç";
     const whenText = card.starts_at
       ? new Date(card.starts_at).toLocaleString("tr-TR", {
           timeZone: "Europe/Istanbul",

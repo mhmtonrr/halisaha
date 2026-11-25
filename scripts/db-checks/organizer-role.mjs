@@ -32,16 +32,15 @@ ok("kurucu, yetkili, organizatör maç açabilir; üye ve yabancı açamaz",
 const insMatch = (n) => `insert into matches (group_id, played_at, created_by, kind) values ('${G}', now() + interval '48 hours', '${U(n)}', 'internal') returning id`;
 await as(4);
 ok("üye maç kuramaz (RLS)", await fails(insMatch(4)));
-ok("üye çağrı açamaz", await fails(`select create_gather_poll($1, current_date + 2) id`, [G]));
-ok("çağrı tablosuna doğrudan yazılamaz", await fails(`insert into match_polls (group_id, created_by, play_on) values ($1,$2, current_date + 2)`, [G, U(4)]));
+ok("üye maç ayarlayamaz", await fails(`select create_match_v2($1, current_date + 2, null, 5::smallint, 'internal') id`, [G]));
 await as(3);
 const M3 = (await q(insMatch(3)))[0].id;
 ok("organizatör maç kurar", !!M3);
-const P3 = (await q(`select create_gather_poll($1, current_date + 2) id`, [G]))[0].id;
-ok("organizatör çağrı açar", !!P3);
+const P3 = (await q(`select create_match_v2($1, current_date + 2, null, 5::smallint, 'internal', null, null, null, 10::smallint, false) id`, [G]))[0].id;
+ok("organizatör maç ayarlar (toplanan)", !!P3);
 await as(1);
 const M1 = (await q(insMatch(1)))[0].id;
-const P1 = (await q(`select create_gather_poll($1, current_date + 2) id`, [G]))[0].id;
+const P1 = (await q(`select create_match_v2($1, current_date + 2, null, 5::smallint, 'internal', null, null, null, 10::smallint, false) id`, [G]))[0].id;
 
 // --- kendi maçını yönetme, başkasınınkine dokunamama
 await as(3);
@@ -66,17 +65,14 @@ await db.query(`update matches set status='voting', score_a=1, score_b=0, voting
 await as(1);
 ok("planlanmamış maça misafir eklenmez", await fails(`select add_match_guest($1, 'Misafir Can', null)`, [M1]));
 
-// --- çağrı yönetimi
+// --- toplanan maç yönetimi
 await as(3);
-ok("organizatör başkasının çağrısını düzenleyemez", await fails(`select update_gather_poll($1, null, 'Saha', null, null, null, 'not')`, [P1]));
-ok("organizatör başkasının çağrısını kesinleştiremez", await fails(`select finalize_poll($1, now() + interval '2 day', null, null, 'internal')`, [P1]));
-ok("organizatör kendi çağrısını düzenler", !(await fails(`select update_gather_poll($1, null, 'Saha', null, null, null, 'not')`, [P3])));
-await as(4);
-await db.query(`select respond_poll($1, 'yes')`, [P3]);
-await as(3);
-ok("organizatör yanıtlayanı güvenilirlik bilgisiyle görür", (await q(`select played from poll_responders($1)`, [P3]))[0]?.played === 0);
+ok("organizatör başkasının maçını erteleyemez", await fails(`select reschedule_match($1, current_date + 3, null)`, [P1]));
+ok("organizatör başkasının maçına kesin gelen ekleyemez", await fails(`select manage_entry($1, $2, 'add')`, [P1, U(4)]));
+ok("organizatör kendi maçını erteler", !(await fails(`select reschedule_match($1, current_date + 3, null)`, [P3])));
+ok("organizatör kendi maçına kesin gelen ekler", !(await fails(`select manage_entry($1, $2, 'add')`, [P3, U(4)])));
 await as(2);
-ok("yetkili organizatörün çağrısını yönetir", !(await fails(`select update_gather_poll($1, null, 'Saha', null, null, null, 'not')`, [P3])));
+ok("yetkili organizatörün maçını yönetir", !(await fails(`select reschedule_match($1, current_date + 4, null)`, [P3])));
 
 // --- çekilme kararı: maçı kuran organizatör verir
 await as(4);
@@ -98,7 +94,7 @@ await as(1);
 await db.query(`select set_member_role($1, 'member')`, [p3]);
 await as(3);
 ok("rolü alınan organizatör yeni maç kuramaz", await fails(insMatch(3)));
-ok("rolü alınan organizatör çağrısını yönetemez", await fails(`select update_gather_poll($1, null, 'Saha', null, null, null, 'not')`, [P3]));
+ok("rolü alınan organizatör yeni maç ayarlayamaz", await fails(`select create_match_v2($1, current_date + 2, null, 5::smallint, 'internal') id`, [G]));
 
 // --- kart paylaşımı: organizatör kendi maçını paylaşır, başkasınınkini paylaşamaz
 await as(1);

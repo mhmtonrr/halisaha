@@ -30,7 +30,7 @@ export default async function DmPage({ params }: { params: Promise<{ threadId: s
     supabase.from("profiles").select("id, display_name, photo_url").eq("id", otherId).maybeSingle(),
     supabase
       .from("dm_messages")
-      .select("id, author_id, kind, body, invite_id, card, poll_id, match_id, deleted_at, created_at")
+      .select("id, author_id, kind, body, invite_id, card, match_id, deleted_at, created_at")
       .eq("thread_id", threadId)
       .order("id", { ascending: false })
       .limit(PAGE_SIZE),
@@ -43,15 +43,13 @@ export default async function DmPage({ params }: { params: Promise<{ threadId: s
 
   // Kartlar: güncel durum (açık/kapalı) ve görüntüleyenin üye olduğu gruplar
   const msgs = (messages ?? []) as DmMessage[];
-  const ids = (k: "poll_id" | "match_id") => [...new Set(msgs.map((m) => m[k]).filter(Boolean))] as string[];
-  const [pol, over, memberships] = await Promise.all([
-    ids("poll_id").length ? supabase.from("match_polls").select("id, status").in("id", ids("poll_id")) : { data: [] },
+  const ids = (k: "match_id") => [...new Set(msgs.map((m) => m[k]).filter(Boolean))] as string[];
+  const [over, memberships] = await Promise.all([
     // Maç kartı canlı: sayaç, durum, benim durumum (0043 match_overview; davetli görebilir)
     matchOverview(supabase, ids("match_id")),
     msgs.some((m) => m.kind === "match") ? getMemberships(supabase, user.id) : Promise.resolve([]),
   ]);
   const refStatus: Record<string, string> = {};
-  for (const r of (pol.data ?? []) as { id: string; status: string }[]) refStatus[`poll:${r.id}`] = r.status;
   const live: Record<string, LiveMatch> = {};
   for (const o of over.values()) {
     refStatus[`match:${o.match_id}`] = o.status;

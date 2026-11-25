@@ -68,7 +68,7 @@ try {
 
   // 3) Hata dayanıklılığı: gönderici patlasa da notify fırlatmaz, bildirim kutusu yazılmış kalır
   const boom = async () => { throw new Error("ağ koptu"); };
-  const rb = await notify([b], "poll", text.pollOpened("G", "g1", "p1", "Cum 21:00"), { sender: boom });
+  const rb = await notify([b], "match", text.matchGathering("G", "g1", "m1", "Cum 21:00", 1, 8), { sender: boom });
   check("gönderim hatasında notify fırlatmaz; kutu yazıldı, abonelik silinmedi", rb.stored === 1 && rb.sent === 0 && (await admin.from("push_subscriptions").select("id").eq("user_id", b)).data!.length === 1);
 
   // 4) Gerçek kütüphane: VAPID imzası ve şifreli gövde (gönderim yapmadan istek detaylarını üretir)
@@ -83,7 +83,7 @@ try {
   check("TTL başlığı iletildi", String(h.TTL) === "3600");
 
   // 5) Gerçek gönderici yolu (enjeksiyon yok): ulaşılamayan push servisinde fırlatmaz ve aboneliği silmez
-  const rr = await notify([b], "poll", text.pollOpened("G2", "g1", "p2", "Cum 21:00"));
+  const rr = await notify([b], "match", text.matchGathering("G2", "g1", "m2", "Cum 21:00", 1, 8));
   check("gerçek gönderici ulaşılamayan servisle fırlatmaz (sent 0, abonelik kalır)", rr.sent === 0 && (await admin.from("push_subscriptions").select("id").eq("user_id", b)).data!.length === 1);
 } catch (e) {
   failed++;

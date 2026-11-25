@@ -61,8 +61,6 @@ export default async function GroupPage({
   const labels = ROLE_LABEL[group.kind as GroupKind];
 
   await finalizeExpired(groupId);
-  // Günü geçen açık çağrılar kapanır (cron yok; sayfa açılışında)
-  await supabase.rpc("close_stale_polls", { p_group: groupId });
 
   const [players, { data: matches }, { data: inviteCode }, { data: unread }] = await Promise.all([
     getGroupSummaries(supabase, groupId),

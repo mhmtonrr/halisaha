@@ -70,16 +70,23 @@ describe("metinler", () => {
   const all = [
     text.voteOpened("g", "m", "Rakip FK"),
     text.voteReminder("g", "m", 3.4),
-    text.pollOpened("Grup", "g", "p", "Cum 21:00", "Saha"),
-    text.fillOpened("Grup", "g", "p", 2, "Cum 21:00", ["DEF"]),
-    text.pollUpdated("Grup", "g", "p", "Cum 21:00", "Saha"),
-    text.pollSelected("Grup", "g", "m", "Cum 21:00"),
-    text.pollReserve("Grup", "g", "p", "Cum 21:00", 2),
-    text.pollRejected("Grup", "g", "p"),
-    text.pollApplied("Ali", "g", "p"),
-    text.pollInviteeAnswered("Ali", "yes", "g", "p"),
-    text.pollInviteeAnswered("Ali", "maybe", "g", "p"),
-    text.spotOpened("Ali", "g", "p", 3),
+    text.selectedForMatch("Grup", "g", "m", "Cum 21:00"),
+    text.spotOpened("Ali", "g", "m", 3),
+    text.matchGathering("Grup", "g", "m", "Cum · saat belli değil", 3, 8),
+    text.addedToRoster("Onur", "Grup", "g", "m", "Cum 21:00"),
+    text.rosterFull("Grup", "g", "m", 8),
+    text.matchConfirmed("Grup", "g", "m", "Cum 21:00", "Rakip"),
+    text.matchRescheduled("Grup", "g", "m", "Cmt 20:00", true),
+    text.applicationReceived("Melih", "Grup", "g", "m", "ilandan"),
+    text.applicationDecided("Grup", "g", "m", "reserve", "Cum 21:00"),
+    text.listingNeedsApproval("Onur", "Takım", "g2", "Cum"),
+    text.listingOpened("Takım", "Grup", "g", "m", 2, "Cum"),
+    text.counterOffer("Takım", "g", "Cum 21:00", false),
+    text.autoPromoted("Grup", "g", "m", "Cum 21:00"),
+    text.matchToday("Grup", "g", "m", "Cum 21:00", null),
+    text.gatheringWarning("Grup", "g", "m", 6, 8),
+    text.scoreReminder("Grup", "g", "m", true),
+    text.gatheringExpired("Grup", "g", "m", "Cum"),
     text.proposalReceived("Ali", "Grup", "g", "Cuma"),
     text.proposalDecided("Grup", "g", true, "p"),
     text.proposalDecided("Grup", "g", false, null),
@@ -119,10 +126,11 @@ describe("metinler", () => {
     expect(text.voteReminder("g", "m1", 2).tag).toBe("vote-reminder:m1");
     expect(text.voteOpened("g", "m1").tag).not.toBe(text.voteReminder("g", "m1", 2).tag);
   });
-  it("kadroya seçilen maça, yedek ve reddedilen çağrıya gider", () => {
-    expect(text.pollSelected("G", "g", "m", "Cum").url).toBe("/g/g/m/m");
-    expect(text.pollReserve("G", "g", "p", "Cum", 1).url).toBe("/g/g/cagri/p");
-    expect(text.pollRejected("G", "g", "p").url).toBe("/g/g/cagri/p");
+  it("maç bildirimleri maç ekranına gider; eski çağrı adresi kalmadı (0047)", () => {
+    expect(text.selectedForMatch("G", "g", "m", "Cum").url).toBe("/g/g/m/m");
+    expect(text.spotOpened("Ali", "g", "m", 2).url).toBe("/g/g/m/m");
+    expect(text.applicationDecided("G", "g", "m", "in", "Cum").url).toBe("/g/g/m/m");
+    expect(text.proposalDecided("G", "g", true, "m").url).toBe("/g/g/m/m");
   });
   it("hatırlatma en az 1 saat gösterir", () => {
     expect(text.voteReminder("g", "m", 0.2).body).toContain("1 saat");
