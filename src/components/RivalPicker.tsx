@@ -23,7 +23,7 @@ export interface RivalSearch {
 
 const place = (t: RivalTeam) => [t.district, t.city].filter(Boolean).join(" · ");
 
-/** Rakip adımı: uygulamadaki takımlarda ad/il/ilçe araması veya uygulamada olmayan takımın adı */
+/** Rakip seçimi (Maç ayarla ve maç ekranı): uygulamadaki takımlarda ad/il/ilçe araması veya uygulamada olmayan takımın adı */
 export function RivalPicker({
   groupId,
   source,
@@ -34,6 +34,7 @@ export function RivalPicker({
   onName,
   search,
   onSearch,
+  teamHint = "Maç açılınca teklif gider",
 }: {
   groupId: string;
   source: "app" | "name";
@@ -44,6 +45,8 @@ export function RivalPicker({
   onName: (v: string) => void;
   search: RivalSearch;
   onSearch: (v: RivalSearch) => void;
+  /** Seçilen takımın konumu yoksa altında yazan */
+  teamHint?: string;
 }) {
   const [results, setResults] = useState<RivalTeam[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -103,7 +106,7 @@ export function RivalPicker({
           <TeamBadge name={team.name} color={team.color ?? null} />
           <div className="min-w-0 flex-1">
             <div className="truncate font-display font-bold">{team.name}</div>
-            <div className="truncate text-xs text-muted">{place(team) || "Maç açılınca teklif gider"}</div>
+            <div className="truncate text-xs text-muted">{place(team) || teamHint}</div>
           </div>
           <button type="button" onClick={() => onTeam(null)} className="shrink-0 rounded-full border border-line px-3 py-1.5 text-xs font-semibold">
             Değiştir

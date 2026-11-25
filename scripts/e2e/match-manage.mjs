@@ -113,7 +113,7 @@ try {
   check("yer açılınca yedek kadroya alındı", (await entry(B)) === "in" && (await entry(D)) === "left");
 
   // --- Rakip adı, kesinleştir, ertele
-  await PO.fill('input[aria-label="Rakip adı"]', "Yıldızspor"); await PO.click('form:has(input[aria-label="Rakip adı"]) button:has-text("Kaydet")'); await PO.waitForURL(/ok=rakip/); await PO.waitForLoadState("networkidle"); await PO.locator("main").waitFor();
+  await PO.click('button:text-is("Uygulamada yok")'); await PO.fill('input[aria-label="Rakip adı"]', "Yıldızspor"); await PO.click('form:has(input[name="opponent"]) button:text-is("Kaydet")'); await PO.waitForURL(/ok=rakip/); await PO.waitForLoadState("networkidle"); await PO.locator("main").waitFor();
   await PO.fill('input[aria-label="Maç saati"]', "21:00");
   await PO.click('button:has-text("Maçı kesinleştir")'); await PO.waitForURL(/ok=kesin/); await PO.waitForLoadState("networkidle"); await PO.locator("main").waitFor();
   const k = (await admin.from("matches").select("status, opponent_name, time_tbd").eq("id", MID).single()).data;
@@ -139,7 +139,10 @@ try {
 
   // --- Uygulamadaki takıma teklif → karşı teklif → kabul
   const M3 = await mk(5);
-  await go(PO, `${BASE}/g/${T}/m/${M3}?rakipAra=${encodeURIComponent("Rakip Aslanlar")}`);
+  await go(PO, `${BASE}/g/${T}/m/${M3}`);
+  await PO.selectOption('select[aria-label="İl"] >> nth=-1', "");
+  await PO.fill('input[aria-label="Takım ara"]', "Rakip Aslanlar");
+  await PO.locator('button:has-text("Rakip Aslanlar")').first().click();
   await PO.click('button:has-text("Teklif gönder")'); await PO.waitForURL(/ok=teklif/); await PO.waitForLoadState("networkidle"); await PO.locator("main").waitFor();
   check("teklif gönderildi, sıra rakipte", (await PO.locator("text=Sıra rakipte").count()) === 1);
   const PR = await login(R);

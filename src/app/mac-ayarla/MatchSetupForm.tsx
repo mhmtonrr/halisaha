@@ -13,7 +13,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { Icon } from "@/components/Icon";
 import { Avatar } from "@/components/Avatar";
 import { OvrBadge, PositionChip } from "@/components/PlayerCard";
-import { RivalPicker, type RivalSearch, type RivalTeam } from "./RivalPicker";
+import { RivalPicker, type RivalSearch, type RivalTeam } from "@/components/RivalPicker";
 
 const selectCls = "min-h-11 w-full rounded-xl border border-line bg-pitch-950 px-3 text-sm";
 const textareaCls = "w-full rounded-xl border border-line bg-pitch-950 p-3 text-sm outline-none placeholder:text-muted/60 focus:border-accent";

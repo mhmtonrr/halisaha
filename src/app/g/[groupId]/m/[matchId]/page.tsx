@@ -22,7 +22,6 @@ import { getFormation, inferSize } from "@/lib/formations";
 import { LineupPitch, type PitchPlayer } from "@/components/LineupPitch";
 import { LineupEditor } from "./LineupEditor";
 import { LiveRefresh } from "@/components/LiveRefresh";
-import { trPattern } from "@/lib/search";
 import { AddPlayer, type Person } from "./AddPlayer";
 import { FeeManage, ListingManage, RivalManage, RosterManage, ScheduleManage, type EntryRow } from "./ManageSections";
 import { applyMatch, cancelApplication } from "@/lib/match-manage-actions";
@@ -212,10 +211,10 @@ export default async function MatchPage({
   searchParams,
 }: {
   params: Promise<{ groupId: string; matchId: string }>;
-  searchParams: Promise<{ error?: string; voted?: string; positions?: string; kabul?: string; dizilis?: string; cekilme?: string; yanit?: string; rakipAra?: string; ok?: string }>;
+  searchParams: Promise<{ error?: string; voted?: string; positions?: string; kabul?: string; dizilis?: string; cekilme?: string; yanit?: string; ok?: string }>;
 }) {
   const { groupId, matchId } = await params;
-  const { error, voted, positions, kabul, dizilis, cekilme, yanit, rakipAra = "", ok } = await searchParams;
+  const { error, voted, positions, kabul, dizilis, cekilme, yanit, ok } = await searchParams;
   const { supabase, user } = await requireUser();
 
   const { data: first } = await supabase
@@ -249,7 +248,7 @@ export default async function MatchPage({
   const open = match.status === "gathering" || planned;
   const manage = open && !!canManage;
   // Yönetim verisi (yeniden tasarım 4b): kayıtlar, ilanlar, bağlantı kodu, hedef gruplar, rakip teklifi
-  const [entryRows, listingRows, code, targetRows, pendingChallenge, rivalResults, applyListing] = await Promise.all([
+  const [entryRows, listingRows, code, targetRows, pendingChallenge, applyListing] = await Promise.all([
     manage
       ? supabase.from("match_entries").select("user_id, player_id, status, source, position, note, queued_at, created_at, profiles!match_entries_user_id_fkey(display_name)").eq("match_id", matchId).then((r) => r.data ?? [])
       : Promise.resolve([]),
@@ -263,9 +262,6 @@ export default async function MatchPage({
     manage && match.kind === "external" && !match.challenge_id
       ? supabase.from("match_challenges").select("id, to_group_id, awaiting_group_id, proposed_at, proposed_tbd, venue").eq("from_match_id", matchId).eq("status", "pending").maybeSingle().then((r) => r.data)
       : Promise.resolve(null),
-    manage && match.kind === "external" && !match.challenge_id && rakipAra.trim().length >= 2
-      ? supabase.from("groups").select("id, name, city").eq("kind", "team").is("archived_at", null).neq("id", groupId).filter("name", "imatch", trPattern(rakipAra)).limit(8).then((r) => r.data ?? [])
-      : Promise.resolve([]),
     // Üye olmayan, kaydı olmayan ama maçı bir ilandan görüyor: "Başvur"
     open && !isMember && !myEntry
       ? supabase.from("match_listings").select("id").eq("match_id", matchId).eq("status", "active").limit(1).maybeSingle().then((r) => r.data?.id as string | undefined)
@@ -559,8 +555,7 @@ export default async function MatchPage({
                 }
               : null
           }
-          search={rakipAra}
-          results={rivalResults as { id: string; name: string; city: string | null }[]}
+          homeCity={myTeam?.city ?? ""}
         />
       )}
       {kabul && (

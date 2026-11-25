@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { SubmitButton } from "@/components/SubmitButton";
-import { ShareLink } from "@/components/ShareLink";
 import { Card, Input, Label, SectionTitle, cx } from "@/components/ui";
 import { OvrBadge, PositionChip } from "@/components/PlayerCard";
 import { POSITION_NAME, POSITIONS, type Position } from "@/lib/data";
 import { matchWhen } from "@/lib/match-rules";
+import { InviteBox } from "./InviteBox";
+import { RivalChooser } from "./RivalChooser";
 import {
   answerChallenge,
   cancelMatch,
@@ -15,13 +16,10 @@ import {
   createListing,
   decideApplication,
   manageEntry,
-  regenerateMatchCode,
   removeGuest,
   rescheduleMatch,
   respondReschedule,
-  sendChallenge,
   setMatchFee,
-  setOpponent,
 } from "@/lib/match-manage-actions";
 
 // Yeniden tasarım 4b: maç ekranının yönetim bölümleri (sadece maçı yönetene; misafir işleri kaptan/yetkiliye)
@@ -304,21 +302,7 @@ export function ListingManage({
             <p className="text-xs text-muted">İlan seçtiğin yerlerin hepsinde paylaşılır. Gelen istekler senin onayına düşer; yetkili olmadığın grupta ilan önce o grubun onayına gider.</p>
           </form>
         )}
-        {code && (
-          <div className="flex items-center gap-2 border-t border-line pt-3">
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold">Davet bağlantısı</div>
-              <div className="truncate text-xs text-muted">Açan kişi kadroyu görür, başvurur; sen onaylarsın · kod {code}</div>
-            </div>
-            <ShareLink path={`/davet/m/${code}`} title="Maça gel" label="Kopyala" className={cx(smallBtn, "bg-accent text-pitch-950")} />
-            <form action={regenerateMatchCode}>
-              <Hidden groupId={groupId} matchId={matchId} />
-              <button className="text-muted" aria-label="Bağlantıyı yenile" title="Bağlantıyı yenile (eskisi geçersiz olur)">
-                <Icon name="refresh" className="text-[20px]" />
-              </button>
-            </form>
-          </div>
-        )}
+        {code && <InviteBox groupId={groupId} matchId={matchId} code={code} />}
       </Card>
     </section>
   );
@@ -330,15 +314,13 @@ export function RivalManage({
   matchId,
   opponentName,
   challenge,
-  search,
-  results,
+  homeCity,
 }: {
   groupId: string;
   matchId: string;
   opponentName: string | null;
   challenge: { id: string; toName: string; awaitingMe: boolean; proposedAt: string; proposedTbd: boolean; venue: string | null } | null;
-  search: string;
-  results: { id: string; name: string; city: string | null }[];
+  homeCity: string;
 }) {
   const back = `/g/${groupId}/m/${matchId}`;
   return (
@@ -376,39 +358,7 @@ export function RivalManage({
             )}
           </div>
         ) : (
-          <>
-            <form action={setOpponent} className="flex gap-2">
-              <Hidden groupId={groupId} matchId={matchId} />
-              <Input name="opponent" defaultValue={opponentName ?? ""} minLength={2} maxLength={60} placeholder="Rakip adı (uygulamada değilse)" aria-label="Rakip adı" className="flex-1" required />
-              <SubmitButton variant="secondary" className="shrink-0 px-4" pendingLabel="…">
-                Kaydet
-              </SubmitButton>
-            </form>
-            <form method="get" action={back} className="flex gap-2 border-t border-line pt-3">
-              <Input name="rakipAra" defaultValue={search} placeholder="Uygulamadaki takımı ara…" aria-label="Rakip takım ara" className="flex-1" />
-              <button className="min-h-11 shrink-0 rounded-xl bg-pitch-800 px-4 font-bold">Ara</button>
-            </form>
-            {search.length >= 2 &&
-              (results.length === 0 ? (
-                <p className="text-sm text-muted">Takım bulunamadı.</p>
-              ) : (
-                <ul className="space-y-1.5">
-                  {results.map((t) => (
-                    <li key={t.id} className="flex items-center gap-2 rounded-lg bg-pitch-900 px-3 py-2">
-                      <span className="min-w-0 flex-1 truncate text-sm">
-                        {t.name}
-                        {t.city ? <span className="text-xs text-muted"> · {t.city}</span> : null}
-                      </span>
-                      <form action={sendChallenge}>
-                        <Hidden groupId={groupId} matchId={matchId} />
-                        <input type="hidden" name="toGroupId" value={t.id} />
-                        <button className={cx(smallBtn, "bg-accent text-pitch-950")}>Teklif gönder</button>
-                      </form>
-                    </li>
-                  ))}
-                </ul>
-              ))}
-          </>
+          <RivalChooser groupId={groupId} matchId={matchId} opponentName={opponentName} homeCity={homeCity} />
         )}
       </Card>
     </section>
