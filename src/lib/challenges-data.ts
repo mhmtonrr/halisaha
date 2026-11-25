@@ -33,6 +33,9 @@ export interface Challenge {
   myMatchId: string | null;
   /** Karşı taraftaki maçın durumu (kabul edilmişse) */
   matchStatus: string | null;
+  /** Bekleyen teklifte sırası gelen takım (0044; karşı teklifle değişir) */
+  awaitingGroupId: string | null;
+  proposedTbd: boolean;
 }
 
 const TEAM_COLS = "id, name, color, city, district";
@@ -46,6 +49,8 @@ type Row = {
   team_size: number;
   status: ChallengeStatus;
   created_at: string;
+  awaiting_group_id: string | null;
+  proposed_tbd: boolean;
   from_group: TeamRef | TeamRef[] | null;
   to_group: TeamRef | TeamRef[] | null;
   matches: { id: string; group_id: string; status: string }[] | null;
@@ -56,7 +61,7 @@ export async function getChallenges(supabase: SupabaseClient, groupId: string): 
   const { data, error } = await supabase
     .from("match_challenges")
     .select(
-      `id, proposed_at, venue, fee_note, message, team_size, status, created_at,
+      `id, proposed_at, venue, fee_note, message, team_size, status, created_at, awaiting_group_id, proposed_tbd,
        from_group:groups!match_challenges_from_group_id_fkey(${TEAM_COLS}),
        to_group:groups!match_challenges_to_group_id_fkey(${TEAM_COLS}),
        matches!matches_challenge_id_fkey(id, group_id, status)`,
@@ -84,6 +89,8 @@ export async function getChallenges(supabase: SupabaseClient, groupId: string): 
         from,
         to,
         myMatchId: mine?.id ?? null,
+        awaitingGroupId: r.awaiting_group_id,
+        proposedTbd: r.proposed_tbd,
         matchStatus: theirs?.status ?? null,
       },
     ];

@@ -239,6 +239,55 @@ export const text = {
     url: `/g/${groupId}/m/${matchId}`,
     tag: `roster-full:${matchId}`,
   }),
+  /** Maç kesinleşti: kadroya */
+  matchConfirmed: (groupName: string, groupId: string, matchId: string, when: string, opponent?: string | null): Content => ({
+    title: "✅ Maç kesinleşti",
+    body: truncate(join(groupName, opponent ? `vs ${opponent}` : null, when), 300),
+    url: `/g/${groupId}/m/${matchId}`,
+    tag: `match:${matchId}`,
+  }),
+  /** Maçın tarihi değişti: kadro ve yedeklere */
+  matchRescheduled: (groupName: string, groupId: string, matchId: string, when: string, freeWithdraw: boolean): Content => ({
+    title: "🗓️ Maç saati değişti",
+    body: truncate(join(groupName, `yeni zaman: ${when}`, freeWithdraw ? "gelemeyecek olan 24 saat içinde onaysız çıkabilir" : null), 300),
+    url: `/g/${groupId}/m/${matchId}`,
+    tag: `match:${matchId}`,
+  }),
+  /** Maça başvuru geldi: yönetenlere */
+  applicationReceived: (who: string, groupName: string, groupId: string, matchId: string, via: string): Content => ({
+    title: "🙋 Maça başvuru",
+    body: truncate(join(`${who} maça katılmak istiyor`, groupName, via), 300),
+    url: `/g/${groupId}/m/${matchId}#basvurular`,
+    tag: `application:${matchId}`,
+  }),
+  /** Başvurunun sonucu: başvurana */
+  applicationDecided: (groupName: string, groupId: string, matchId: string, result: "in" | "reserve" | "rejected", when: string): Content => ({
+    title: result === "rejected" ? "Başvurun kabul edilmedi" : result === "in" ? "✅ Başvurun kabul edildi" : "Başvurun kabul edildi · yedektesin",
+    body: truncate(join(groupName, when, result === "reserve" ? "kadro dolu; yer açılırsa kadroya alınırsın" : null), 300),
+    url: `/g/${groupId}/m/${matchId}`,
+    tag: `application-result:${matchId}`,
+  }),
+  /** Gruba onay bekleyen ilan: o grubun kaptan/yetkililerine */
+  listingNeedsApproval: (who: string, fromName: string, targetGroupId: string, when: string): Content => ({
+    title: "📋 Onay bekleyen ilan",
+    body: truncate(join(`${who}, ${fromName} maçı için grubunda adam arıyor`, when, "yayınlamak için onayla"), 300),
+    url: `/g/${targetGroupId}#bekleyen-ilanlar`,
+    tag: `listing-approval:${targetGroupId}`,
+  }),
+  /** Grupta ilan yayında: o grubun üyelerine */
+  listingOpened: (fromName: string, targetName: string, groupId: string, matchId: string, needed: number, when: string): Content => ({
+    title: `🔎 ${needed} oyuncu aranıyor`,
+    body: truncate(join(fromName, when, `${targetName} grubunda paylaşıldı`), 300),
+    url: `/g/${groupId}/m/${matchId}`,
+    tag: `listing:${matchId}`,
+  }),
+  /** Teklifte karşı teklif / bağlı maçta tarih önerisi: sırası gelen takımın yetkililerine */
+  counterOffer: (team: string, groupId: string, when: string, reschedule: boolean): Content => ({
+    title: reschedule ? "🗓️ Rakip tarih değişikliği önerdi" : "↩️ Karşı teklif geldi",
+    body: truncate(join(team, `önerilen: ${when}`, "kabul et veya reddet"), 300),
+    url: `/g/${groupId}/teklifler`,
+    tag: `counter:${groupId}`,
+  }),
   /** Maça 3 saat kala yedekten otomatik kadroya alınana */
   autoPromoted: (groupName: string, groupId: string, matchId: string, when: string): Content => ({
     title: "✅ Kadroya alındın",

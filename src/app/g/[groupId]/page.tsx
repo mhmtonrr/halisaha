@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { SubmitButton } from "@/components/SubmitButton";
+import { decideListing } from "@/lib/match-manage-actions";
 import { matchWhen } from "@/lib/match-rules";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
@@ -26,6 +28,18 @@ const STATUS: Record<string, { label: string; tone: "default" | "accent" | "warn
   voting: { label: "Oylama açık", tone: "warn" },
   closed: { label: "Tamamlandı", tone: "accent" },
 };
+
+interface PendingListing {
+  id: string;
+  group_name: string;
+  played_at: string;
+  time_tbd: boolean;
+  venue: string | null;
+  capacity: number | null;
+  roster_count: number;
+  note: string | null;
+  by: string | null;
+}
 
 export default async function GroupPage({
   params,
@@ -86,6 +100,10 @@ export default async function GroupPage({
       ])
     : [{ data: [] }, { data: null }];
   const proposals = (proposalRows ?? []) as Proposal[];
+  // Başka grupların bu gruba gönderdiği, kaptan/yetkili onayı bekleyen ilanlar (0043/0044; tam sayfa: Parça 6)
+  const pendingListings = canManage
+    ? (((await supabase.rpc("pending_requests", { p_group: groupId })).data as { listings?: PendingListing[] } | null)?.listings ?? [])
+    : [];
   const nameOf = new Map(players.filter((p) => p.user_id).map((p) => [p.user_id as string, p.display_name]));
   // Asıl kadro hesabı olan üyelerdir; misafirler ayrı sekmede (istatistikleri orada görünür)
   const members = players.filter(isSquadMember);
@@ -235,6 +253,36 @@ export default async function GroupPage({
           </form>
         ) : null;
       })()}
+
+      {pendingListings.length > 0 && (
+        <section id="bekleyen-ilanlar" className="mb-4 space-y-2">
+          <SectionTitle>Onay bekleyen ilanlar · {pendingListings.length}</SectionTitle>
+          {pendingListings.map((l) => (
+            <Card key={l.id} className="space-y-2">
+              <div className="text-sm">
+                <b>{l.group_name}</b> maçı için adam arıyor · {matchWhen(l.played_at, l.time_tbd)}
+                {l.venue ? ` · ${l.venue}` : ""}
+              </div>
+              <div className="text-xs text-muted">
+                Paylaşan: {l.by ?? "bir üye"} · kadro {l.roster_count}/{l.capacity ?? "?"}
+                {l.note ? ` · "${l.note}"` : ""}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {(["1", "0"] as const).map((a) => (
+                  <form key={a} action={decideListing}>
+                    <input type="hidden" name="groupId" value={groupId} />
+                    <input type="hidden" name="listingId" value={l.id} />
+                    <input type="hidden" name="accept" value={a} />
+                    <SubmitButton variant={a === "1" ? "primary" : "secondary"} className="w-full" pendingLabel="…">
+                      {a === "1" ? "Grupta yayınla" : "Reddet"}
+                    </SubmitButton>
+                  </form>
+                ))}
+              </div>
+            </Card>
+          ))}
+        </section>
+      )}
 
       {canCreate && (
         <LinkButton href={`/mac-ayarla?grup=${groupId}`} className="mb-2 w-full">

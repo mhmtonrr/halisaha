@@ -11,7 +11,6 @@ import { formatDate, getGroupPlayers, getGroupSummaries, one, POSITION_NAME, POS
 import {
   addToMatch,
   closeVoting,
-  deleteMatch,
   movePlayer,
   removeFromMatch,
   reshuffleTeams,
@@ -25,9 +24,8 @@ import { LineupPitch, type PitchPlayer } from "@/components/LineupPitch";
 import { LineupEditor } from "./LineupEditor";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { GuestForm } from "./GuestForm";
-import { FillSection } from "./FillSection";
-import { AutoOpenDetails } from "@/components/AutoOpenDetails";
-import { fillCallsOfMatch, gatherCallOfMatch, myManagedCommunities, type Call } from "@/lib/calls-data";
+import { ListingManage, RivalManage, RosterManage, ScheduleManage, type EntryRow } from "./ManageSections";
+import { applyMatch, cancelApplication } from "@/lib/match-manage-actions";
 import { SubmitButton } from "@/components/SubmitButton";
 import { PushPrompt } from "@/components/PushControls";
 import { TeamBadge } from "@/components/TeamBadge";
@@ -38,6 +36,28 @@ import { VoteForm } from "./VoteForm";
 import { WithdrawalSection, type WithdrawalRow } from "./WithdrawalSection";
 
 type Team = "A" | "B";
+
+/** Yönetim eylemlerinden sonra kısa onay (?ok=) */
+const OK_TEXT: Record<string, string> = {
+  eklendi: "Kadroya alındı; bildirim gitti.",
+  cikarildi: "Kadrodan çıkarıldı.",
+  "basvuru-in": "Başvuru kabul edildi, kadroya alındı.",
+  "basvuru-reserve": "Başvuru kabul edildi; kadro dolu olduğu için yedeğe yazıldı.",
+  "basvuru-rejected": "Başvuru reddedildi.",
+  basvuru: "Başvurun gönderildi; maçı ayarlayan onaylayınca haber vereceğiz.",
+  ilan: "İlan açıldı.",
+  "ilan-kapandi": "İlan kapatıldı.",
+  kod: "Bağlantı yenilendi; eski bağlantı artık çalışmaz.",
+  rakip: "Rakip kaydedildi.",
+  teklif: "Teklif gönderildi; rakibin yanıtı bekleniyor.",
+  "teklif-kabul": "Teklif kabul edildi, maç rakiple bağlandı.",
+  "teklif-ret": "Teklif reddedildi.",
+  "tarih-onerildi": "Tarih önerisi rakibe gitti.",
+  "tarih-reddedildi": "Tarih önerisi reddedildi.",
+  ertelendi: "Maçın tarihi değişti; kadroya bildirim gitti.",
+  kesin: "Maç kesinleşti; kadroya bildirim gitti.",
+  iptal: "Maç iptal edildi; herkese bildirim gitti.",
+};
 const TEAM = {
   A: { label: "Sarı", text: "text-team-a", bg: "bg-team-a" },
   B: { label: "Mavi", text: "text-team-b", bg: "bg-team-b" },
@@ -191,10 +211,10 @@ export default async function MatchPage({
   searchParams,
 }: {
   params: Promise<{ groupId: string; matchId: string }>;
-  searchParams: Promise<{ error?: string; voted?: string; positions?: string; kabul?: string; dizilis?: string; cekilme?: string; yanit?: string }>;
+  searchParams: Promise<{ error?: string; voted?: string; positions?: string; kabul?: string; dizilis?: string; cekilme?: string; yanit?: string; rakipAra?: string; ok?: string }>;
 }) {
   const { groupId, matchId } = await params;
-  const { error, voted, positions, kabul, dizilis, cekilme, yanit } = await searchParams;
+  const { error, voted, positions, kabul, dizilis, cekilme, yanit, rakipAra = "", ok } = await searchParams;
   const { supabase, user } = await requireUser();
 
   const { data: first } = await supabase
@@ -224,15 +244,83 @@ export default async function MatchPage({
   ]);
   if (!match) notFound();
   const myTeamName = myTeam?.name ?? "Biz";
-  // Planlı maçın açık "adam ara" çağrıları (görebildiğim gruplardakiler) ve maçı kuran toplama çağrısı (yedekler)
   const planned = match.status === "planned";
-  const [fills, gatherCall, communities] = planned
-    ? await Promise.all([
-        fillCallsOfMatch(supabase, matchId),
-        canManage ? gatherCallOfMatch(supabase, matchId) : Promise.resolve(null),
-        canManage ? myManagedCommunities(supabase, user.id) : Promise.resolve([]),
-      ])
-    : [[], null, []];
+  const open = match.status === "gathering" || planned;
+  const manage = open && !!canManage;
+  // Yönetim verisi (yeniden tasarım 4b): kayıtlar, ilanlar, bağlantı kodu, hedef gruplar, rakip teklifi
+  const [entryRows, listingRows, code, targetRows, pendingChallenge, rivalResults, applyListing] = await Promise.all([
+    manage
+      ? supabase.from("match_entries").select("user_id, player_id, status, source, position, note, queued_at, created_at, profiles!match_entries_user_id_fkey(display_name)").eq("match_id", matchId).then((r) => r.data ?? [])
+      : Promise.resolve([]),
+    manage
+      ? supabase.from("match_listings").select("id, status, target_group_id, groups(name)").eq("match_id", matchId).in("status", ["pending", "active"]).then((r) => r.data ?? [])
+      : Promise.resolve([]),
+    manage ? supabase.rpc("match_invite_code", { p_match: matchId }).then((r) => (r.data as string | null) ?? null) : Promise.resolve(null),
+    manage
+      ? supabase.from("group_players").select("groups(id, name)").eq("user_id", user.id).is("left_at", null).eq("is_loan", false).neq("group_id", groupId).then((r) => r.data ?? [])
+      : Promise.resolve([]),
+    manage && match.kind === "external" && !match.challenge_id
+      ? supabase.from("match_challenges").select("id, to_group_id, awaiting_group_id, proposed_at, proposed_tbd, venue").eq("from_match_id", matchId).eq("status", "pending").maybeSingle().then((r) => r.data)
+      : Promise.resolve(null),
+    manage && match.kind === "external" && !match.challenge_id && rakipAra.trim().length >= 2
+      ? supabase.from("groups").select("id, name, city").eq("kind", "team").is("archived_at", null).neq("id", groupId).ilike("name", `%${rakipAra.trim().replace(/[%_,()]/g, " ")}%`).limit(8).then((r) => r.data ?? [])
+      : Promise.resolve([]),
+    // Üye olmayan, kaydı olmayan ama maçı bir ilandan görüyor: "Başvur"
+    open && !isMember && !myEntry
+      ? supabase.from("match_listings").select("id").eq("match_id", matchId).eq("status", "active").limit(1).maybeSingle().then((r) => r.data?.id as string | undefined)
+      : Promise.resolve(undefined),
+  ]);
+  const challengeTo = pendingChallenge
+    ? (await supabase.from("groups").select("name").eq("id", pendingChallenge.to_group_id).maybeSingle()).data?.name ?? "Rakip"
+    : null;
+  const { data: rescheduleRow } =
+    open && canManage && match.challenge_id
+      ? await supabase.from("match_challenges").select("id, pending_at, pending_tbd, awaiting_group_id").eq("id", match.challenge_id).maybeSingle()
+      : { data: null };
+  const entryUserIds = (entryRows as { user_id: string | null }[]).map((e) => e.user_id).filter(Boolean) as string[];
+  const { data: entryRatings } = entryUserIds.length
+    ? await supabase.from("user_ratings").select("user_id, overall").in("user_id", entryUserIds)
+    : { data: [] as { user_id: string; overall: number }[] };
+  const ovr = new Map((entryRatings ?? []).map((r) => [r.user_id as string, r.overall as number]));
+  const entries: EntryRow[] = (entryRows as {
+    user_id: string | null;
+    player_id: string | null;
+    status: string;
+    source: string;
+    position: Position | null;
+    note: string | null;
+    queued_at: string | null;
+    created_at: string;
+    profiles: { display_name: string } | { display_name: string }[] | null;
+  }[])
+    .sort((a, b) => (a.queued_at ?? a.created_at).localeCompare(b.queued_at ?? b.created_at))
+    .map((e) => ({
+      userId: e.user_id,
+      playerId: e.player_id,
+      name: one(e.profiles)?.display_name ?? "Oyuncu",
+      status: e.status,
+      source: e.source,
+      position: e.position,
+      note: e.note,
+      overall: (e.user_id && ovr.get(e.user_id)) || 65,
+    }));
+  const busy = new Set(entries.filter((e) => ["in", "reserve", "pending", "invited"].includes(e.status)).map((e) => e.userId));
+  const addable = players
+    .filter((p) => p.user_id && !p.is_loan && !busy.has(p.user_id))
+    .map((p) => ({ userId: p.user_id as string, name: p.display_name }))
+    .sort((a, b) => a.name.localeCompare(b.name, "tr"));
+  const listings = (listingRows as { id: string; status: string; target_group_id: string | null; groups: { name: string } | { name: string }[] | null }[]).map((l) => ({
+    id: l.id,
+    status: l.status,
+    targetName: l.target_group_id ? (one(l.groups)?.name ?? "Grup") : null,
+    targetId: l.target_group_id,
+  }));
+  const listed = new Set(listings.map((l) => l.targetId).filter(Boolean));
+  const targets = (targetRows as { groups: { id: string; name: string } | { id: string; name: string }[] | null }[])
+    .map((r) => one(r.groups))
+    .filter((g): g is { id: string; name: string } => !!g && !listed.has(g.id))
+    .sort((a, b) => a.name.localeCompare(b.name, "tr"));
+  const full = !!match.capacity && match.roster_count >= match.capacity;
   const myTeamColor = myTeam?.color ?? null;
   const opp = match.challenge_id
     ? await loadOpponent(supabase, match.challenge_id, matchId, match.opponent_group_id)
@@ -309,7 +397,7 @@ export default async function MatchPage({
             : []),
         ]}
       />
-      <Header title={external ? (oppName ? `vs ${oppName}` : "Rakip belli değil") : "Kendi aramızda"} back={`/g/${groupId}`} />
+      <Header title={external ? (oppName ? `vs ${oppName}` : "Rakip belli değil") : "Kendi aramızda"} back={isMember || myTeam?.kind === "team" ? `/g/${groupId}` : "/"} />
       <div className="-mt-3 mb-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-on-surface-variant">
         {statusBadge}
         <span className="inline-flex items-center gap-1">
@@ -355,7 +443,7 @@ export default async function MatchPage({
       {canManage && (match.status === "planned" || match.status === "gathering") && (
         <SendInviteLink tur="match" refId={matchId} className="mb-4" />
       )}
-      {match.status === "gathering" && (
+      {match.status === "gathering" && !manage && (
         <>
           <SectionTitle>Kadro · {roster.length}</SectionTitle>
           {roster.length === 0 ? (
@@ -378,24 +466,80 @@ export default async function MatchPage({
           )}
         </>
       )}
-      {!canManage &&
-        fills
-          .filter((f) => f.status === "open")
-          .map((f) => (
-            <Link key={f.id} href={`/g/${f.group_id}/cagri/${f.id}`} className="mb-4 block">
-              <Card className="flex items-center gap-3 border-amber-400/40 bg-amber-400/10 transition hover:border-amber-400">
-                <Icon name="person_search" fill className="text-[24px] text-amber-300" />
-                <div className="min-w-0 flex-1">
-                  <div className="font-semibold">{f.capacity} oyuncu aranıyor</div>
-                  <div className="truncate text-xs text-muted">
-                    {f.positions.length ? f.positions.map((p) => POSITION_NAME[p as Position]).join(", ") + " · " : ""}
-                    {f.group_name} · çağrıyı gör ve başvur
-                  </div>
-                </div>
-                <Icon name="chevron_right" className="text-[22px] text-amber-300" />
-              </Card>
-            </Link>
-          ))}
+      {applyListing && (
+        <Card className="mb-4 space-y-2 border-amber-400/40 bg-amber-400/10">
+          <div className="font-semibold">Bu maça adam aranıyor</div>
+          <p className="text-sm text-on-surface-variant">Başvurunu maçı ayarlayan kişi onaylar. Kadro doluysa yedeğe yazılırsın.</p>
+          <form action={applyMatch} className="space-y-2">
+            <input type="hidden" name="groupId" value={groupId} />
+            <input type="hidden" name="matchId" value={matchId} />
+            <input type="hidden" name="listingId" value={applyListing} />
+            <div className="flex gap-2">
+              <select name="position" aria-label="Mevki" defaultValue="" className="min-h-11 rounded-xl border border-line bg-pitch-950 px-2 text-sm">
+                <option value="">Mevki</option>
+                {POSITIONS.map((p) => (
+                  <option key={p} value={p}>
+                    {POSITION_NAME[p]}
+                  </option>
+                ))}
+              </select>
+              <Input name="note" maxLength={200} placeholder="Not (isteğe bağlı)" aria-label="Başvuru notu" className="flex-1" />
+            </div>
+            <SubmitButton className="w-full" pendingLabel="Gönderiliyor…">
+              Başvur
+            </SubmitButton>
+          </form>
+        </Card>
+      )}
+      {myEntry?.status === "pending" && (
+        <form action={cancelApplication} className="-mt-2 mb-4 text-center">
+          <input type="hidden" name="groupId" value={groupId} />
+          <input type="hidden" name="matchId" value={matchId} />
+          <button className="text-xs text-muted underline">Başvurumu geri çek</button>
+        </form>
+      )}
+      {ok && OK_TEXT[ok] && (
+        <p className="mb-4 flex items-center gap-1.5 rounded-xl bg-primary/10 p-3 text-sm text-primary">
+          <Icon name="check_circle" fill className="text-[18px]" />
+          {OK_TEXT[ok]}
+        </p>
+      )}
+      {manage && match.status === "gathering" && (
+        <RosterManage
+          groupId={groupId}
+          matchId={matchId}
+          roster={roster.map((r) => ({ id: r.id, userId: r.userId, name: r.name, overall: r.overall, position: r.position }))}
+          entries={entries}
+          addable={addable}
+          isAdmin={!!isAdmin}
+          full={full}
+        />
+      )}
+      {manage && planned && entries.some((e) => ["reserve", "pending"].includes(e.status)) && (
+        <RosterManage groupId={groupId} matchId={matchId} roster={[]} entries={entries} addable={[]} isAdmin={false} full={full} />
+      )}
+      {manage && <ListingManage groupId={groupId} matchId={matchId} listings={listings} targets={targets} code={code} full={full} />}
+      {manage && match.kind === "external" && !match.challenge_id && (
+        <RivalManage
+          groupId={groupId}
+          matchId={matchId}
+          opponentName={match.opponent_name}
+          challenge={
+            pendingChallenge
+              ? {
+                  id: pendingChallenge.id,
+                  toName: challengeTo ?? "Rakip",
+                  awaitingMe: pendingChallenge.awaiting_group_id === groupId,
+                  proposedAt: pendingChallenge.proposed_at,
+                  proposedTbd: pendingChallenge.proposed_tbd,
+                  venue: pendingChallenge.venue,
+                }
+              : null
+          }
+          search={rakipAra}
+          results={rivalResults as { id: string; name: string; city: string | null }[]}
+        />
+      )}
       {kabul && (
         <p className="mb-4 flex items-start gap-1.5 rounded-xl bg-primary/10 p-3 text-sm text-primary">
           <Icon name="check_circle" fill className="mt-0.5 text-[18px]" />
@@ -471,10 +615,6 @@ export default async function MatchPage({
           linked={linked}
           teamSize={match.team_size}
           formations={{ A: match.formation_a, B: match.formation_b }}
-          groupLabel={myTeam?.name ?? ""}
-          fills={fills}
-          gatherCall={gatherCall}
-          communities={communities}
           bench={players
             .filter((p) => !roster.some((r) => r.id === p.id))
             .sort((a, b) => a.display_name.localeCompare(b.display_name, "tr"))}
@@ -510,6 +650,24 @@ export default async function MatchPage({
         <ResultsView groupId={groupId} matchId={matchId} roster={roster} myId={me?.id} external={external} />
       )}
 
+      {manage && (
+        <ScheduleManage
+          groupId={groupId}
+          matchId={matchId}
+          status={match.status as "gathering" | "planned"}
+          playedAt={match.played_at}
+          timeTbd={match.time_tbd}
+          linked={linked}
+          reschedule={
+            rescheduleRow?.pending_at
+              ? { challengeId: rescheduleRow.id, at: rescheduleRow.pending_at, tbd: !!rescheduleRow.pending_tbd, awaitingMe: rescheduleRow.awaiting_group_id === groupId }
+              : null
+          }
+          rosterCount={match.roster_count}
+          minPlayers={external ? 2 : 4}
+        />
+      )}
+
       {linked && opp && <OpponentSection opp={opp} />}
     </main>
   );
@@ -529,10 +687,6 @@ async function PlannedView({
   linked,
   teamSize,
   formations,
-  groupLabel,
-  fills,
-  gatherCall,
-  communities,
   bench,
 }: {
   groupId: string;
@@ -546,10 +700,6 @@ async function PlannedView({
   linked: boolean;
   teamSize: number | null;
   formations: Record<Team, string | null>;
-  groupLabel: string;
-  fills: (Call & { group_name: string })[];
-  gatherCall: { id: string; group_id: string } | null;
-  communities: { id: string; name: string }[];
   bench: { id: string; display_name: string }[];
 }) {
   const all = [...teams.A, ...teams.B];
@@ -664,21 +814,6 @@ async function PlannedView({
             </form>
           </details>
 
-          <AutoOpenDetails
-            className="mt-1"
-            openInitially={false}
-            summary={
-              <span className="inline-flex items-center gap-1.5 align-middle">
-                <Icon name="person_search" className="text-[18px]" />
-                Adam ara
-                {fills.length > 0 && ` · ${fills.filter((f) => f.status === "open").length} açık`}
-              </span>
-            }
-          >
-            <Card className="mt-2">
-              <FillSection groupId={groupId} matchId={matchId} groupLabel={groupLabel} fills={fills} communities={communities} gatherCall={gatherCall} />
-            </Card>
-          </AutoOpenDetails>
 
           <details className="mt-1">
             <summary className="cursor-pointer py-2 text-sm text-muted">
@@ -759,12 +894,6 @@ async function PlannedView({
           <SectionTitle>Maç bitti mi? Sonucu gir</SectionTitle>
           <ResultForm groupId={groupId} matchId={matchId} all={all} external={external} labels={labels} linked={linked} allowNoShow />
 
-          <form action={deleteMatch} className="mt-8 text-center">
-            <Hidden groupId={groupId} matchId={matchId} />
-            <button className="text-xs text-muted hover:text-red-300">
-              {linked ? "Maçı iptal et (rakip takımda da silinir)" : "Maçı iptal et"}
-            </button>
-          </form>
         </>
       )}
       {!canManage && (

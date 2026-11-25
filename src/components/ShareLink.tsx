@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 /** Sayfa linkini paylaşır (telefonda paylaşım menüsü, olmayan yerde panoya kopyalar) */
-export function ShareLink({ path, title, className }: { path: string; title: string; className?: string }) {
+export function ShareLink({ path, title, className, label = "🔗 Paylaş" }: { path: string; title: string; className?: string; label?: string }) {
   const [copied, setCopied] = useState(false);
 
   async function share() {
@@ -32,7 +32,7 @@ export function ShareLink({ path, title, className }: { path: string; title: str
       onClick={share}
       className={className ?? "rounded-lg border border-line px-3 py-2 text-sm font-medium text-muted transition hover:bg-pitch-800 hover:text-white"}
     >
-      {copied ? "Link kopyalandı ✓" : "🔗 Paylaş"}
+      {copied ? "Link kopyalandı ✓" : label}
     </button>
   );
 }

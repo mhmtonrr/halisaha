@@ -1,4 +1,6 @@
+import { matchWhen } from "@/lib/match-rules";
 import Link from "next/link";
+import { CounterForm } from "../m/[matchId]/ManageSections";
 import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { cancelChallenge, respondChallenge } from "@/lib/actions";
@@ -123,7 +125,9 @@ function ChallengeCard({
 }) {
   const other = direction === "in" ? c.from : c.to;
   const status = CHALLENGE_STATUS[c.status];
-  const cancellable = canAct && (c.status === "accepted" ? c.matchStatus === "planned" : c.status === "pending" && direction === "out");
+  const cancellable = canAct && (c.status === "accepted" ? c.matchStatus === "planned" || c.matchStatus === "gathering" : c.status === "pending" && direction === "out");
+  // Sıra kimde (0044): karşı teklifle gönderene de geçebilir
+  const myTurn = c.status === "pending" && (c.awaitingGroupId ?? c.to.id) === groupId;
 
   return (
     <Card className="space-y-3">
@@ -142,7 +146,7 @@ function ChallengeCard({
 
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
         <dt className="text-muted">Zaman</dt>
-        <dd>{formatDate(c.proposedAt)}</dd>
+        <dd>{c.proposedTbd ? matchWhen(c.proposedAt, true) : formatDate(c.proposedAt)}</dd>
         <dt className="text-muted">Kişi</dt>
         <dd>
           {c.teamSize} kişilik ({c.teamSize}v{c.teamSize})
@@ -158,7 +162,9 @@ function ChallengeCard({
       </dl>
       {c.message && <p className="rounded-lg bg-pitch-950 p-2.5 text-sm text-muted">“{c.message}”</p>}
 
-      {c.status === "pending" && direction === "in" && canAct && (
+      {c.status === "pending" && !myTurn && <p className="text-sm text-muted">Sıra rakipte: kabul, ret veya karşı teklif bekleniyor.</p>}
+      {myTurn && direction === "out" && <p className="text-sm text-amber-300">Rakip karşı teklif yaptı (yukarıdaki tarih).</p>}
+      {myTurn && canAct && (
         <div className="grid grid-cols-2 gap-2">
           {(["accept", "decline"] as const).map((answer) => (
             <form key={answer} action={respondChallenge}>
@@ -176,6 +182,7 @@ function ChallengeCard({
           ))}
         </div>
       )}
+      {myTurn && canAct && <CounterForm groupId={groupId} challengeId={c.id} back={`/g/${groupId}/teklifler`} at={c.proposedAt} />}
 
       {c.status === "accepted" && c.myMatchId && (
         <Link href={`/g/${groupId}/m/${c.myMatchId}`} className="block text-sm font-medium text-accent">

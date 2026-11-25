@@ -1106,34 +1106,6 @@ function sendNotices(notices: Notice[], actorId: string) {
   });
 }
 
-export async function deleteMatch(fd: FormData) {
-  const { supabase, user } = await requireUser();
-  const groupId = str(fd, "groupId");
-  const matchId = str(fd, "matchId");
-  const { data: match } = await supabase
-    .from("matches")
-    .select("status, challenge_id")
-    .eq("id", matchId)
-    .single();
-  if (match?.status === "closed") fail(`/g/${groupId}/m/${matchId}`, "Kapanmış maç silinemez");
-  if (match?.challenge_id) {
-    // Karşı takımla ortak maç: iki taraftaki maç birlikte iptal edilir
-    const notices = await prepareCancelNotices({ challengeId: match.challenge_id as string });
-    const { error } = await supabase.rpc("cancel_challenge", { p_challenge_id: match.challenge_id });
-    if (error) fail(`/g/${groupId}/m/${matchId}`, rpcMessage(error, "Maç iptal edilemedi"));
-    sendNotices(notices, user.id);
-    redirect(`/g/${groupId}`);
-  }
-  const notices = await prepareCancelNotices({ matchId });
-  const { data: deleted, error } = await supabase.from("matches").delete().eq("id", matchId).select("id");
-  if (error) fail(`/g/${groupId}/m/${matchId}`, "Maç silinemedi");
-  if (deleted?.length) sendNotices(notices, user.id);
-  // Geçici takımın maçı iptal olduysa: hiç maçı kalmayan takım silinir, sadece kapanmış maçları kalan arşivlenir
-  const { data: cleanup } = await supabase.rpc("cleanup_temp_team", { p_group: groupId });
-  revalidatePath("/", "layout");
-  redirect(cleanup === "deleted" ? "/" : `/g/${groupId}`);
-}
-
 // ---------------------------------------------------------------------------
 // Takımlar arası maç teklifi
 // ---------------------------------------------------------------------------

@@ -51,7 +51,8 @@ try {
   await cap.fill('input[name="name"]', "Zeki Misafir");
   await cap.selectOption('select[name="position"]', "GK");
   // Sayfa zıplamasın: gönderimden önce kaydırma konumunu al, sonra aynı yerde kalmalı
-  await cap.evaluate(() => window.scrollTo(0, 250));
+  // Düğmeyi görünür yap (tıklama otomatik kaydırma yapmasın), ölçüm o konumdan başlar
+  await cap.locator('button:has-text("Misafiri ekle")').scrollIntoViewIfNeeded();
   const y0 = await cap.evaluate(() => window.scrollY);
   await cap.evaluate(() => { window.__same = 1; });
   await cap.click('button:has-text("Misafiri ekle")');
