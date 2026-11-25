@@ -218,6 +218,27 @@ export const text = {
     url: `/g/${groupId}`,
     tag: `match-cancel:${matchId}`,
   }),
+  /** Takıma/gruba duyurulan yeni maç (toplanıyor): geliyorum/gelemem */
+  matchGathering: (groupName: string, groupId: string, matchId: string, when: string, roster: number, capacity: number): Content => ({
+    title: "📣 Maç ayarlanıyor",
+    body: truncate(join(groupName, when, `kadro ${roster}/${capacity}`, "geliyor musun?"), 300),
+    url: `/g/${groupId}/m/${matchId}`,
+    tag: `match:${matchId}`,
+  }),
+  /** Yöneten kişi seni kadroya yazdı (kesin gelen / yedekten / başvurun kabul) */
+  addedToRoster: (who: string, groupName: string, groupId: string, matchId: string, when: string): Content => ({
+    title: "⚽ Kadrodasın",
+    body: truncate(join(`${who} seni kadroya yazdı`, groupName, when, "gelemezsen maç ekranından çık"), 300),
+    url: `/g/${groupId}/m/${matchId}`,
+    tag: `match:${matchId}`,
+  }),
+  /** Toplanan maçın kadrosu doldu: yönetenlere */
+  rosterFull: (groupName: string, groupId: string, matchId: string, count: number): Content => ({
+    title: "✅ Kadro tamam",
+    body: truncate(join(groupName, `${count} kişi`, "saati seçip maçı kesinleştir"), 300),
+    url: `/g/${groupId}/m/${matchId}`,
+    tag: `roster-full:${matchId}`,
+  }),
   /** Maça 3 saat kala yedekten otomatik kadroya alınana */
   autoPromoted: (groupName: string, groupId: string, matchId: string, when: string): Content => ({
     title: "✅ Kadroya alındın",

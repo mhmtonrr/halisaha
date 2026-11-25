@@ -701,76 +701,6 @@ async function ratingsFor(
   );
 }
 
-export async function createMatch(fd: FormData) {
-  const { supabase, user } = await requireUser();
-  const groupId = str(fd, "groupId");
-  const back = `/g/${groupId}/matches/new`;
-  const playerIds = [...new Set(fd.getAll("players").map(String))];
-  const goalkeepers = new Set(fd.getAll("gk").map(String).filter((id) => playerIds.includes(id)));
-  const when = str(fd, "playedAt");
-  // Takım sadece rakibe karşı, grup sadece kendi aralarında maç kurar (veritabanı da zorunlu kılar)
-  const { data: groupRow } = await supabase.from("groups").select("kind").eq("id", groupId).maybeSingle();
-  if (!groupRow) fail(back, "Grup bulunamadı");
-  const external = groupRow.kind === "team";
-  const opponent = str(fd, "opponent");
-
-  if (!when) fail(back, "Maç tarihini seçin");
-  if (external && opponent.length < 2) fail(back, "Rakip takımın adını yazın");
-  if (playerIds.length < (external ? 2 : 4)) fail(back, external ? "En az 2 oyuncu seçin" : "En az 4 oyuncu seçin");
-
-  const ratings = await ratingsFor(supabase, groupId);
-  // Maçtaki mevki: işaretlenen kaleciler GK, diğerleri profildeki mevki (GK değilse)
-  const positionOf = (id: string): Position | null => {
-    if (goalkeepers.has(id)) return "GK";
-    const p = ratings.get(id)?.position ?? null;
-    return p === "GK" ? null : p;
-  };
-  const roster = playerIds.map((id) => ({ id, position: positionOf(id) }));
-
-  let teamOf: (id: string) => "A" | "B" = () => "A";
-  if (!external) {
-    const [best] = balanceTeams(toCandidates(roster, ratings));
-    const inA = new Set(best.teamA.map((p) => p.id));
-    teamOf = (id) => (inA.has(id) ? "A" : "B");
-  }
-
-  const { data: match, error } = await supabase
-    .from("matches")
-    .insert({
-      group_id: groupId,
-      played_at: parseLocalDateTime(when),
-      venue: str(fd, "venue") || null,
-      created_by: user.id,
-      kind: external ? "external" : "internal",
-      opponent_name: external ? opponent.slice(0, 60) : null,
-      team_size: sizeOf(fd),
-    })
-    .select("id")
-    .single();
-  if (error) fail(back, "Maç oluşturulamadı");
-
-  const { error: rosterError } = await supabase.from("match_players").insert(
-    roster.map((r) => ({
-      match_id: match.id,
-      player_id: r.id,
-      team: teamOf(r.id),
-      position: r.position,
-      is_goalkeeper: r.position === "GK",
-    })),
-  );
-  if (rosterError) {
-    await supabase.from("matches").delete().eq("id", match.id);
-    fail(back, "Kadro kaydedilemedi");
-  }
-  // Kadrodaki hesap sahiplerine "maç kuruldu"
-  later(async () => {
-    const admin = createAdminClient();
-    const [ids, name] = await Promise.all([matchAccountIds(admin, [match.id]), groupName(admin, groupId)]);
-    await notify(ids, "match", text.matchCreated(name, groupId, match.id, formatDate(parseLocalDateTime(when)), external ? opponent : null), { excludeUserId: user.id });
-  });
-  redirect(`/g/${groupId}/m/${match.id}`);
-}
-
 /** Oylanabilecek oyuncular: maçın kadrosu; bağlı maçta rakip kadro da */
 async function loadVoteTargets(
   supabase: Awaited<ReturnType<typeof requireUser>>["supabase"],
@@ -812,11 +742,21 @@ async function writeTeams(
 
 /** Takımları yeniden dengeler: en iyiye yakın bölünmelerden rastgele biri. */
 export async function reshuffleTeams(fd: FormData) {
-  const { supabase } = await requireUser();
   const groupId = str(fd, "groupId");
   const matchId = str(fd, "matchId");
   const back = `/g/${groupId}/m/${matchId}`;
+  if (!(await splitTeams(groupId, matchId))) fail(back, "Takımlar güncellenemedi");
+  revalidatePath(back);
+}
+
+/**
+ * Kendi aramızdaki maçın kadrosunu iki dengeli tarafa böler (maç kesinleşince ve "karıştır"da).
+ * Yetki RLS'de (maçı yöneten); başarılıysa true.
+ */
+export async function splitTeams(groupId: string, matchId: string): Promise<boolean> {
+  const { supabase } = await requireUser();
   const roster = await loadRoster(supabase, matchId);
+  if (roster.length < 2) return true;
   const ratings = await ratingsFor(supabase, groupId);
   const splits = balanceTeams(
     toCandidates(
@@ -831,8 +771,7 @@ export async function reshuffleTeams(fd: FormData) {
     pick.teamA.map((p) => p.id),
     pick.teamB.map((p) => p.id),
   );
-  if (error) fail(back, "Takımlar güncellenemedi");
-  revalidatePath(back);
+  return !error;
 }
 
 export async function movePlayer(fd: FormData) {

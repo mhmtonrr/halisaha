@@ -9,7 +9,9 @@ src/lib/attributes.ts    Kart özellikleri FRM/İST/GOL|KRT/AST/GAL/MVP (saf, te
 src/lib/teams-data.ts    Takım rating'i (en iyi 7), rol etiketleri, takım/üyelik sorguları
 src/lib/formations.ts    Sabit dizilişler (5-11 kişilik, slot koordinatları), otomatik yerleştirme (saf, testli)
 src/lib/call-rules.ts    Birleşik çağrı: varsayılan seçim, yedek/başvuru sırası, karar zamanı, gün/saat metinleri (saf, testli)
-src/lib/call-actions.ts  Çağrı Server Action'ları: aç/düzenle/yanıtla/kesinleştir/kadroya al/adam ara + bildirimler
+src/lib/match-actions.ts Yeni maç yapısı Server Action'ları: Maç ayarla (setupMatch), Geliyorum/Gelemem (respondMatch) + bildirimler
+src/lib/match-rules.ts   Maç kuralları (saf, testli): varsayılan kadro, saat belli değil metni, direkt kesin mi
+src/lib/call-actions.ts  Eski çağrı Server Action'ları (düzenle/yanıtla/kesinleştir/kadroya al/adam ara; açma artık /mac-ayarla) + bildirimler
 src/lib/calls-data.ts    Çağrı sorguları (çağrı + yanıtlayanlar, gruptaki/maçtaki çağrılar, yönettiğim takım/topluluklar)
 src/lib/calls-notify.ts  Kadroda yer açılınca organizatöre bildirim (service role)
 src/lib/membership-notify.ts  Üye katıldı (yetkililere) ve rol değişti (kişiye) bildirimleri
@@ -57,7 +59,7 @@ src/components/AutoOpenDetails.tsx  İlk yüklemede bir kez açılan açılır b
 src/components/ProfileFields.tsx  Profil ve karşılama formlarının ortak alanları; RegionSelect.tsx bağlı il/ilçe seçimi
 src/components/TeamFields.tsx  Takım kurma ve takım/grup bilgileri düzenleme form alanları; TeamSizeSelect.tsx kaç kişilik (5v5…11v11); TeamBadge.tsx renkli baş harf rozeti
 src/components/RosterTabs.tsx  Kadro / Misafirler sekmesi
-src/components/SendInviteLink.tsx  "Maça çağır": çağrı kartını sohbetten gönderme bağlantısı + maç ekranı düğmesi (/davet/gonder)
+src/components/SendInviteLink.tsx  "Maça çağır": maç/çağrı kartını sohbetten gönderme bağlantısı (/davet/gonder; maçta kişiye özel davet)
 src/components/ShareLink.tsx  Sayfa linkini paylaş (paylaşım menüsü ya da panoya kopyala); profile/ShareButton.tsx profil için
 src/components/SkillBars.tsx  Kartın 6 yeteneği çubuk olarak; SkillQueueBanner.tsx değerlendirme bekleyen varsa /yetenek kartı
 src/components/profile/  FlipCard (kart çevirme), MatchesList (geçmiş maçlar + filtre), ProfileBars (başlık), RadarChart (yetenek altıgeni)
@@ -78,5 +80,5 @@ scripts/recompute-all.ts Tüm ratingleri baştan hesaplar (vite-node ile, aşağ
 
 Sayfalar: `/login` (e-posta+şifre, Google, şifremi unuttum) · `/hosgeldin` (ilk giriş: ad, il/ilçe, mevki…)
 · `/` ana sayfa · `/kesfet` takım sıralaması (`?sekme=oyuncu` oyuncu arama, `?sekme=mac` adam arayan maçlar) · `/profil` · `/takim-kur` · `/grup-kur` · `/sifre-yenile`
-· `/profil/ayarlar/{kisisel,futbolcu,iletisim,guvenlik,gorunurluk,engellenenler}` · `/sohbet` (genel sohbet: takım/grup/kişi; `/sohbet/[threadId]` birebir) · `/sosyal` (arkadaşlar ve istekler, takımlarım, gruplarım) · `/bildirimler` (bildirim kutusu, son 50) · `/davet/gonder` (maç/çağrı kartını sohbetten gönder; `?tur=poll|match&ref=`) · `/privacy` (gizlilik) · `/yardim` · `/geri-bildirim` · `/yetenek` (yetenek değerlendirmesi) · `/oyuncu/[userId]` (başkasının profili) · `/katil` (davet koduyla takıma/gruba katıl; `?tur=takim|grup`) · `/join/[code]` · `/g/[id]` grup/takım · `/g/[id]/{players,kadro,sohbet,matches/new,cagri/yeni,cagri/[pollId],m/[matchId],p/[playerId]}`
+· `/profil/ayarlar/{kisisel,futbolcu,iletisim,guvenlik,gorunurluk,engellenenler}` · `/sohbet` (genel sohbet: takım/grup/kişi; `/sohbet/[threadId]` birebir) · `/sosyal` (arkadaşlar ve istekler, takımlarım, gruplarım) · `/bildirimler` (bildirim kutusu, son 50) · `/davet/gonder` (maç/çağrı kartını sohbetten gönder; `?tur=poll|match&ref=`) · `/privacy` (gizlilik) · `/yardim` · `/geri-bildirim` · `/yetenek` (yetenek değerlendirmesi) · `/oyuncu/[userId]` (başkasının profili) · `/katil` (davet koduyla takıma/gruba katıl; `?tur=takim|grup`) · `/join/[code]` · `/mac-ayarla` (tek Maç ayarla formu; `?grup=&rakip=`) · `/g/[id]` grup/takım · `/g/[id]/{players,kadro,sohbet,cagri/[pollId],m/[matchId],p/[playerId]}` (`matches/new` ve `cagri/yeni` → `/mac-ayarla`)
 · takımlara özel: `/g/[id]/teklif` (bu takıma maç teklif et) · `/g/[id]/teklifler` (gelen/giden/kabul edilen) · `/g/[id]/istatistik` (herkese açık)

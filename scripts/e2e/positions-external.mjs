@@ -74,10 +74,19 @@ try {
   const { data: gp } = await admin.from("group_players").select("display_name, position").eq("group_id", groupId);
   log("katılınca mevkiler gruba geldi:", gp.map((p) => `${p.display_name}=${p.position}`).join(", "));
 
-  // 1) Kendi aramızda maç + maça özel mevki
-  await A.page.goto(`${BASE}/g/${groupId}/matches/new`);
-  await A.page.click('button:has-text("Hepsi")'); await A.page.waitForSelector("text=Önerilen takımlar");
-  await A.page.click('button:has-text("Maçı oluştur")'); await A.page.waitForURL(/\/m\//);
+  // "Maç ayarla" formu (yeniden tasarım 4a): yarın 21:00, kadro = seçilenler + ben → kadro tam: "Maçı kur" (direkt kesin)
+  const setup = async (gid, others, opponent) => {
+    await A.page.goto(`${BASE}/mac-ayarla?grup=${gid}`, { waitUntil: "networkidle" });
+    await A.page.fill('input[name="day"]', new Date(Date.now() + 3 * 3600e3 + 864e5).toISOString().slice(0, 10));
+    await A.page.fill('input[aria-label="Saat"]', "21:00");
+    await A.page.fill('input[aria-label="Kadro sayısı"]', String(others.length + 1));
+    if (opponent) { await A.page.click('label:has-text("İsim yaz")'); await A.page.fill('input[aria-label="Rakip adı"]', opponent); }
+    for (const n of others) await A.page.locator(`li button:has-text("${n}")`).first().click();
+    await A.page.click('button:has-text("Maçı kur")'); await A.page.waitForURL(/\/m\//);
+  };
+
+  // 1) Kendi aramızda maç + maça özel mevki (kesinleşince taraflar dengelenir)
+  await setup(groupId, ["Burak", "Cem", "Deniz"]);
   const m1 = A.page.url();
   const { data: rosterPos } = await admin.from("match_players").select("team, position, group_players(display_name)").eq("match_id", m1.split("/m/")[1]);
   const dist = (t) => rosterPos.filter((r) => r.team === t).map((r) => r.position ?? "-").sort().join(",");
@@ -105,11 +114,7 @@ try {
   await A.page.waitForURL(/\/g\/[0-9a-f-]{36}$/, { timeout: 20000 }); teamId = A.page.url().split("/g/")[1];
   const { data: tm } = await admin.from("groups").select("invite_code").eq("id", teamId).single();
   for (const u of users.slice(1)) { const { ctx, page } = await ctxFor(u); await page.goto(`${BASE}/join/${tm.invite_code}`); await page.waitForURL(/\/g\//); await ctx.close(); }
-  await A.page.goto(`${BASE}/g/${teamId}/matches/new`);
-  await A.page.fill('input[name="opponent"]', "Yıldızspor");
-  for (const n of ["Ahmet", "Burak", "Cem", "Deniz"]) await A.page.locator(`li button:has-text("${n}")`).first().click();
-  await shot(A.page, "03-rakip-mac-olustur");
-  await A.page.click('button:has-text("Maçı oluştur")'); await A.page.waitForURL(/\/m\//);
+  await setup(teamId, ["Burak", "Cem", "Deniz"], "Yıldızspor");
   const m2 = A.page.url();
   await shot(A.page, "04-rakip-mac-kadro");
   const { data: m2rows } = await admin.from("match_players").select("team").eq("match_id", m2.split("/m/")[1]);

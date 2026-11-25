@@ -6,6 +6,7 @@ import { notify } from "@/lib/notify";
 import { text } from "@/lib/notify-rules";
 import { groupMemberIds, groupName, matchAccountIds } from "@/lib/recipients";
 import { formatDate } from "@/lib/data";
+import { matchWhen } from "@/lib/match-rules";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -18,8 +19,7 @@ export function istanbulNow(now: number) {
   return { day: `${get("year")}-${get("month")}-${get("day")}`, hour: Number(get("hour")) };
 }
 
-const whenText = (iso: string, tbd: boolean) =>
-  tbd ? new Date(iso).toLocaleDateString("tr-TR", { timeZone: TZ, weekday: "short", day: "numeric", month: "short" }) : formatDate(iso);
+const whenText = matchWhen;
 
 /** Aynı etiketli bildirimi zaten almış olanları çıkarır (her iş her kişiye bir kez) */
 async function notYetTagged(admin: Admin, userIds: string[], tag: string) {

@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { InviteToMatchButton } from "@/components/SendInviteLink";
+import { SendInviteLink } from "@/components/SendInviteLink";
+import { GatheringPanel, type EntryStatus } from "./GatheringPanel";
+import { matchWhen } from "@/lib/match-rules";
 import { Icon } from "@/components/Icon";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
@@ -189,10 +191,10 @@ export default async function MatchPage({
   searchParams,
 }: {
   params: Promise<{ groupId: string; matchId: string }>;
-  searchParams: Promise<{ error?: string; voted?: string; positions?: string; kabul?: string; dizilis?: string; cekilme?: string }>;
+  searchParams: Promise<{ error?: string; voted?: string; positions?: string; kabul?: string; dizilis?: string; cekilme?: string; yanit?: string }>;
 }) {
   const { groupId, matchId } = await params;
-  const { error, voted, positions, kabul, dizilis, cekilme } = await searchParams;
+  const { error, voted, positions, kabul, dizilis, cekilme, yanit } = await searchParams;
   const { supabase, user } = await requireUser();
 
   const { data: first } = await supabase
@@ -204,10 +206,10 @@ export default async function MatchPage({
   if (!first) notFound();
   if (first.status === "voting") await finalizeExpired(groupId);
 
-  const [{ data: match }, roster, players, { data: canManage }, { data: myTeam }, { data: isAdmin }] = await Promise.all([
+  const [{ data: match }, roster, players, { data: canManage }, { data: myTeam }, { data: isAdmin }, { data: myEntry }, { data: isMember }] = await Promise.all([
     supabase
       .from("matches")
-      .select("id, played_at, venue, status, score_a, score_b, voting_deadline, kind, opponent_name, challenge_id, opponent_group_id, team_size, formation_a, formation_b")
+      .select("id, played_at, venue, status, score_a, score_b, voting_deadline, kind, opponent_name, challenge_id, opponent_group_id, team_size, formation_a, formation_b, time_tbd, capacity, roster_count, reserve_count, open_to_members, cancel_reason")
       .eq("id", matchId)
       .single(),
     fetchRoster(supabase, matchId, groupId),
@@ -216,6 +218,9 @@ export default async function MatchPage({
     supabase.from("groups").select("name, color, kind").eq("id", groupId).single(),
     // Misafiri sadece kaptan/yetkili ekler (0042)
     supabase.rpc("is_group_admin", { p_group_id: groupId }),
+    // Yeni maç yapısı (0042): benim kaydım (kadro/yedek/davetli/başvuru) ve üyeliğim
+    supabase.from("match_entries").select("status").eq("match_id", matchId).eq("user_id", user.id).maybeSingle(),
+    supabase.rpc("is_group_member", { p_group_id: groupId }),
   ]);
   if (!match) notFound();
   const myTeamName = myTeam?.name ?? "Biz";
@@ -263,7 +268,13 @@ export default async function MatchPage({
     t.length ? Math.round((t.reduce((s, p) => s + p.overall, 0) / t.length) * 10) / 10 : 0;
 
   const statusBadge =
-    match.status === "planned" ? (
+    match.status === "gathering" ? (
+      <Badge tone="warn">Toplanıyor</Badge>
+    ) : match.status === "cancelled" ? (
+      <Badge>İptal edildi</Badge>
+    ) : match.status === "no_result" ? (
+      <Badge>Sonuçsuz</Badge>
+    ) : match.status === "planned" ? (
       <Badge>Planlandı</Badge>
     ) : match.status === "played" ? (
       <Badge tone="warn">Skor onayı</Badge>
@@ -298,12 +309,12 @@ export default async function MatchPage({
             : []),
         ]}
       />
-      <Header title={external ? `vs ${oppName}` : "Kendi aramızda"} back={`/g/${groupId}`} />
+      <Header title={external ? (oppName ? `vs ${oppName}` : "Rakip belli değil") : "Kendi aramızda"} back={`/g/${groupId}`} />
       <div className="-mt-3 mb-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-on-surface-variant">
         {statusBadge}
         <span className="inline-flex items-center gap-1">
           <Icon name="calendar_today" className="text-[16px]" />
-          {formatDate(match.played_at)}
+          {match.time_tbd ? matchWhen(match.played_at, true) : formatDate(match.played_at)}
         </span>
         {match.team_size ? (
           <span className="inline-flex items-center gap-1">
@@ -319,7 +330,54 @@ export default async function MatchPage({
         ) : null}
       </div>
       <ErrorNote message={error} />
-      {canManage && match.status === "planned" && <InviteToMatchButton groupId={groupId} matchId={matchId} className="mb-4" />}
+      {(match.status === "cancelled" || match.status === "no_result") && (
+        <Card className="mb-4 flex items-start gap-3 text-sm">
+          <Icon name={match.status === "cancelled" ? "event_busy" : "help"} className="text-[22px] text-muted" />
+          <div>
+            <div className="font-semibold">{match.status === "cancelled" ? "Bu maç iptal edildi" : "Skor girilmediği için sonuçsuz kapandı"}</div>
+            {match.cancel_reason && <div className="text-muted">{match.cancel_reason}</div>}
+          </div>
+        </Card>
+      )}
+      {(match.status === "gathering" || (match.status === "planned" && match.capacity)) && (
+        <GatheringPanel
+          groupId={groupId}
+          matchId={matchId}
+          status={match.status as "gathering" | "planned"}
+          roster={match.roster_count}
+          reserve={match.reserve_count}
+          capacity={match.capacity ?? match.roster_count}
+          myStatus={(myEntry?.status as EntryStatus) ?? null}
+          canRespond={!!myEntry || (!!isMember && match.open_to_members)}
+          flash={yanit}
+        />
+      )}
+      {canManage && (match.status === "planned" || match.status === "gathering") && (
+        <SendInviteLink tur="match" refId={matchId} className="mb-4" />
+      )}
+      {match.status === "gathering" && (
+        <>
+          <SectionTitle>Kadro · {roster.length}</SectionTitle>
+          {roster.length === 0 ? (
+            <p className="mb-4 px-1 text-sm text-muted">Henüz kimse yok.</p>
+          ) : (
+            <Card className="mb-4 p-0">
+              <ul className="divide-y divide-line">
+                {roster.map((r) => (
+                  <li key={r.id}>
+                    <Link href={`/g/${groupId}/p/${r.id}`} className="flex min-h-12 items-center gap-3 px-4 py-2">
+                      <OvrBadge overall={r.overall} />
+                      <span className="min-w-0 flex-1 truncate">{r.name}</span>
+                      {!r.userId && <span className="text-xs text-muted">misafir</span>}
+                      <PositionChip position={r.position} />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+        </>
+      )}
       {!canManage &&
         fills
           .filter((f) => f.status === "open")
@@ -352,11 +410,11 @@ export default async function MatchPage({
       )}
 
       {linked && opp && <VersusCard mine={{ id: groupId, name: myTeamName, color: myTeamColor, roster }} opp={opp} />}
-      {external && !opp && match.status !== "planned" && roster.length > 0 && (
+      {external && !opp && ["played", "voting", "closed"].includes(match.status) && roster.length > 0 && (
         <VersusCard mine={{ id: groupId, name: myTeamName, color: myTeamColor, roster }} opp={null} />
       )}
 
-      {match.status !== "planned" && (
+      {["played", "voting", "closed"].includes(match.status) && (
         <Card className="mb-4 flex items-center justify-around bg-gradient-to-br from-primary/10 via-surface-container to-surface-container py-5 shadow-md">
           {(["A", "B"] as const).map((t, i) => (
             <div key={t} className="flex items-center gap-4">

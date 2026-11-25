@@ -33,7 +33,7 @@ async function loadSource(supabase: Awaited<ReturnType<typeof requireUser>>["sup
   }
   const { data } = await supabase.from("matches").select("group_id, status, played_at, venue, groups!matches_group_id_fkey(name)").eq("id", ref).maybeSingle();
   const g = one(data?.groups as { name: string } | { name: string }[] | null);
-  return data && g ? { groupId: data.group_id as string, open: data.status === "planned", title: `Maç · ${g.name}`, when: data.played_at as string, venue: data.venue as string | null } : null;
+  return data && g ? { groupId: data.group_id as string, open: data.status === "planned" || data.status === "gathering", title: `Maç · ${g.name}`, when: data.played_at as string, venue: data.venue as string | null } : null;
 }
 
 /** Maç/çağrı kartını sohbetten gönderme: arkadaşlar + oyuncu arama */
@@ -102,7 +102,7 @@ export default async function SendCardPage({ searchParams }: { searchParams: Pro
   return (
     <main>
       <Header
-        title={tur === "poll" ? "Maça çağır" : "Davet gönder"}
+        title="Maça çağır"
         back={tur === "poll" ? `/g/${source.groupId}/cagri/${ref}` : `/g/${source.groupId}/m/${ref}`}
       />
       <ErrorNote message={error} />

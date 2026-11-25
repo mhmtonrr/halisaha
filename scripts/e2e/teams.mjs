@@ -62,11 +62,11 @@ try {
 
   // 3) Görünürlük: yetkili maç kurar ama rol veremez; oyuncu maç kuramaz; yabancı takımı görür, davet linkini görmez
   await B.goto(`${BASE}/g/${teamId}`);
-  check("yetkili '+ Maç kur' görür", (await B.locator("text=+ Maç kur").count()) > 0);
+  check("yetkili 'Maç ayarla' görür", (await B.locator('a:has-text("Maç ayarla")').count()) > 0);
   await B.goto(`${BASE}/g/${teamId}/players`);
   check("yetkili 'Yetkili yap' düğmesini görmez", (await B.locator("text=Yetkili yap").count()) === 0);
   await C.goto(`${BASE}/g/${teamId}`);
-  check("oyuncu '+ Maç kur' görmez", (await C.locator("text=+ Maç kur").count()) === 0);
+  check("oyuncu 'Maç ayarla' düğmesini görmez", (await C.locator('a[href^="/mac-ayarla"]').count()) === 0);
   await C.goto(`${BASE}/g/${teamId}/matches/new`); await C.waitForLoadState("networkidle");
   check("oyuncu maç kurma sayfasından geri gönderilir", !C.url().includes("/matches/new"));
   await D.goto(`${BASE}/g/${teamId}`);

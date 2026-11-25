@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { matchWhen } from "@/lib/match-rules";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { finalizeExpired } from "@/lib/finalize";
@@ -19,6 +20,7 @@ import { LiveRefresh } from "@/components/LiveRefresh";
 import { MuteToggle, Proposals, TeamStateBanner, type Proposal } from "./GroupExtras";
 
 const STATUS: Record<string, { label: string; tone: "default" | "accent" | "warn" }> = {
+  gathering: { label: "Toplanıyor", tone: "warn" },
   planned: { label: "Planlandı", tone: "default" },
   played: { label: "Skor onayı", tone: "warn" },
   voting: { label: "Oylama açık", tone: "warn" },
@@ -53,7 +55,7 @@ export default async function GroupPage({
     getGroupSummaries(supabase, groupId),
     supabase
       .from("matches")
-      .select("id, played_at, venue, status, score_a, score_b, kind, opponent_name, match_players(count)")
+      .select("id, played_at, venue, status, score_a, score_b, kind, opponent_name, time_tbd, capacity, roster_count, match_players(count)")
       .eq("group_id", groupId)
       .order("played_at", { ascending: false })
       .limit(50),
@@ -91,7 +93,8 @@ export default async function GroupPage({
   const tab = sekme === "misafir" && guests.length > 0 ? "misafir" : "kadro";
   const ranked = [...members].sort(byRanking);
   const guestRanked = [...guests].sort(byRanking);
-  const active = (matches ?? []).filter((m) => m.status !== "closed");
+  // İptal edilen ve sonuçsuz kapanan maçlar listelenmez (maç ekranında durur)
+  const active = (matches ?? []).filter((m) => m.status in STATUS && m.status !== "closed");
   const recent = (matches ?? []).filter((m) => m.status === "closed").slice(0, 8);
   const rating = teamRating(members.map((p) => p.overall));
 
@@ -234,15 +237,10 @@ export default async function GroupPage({
       })()}
 
       {canCreate && (
-        <div className="mb-2 grid grid-cols-2 gap-2">
-          <LinkButton href={`/g/${groupId}/cagri/yeni`}>
-            <Icon name="sports_soccer" className="text-[20px]" />
-            Maç ayarla
-          </LinkButton>
-          <LinkButton href={`/g/${groupId}/matches/new`} variant="secondary">
-            {isTeam ? "+ Maç kur" : "+ Doğrudan maç"}
-          </LinkButton>
-        </div>
+        <LinkButton href={`/mac-ayarla?grup=${groupId}`} className="mb-2 w-full">
+          <Icon name="sports_soccer" className="text-[20px]" />
+          Maç ayarla
+        </LinkButton>
       )}
 
       {/* Kısayollar: sohbet, teklifler, kadro, oyuncular */}
@@ -338,10 +336,13 @@ export default async function GroupPage({
                     <Icon name="sports_soccer" className="text-[22px]" />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate font-semibold">{m.kind === "external" ? `vs ${m.opponent_name}` : formatDate(m.played_at)}</div>
+                    <div className="truncate font-semibold">
+                      {m.kind === "external" ? (m.opponent_name ? `vs ${m.opponent_name}` : "Rakip belli değil") : m.time_tbd ? matchWhen(m.played_at, true) : formatDate(m.played_at)}
+                    </div>
                     <div className="truncate text-xs text-on-surface-variant">
-                      {m.kind === "external" && `${formatDate(m.played_at)} · `}
-                      {m.venue ?? "Saha belirtilmedi"} · {m.match_players[0]?.count ?? 0} oyuncu
+                      {m.kind === "external" && `${m.time_tbd ? matchWhen(m.played_at, true) : formatDate(m.played_at)} · `}
+                      {m.venue ?? "Saha belirtilmedi"} ·{" "}
+                      {m.capacity ? `${m.roster_count}/${m.capacity} kadro` : `${m.match_players[0]?.count ?? 0} oyuncu`}
                     </div>
                   </div>
                   <Badge tone={STATUS[m.status].tone}>{STATUS[m.status].label}</Badge>

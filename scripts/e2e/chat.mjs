@@ -56,12 +56,12 @@ try {
   await C.goto(`${BASE}/g/${gid}/sohbet`); await C.waitForSelector("text=canlı"); await C.goto(BASE + "/");
   log("sohbeti açınca rozet kalktı:", (await C.locator('span[title$="okunmamış mesaj"]').count()) === 0 ? "✓" : "HATA");
 
-  // Etkinlik kartı: kurucu çağrı açınca sohbete düşer
+  // Etkinlik kartı: kurucu maç ayarlayınca sohbete düşer (0042: "📣 Maç ayarlanıyor: <tarih>")
   const A2 = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
   await A2.context().addCookies(await A.context().cookies());
-  await A2.goto(`${BASE}/g/${gid}/cagri/yeni`); await A2.fill('input[name="venue"]', "Petroller"); await A2.click('button:has-text("Çağrıyı aç")'); await A2.waitForURL(/cagri\/[0-9a-f-]+$/);
-  await B.waitForSelector("text=📣 Maç çağrısı:", { timeout: 10000 }); // 0035: kart metni "📣 Maç çağrısı: <tarih>"
-  log("çağrı açılınca sohbete etkinlik kartı düştü ✓ (B canlı gördü)");
+  await A2.goto(`${BASE}/mac-ayarla?grup=${gid}`); await A2.check("text=Saat belli değil"); await A2.fill('input[name="venue"]', "Petroller"); await A2.click('button:has-text("Maçı ayarla")'); await A2.waitForURL(/\/m\/[0-9a-f-]+/);
+  await B.waitForSelector("text=📣 Maç ayarlanıyor:", { timeout: 10000 });
+  log("maç ayarlanınca sohbete etkinlik kartı düştü ✓ (B canlı gördü)");
 
   // Silme: kurucu B'nin mesajını siler, B canlı görür
   await A.locator("button:has-text('Ben varım!')").click(); await A.click("text=Mesajı sil");

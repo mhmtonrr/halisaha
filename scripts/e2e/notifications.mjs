@@ -1,6 +1,6 @@
 // Bildirimler: olaylar doğru kişilere ulaşır (teklif, çağrı, oylama, sohbet, adam ara), olayı yapana gitmez, tercih kapalıysa gitmez,
 // sohbet 10 dakikada tek bildirime birleşir, rozet canlı güncellenir, kutu okundu işaretlenir, hatırlatma cron'u bir kez gönderir.
-// Cron adımı için sunucu CRON_SECRET=e2e-secret ile başlatılmalı (değilse o adım atlanır ve söylenir).
+// Cron adımı için sunucu .env.local içindeki CRON_SECRET ile çalışmalı (npm run dev onu okur; yoksa o adım atlanır ve söylenir).
 // Canlı Supabase'e karşı çalışır; test verisini sonunda siler. Kullanım: node scripts/e2e/notifications.mjs [ekran-klasörü]
 import { createRequire } from "module";
 import fs from "fs";
@@ -92,14 +92,16 @@ try {
   await rivP.locator('button:has-text("Kabul et")').first().click(); await rivP.waitForURL(/\/m\/[0-9a-f-]+\?kabul=1/);
   check("teklif kabul edilince gönderene 'kabul edildi' bildirimi", !!(await until(async () => (await notifs(cap, "offer")).some((n) => n.title.includes("kabul edildi")))));
 
-  // 5) Çağrı: gruba yeni çağrı → üyelere (açan hariç)
-  await capP.goto(`${BASE}/g/${G}/cagri/yeni`);
+  // 5) Maç ayarla (0042): gruba duyurulan toplanan maç → üyelere "Maç ayarlanıyor" (açan hariç)
+  await capP.goto(`${BASE}/mac-ayarla?grup=${G}`);
   await capP.fill('input[name="day"]', trDate(2));
+  await capP.check("text=Saat belli değil");
   await capP.fill('input[name="venue"]', "Bildirim Sahası");
-  await capP.click('button:has-text("Çağrıyı aç")'); await capP.waitForURL(/cagri\/[0-9a-f-]+$/);
-  check("çağrı: iki üyeye 'poll' bildirimi", !!(await until(async () => (await notifs(mem, "poll")).length === 1 && (await notifs(apl, "poll")).length === 1)));
-  check("çağrıyı açana bildirim yok", (await notifs(cap, "poll")).length === 0);
-  check("çağrı bildirimi saha bilgisini taşır", (await notifs(mem, "poll"))[0].body.includes("Bildirim Sahası"));
+  await capP.click('button:has-text("Maçı ayarla")'); await capP.waitForURL(/\/m\/[0-9a-f-]+/);
+  const gathering = async (u) => (await notifs(u, "match")).filter((n) => n.title.includes("Maç ayarlanıyor"));
+  check("maç ayarla: iki üyeye 'Maç ayarlanıyor' bildirimi", !!(await until(async () => (await gathering(mem)).length === 1 && (await gathering(apl)).length === 1)));
+  check("maçı ayarlayana bildirim yok", (await gathering(cap)).length === 0);
+  check("bildirim gün bilgisini taşır", (await gathering(mem))[0].body.includes("saat belli değil"));
 
   // 6) Oylama açıldı + hatırlatma cron'u
   const mid = (await admin.from("matches").insert({ group_id: A, played_at: new Date(Date.now() + 3 * 3600e3).toISOString(), created_by: cap.id, kind: "external", opponent_name: "Rakip FK", team_size: 7 }).select("id").single()).data.id;
@@ -115,23 +117,23 @@ try {
   check("hatırlatma cron'u anahtarsız 401", unauthorized.status === 401);
   const wrong = await fetch(`${BASE}/api/cron/vote-reminders`, { headers: { authorization: "Bearer yanlis" } });
   check("yanlış anahtarla da 401", wrong.status === 401);
-  const res1 = await fetch(`${BASE}/api/cron/vote-reminders`, { headers: { authorization: "Bearer e2e-secret" } });
+  const res1 = await fetch(`${BASE}/api/cron/vote-reminders`, { headers: { authorization: `Bearer ${env.CRON_SECRET}` } });
   if (res1.status === 401) {
-    console.log("  – ATLANDI: hatırlatma cron'u (sunucu CRON_SECRET=e2e-secret ile başlatılmamış)");
+    console.log("  – ATLANDI: hatırlatma cron'u (sunucu .env.local CRON_SECRET ile başlatılmamış)");
   } else {
     const r1 = await res1.json();
     check("cron: oy vermemiş iki kişiye hatırlatma (kaptan + oyuncu)", r1.reminded >= 2 && (await notifs(mem, "vote")).length === 2);
-    const r2 = await (await fetch(`${BASE}/api/cron/vote-reminders`, { headers: { authorization: "Bearer e2e-secret" } })).json();
+    const r2 = await (await fetch(`${BASE}/api/cron/vote-reminders`, { headers: { authorization: `Bearer ${env.CRON_SECRET}` } })).json();
     check("ikinci çalıştırmada tekrar hatırlatma yok (en fazla 1)", r2.reminded === 0 && (await notifs(mem, "vote")).length === 2);
   }
 
   // 6b) Oylama süresi dolunca kapanır → kadroya "Sonuçlar açıklandı" (cron varsa cron kapatır, yoksa maç sayfası açılınca)
   await admin.from("matches").update({ voting_deadline: new Date(Date.now() - 60e3).toISOString() }).eq("id", mid);
-  const cron = await fetch(`${BASE}/api/cron/vote-reminders`, { headers: { authorization: "Bearer e2e-secret" } });
+  const cron = await fetch(`${BASE}/api/cron/vote-reminders`, { headers: { authorization: `Bearer ${env.CRON_SECRET}` } });
   if (cron.status === 200) {
     check("cron süresi dolan oylamayı kapattı", (await cron.json()).finalized >= 1);
   } else {
-    console.log("  – ATLANDI: cron ile kapatma (sunucu CRON_SECRET=e2e-secret ile başlatılmamış); maç sayfasıyla kapatılıyor");
+    console.log("  – ATLANDI: cron ile kapatma (sunucu .env.local CRON_SECRET ile başlatılmamış); maç sayfasıyla kapatılıyor");
     await memP.goto(`${BASE}/g/${A}/m/${mid}`);
   }
   check("oylama kapanınca maç kapandı", !!(await until(async () => (await admin.from("matches").select("status").eq("id", mid).single()).data.status === "closed")));

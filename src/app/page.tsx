@@ -1,3 +1,4 @@
+import { matchWhen } from "@/lib/match-rules";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { requireUser } from "@/lib/supabase/server";
@@ -46,9 +47,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
     groupIds.length
       ? supabase
           .from("matches")
-          .select("id, group_id, played_at, status, kind, opponent_name, venue, team_size, voting_deadline, match_players(player_id)")
+          .select("id, group_id, played_at, status, kind, opponent_name, venue, team_size, voting_deadline, capacity, time_tbd, match_players(player_id)")
           .in("group_id", groupIds)
-          .in("status", ["planned", "played", "voting"])
+          .in("status", ["gathering", "planned", "played", "voting"])
           .order("played_at")
           .limit(20)
       : Promise.resolve({ data: [] as never[] }),
@@ -318,13 +319,15 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
           <div className="no-scrollbar -mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1">
             {upcoming.map((m) => {
               const days = daysLeftLabel(m.played_at);
-              const cap = rosterCapacity(m.team_size, m.kind);
+              const cap = m.capacity ?? rosterCapacity(m.team_size, m.kind);
               const count = m.match_players.length;
               const status =
                 m.status === "voting"
                   ? { label: "Oylama", icon: "how_to_vote", warn: true }
                   : m.status === "played"
                     ? { label: "Skor onayı", icon: "scoreboard", warn: true }
+                    : m.status === "gathering" && !m.inRoster
+                      ? { label: `Toplanıyor ${count}/${cap ?? "?"}`, icon: "group_add", warn: true }
                     : m.inRoster
                       ? { label: "Kadrodasın", icon: "check_circle", warn: false, on: true }
                       : { label: "Planlandı", icon: "event", warn: false };
@@ -352,13 +355,13 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
                   <div className="flex items-center gap-2">
                     <TeamBadge name={m.group.name} color={m.group.color} size="sm" />
                     <span className="min-w-0 truncate font-display text-[17px] font-bold leading-snug">
-                      {m.kind === "external" ? `${m.group.name} vs ${m.opponent_name}` : m.group.name}
+                      {m.kind === "external" ? `${m.group.name} vs ${m.opponent_name ?? "?"}` : m.group.name}
                     </span>
                   </div>
                   <div className="space-y-1 text-[13px] text-on-surface-variant">
                     <div className="flex items-center gap-1.5">
                       <Icon name="calendar_today" className="text-[16px]" />
-                      {formatDate(m.played_at)}
+                      {m.time_tbd ? matchWhen(m.played_at, true) : formatDate(m.played_at)}
                       {m.kind !== "external" && " · kendi aramızda"}
                     </div>
                     {m.venue && (
@@ -440,12 +443,12 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
             </span>
             <div className="min-w-0">
               <div className="font-display text-base font-bold">Maç ayarla</div>
-              <div className="text-xs font-medium">Çağrıyı aç, üyeler &quot;geliyorum&quot; desin, kadroyu sen kesinleştir.</div>
+              <div className="text-xs font-medium">Üyeler &quot;geliyorum&quot; desin, eksik için adam ara, kadro tamamlanınca kesinleştir.</div>
             </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             {managed.slice(0, 4).map((m) => (
-              <Link key={m.playerId} href={`/g/${m.group.id}/cagri/yeni`} className="inline-flex min-h-9 max-w-full items-center gap-1 rounded-full bg-pitch-950 px-3.5 font-display text-[13px] font-bold text-primary">
+              <Link key={m.playerId} href={`/mac-ayarla?grup=${m.group.id}`} className="inline-flex min-h-9 max-w-full items-center gap-1 rounded-full bg-pitch-950 px-3.5 font-display text-[13px] font-bold text-primary">
                 <Icon name="add" className="text-[16px]" />
                 <span className="truncate">{m.group.name}</span>
               </Link>

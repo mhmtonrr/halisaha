@@ -37,38 +37,6 @@ function rpcMessage(error: { message?: string; code?: string } | null, fallback:
 }
 const callPath = (groupId: string, pollId: string) => `/g/${groupId}/cagri/${pollId}`;
 
-/** Toplama çağrısı ("Maç ayarla") — gün zorunlu, gerisi isteğe bağlı */
-export async function createGatherPoll(fd: FormData) {
-  const { supabase, user } = await requireUser();
-  const groupId = str(fd, "groupId");
-  const back = `/g/${groupId}/cagri/yeni`;
-  const day = str(fd, "day");
-  if (!day) fail(back, "Maç gününü seçin");
-  const time = str(fd, "time");
-  const startsAt = time ? dayTimeToIso(day, time) : null;
-  if (time && !startsAt) fail(back, "Saat geçersiz");
-  const decideBy = str(fd, "decideBy");
-  const venue = str(fd, "venue").slice(0, 80) || null;
-  const { data, error } = await supabase.rpc("create_gather_poll", {
-    p_group: groupId,
-    p_play_on: day,
-    p_starts_at: startsAt,
-    p_venue: venue,
-    p_team_size: sizeOf(fd),
-    p_capacity: await gatherCapacity(supabase, groupId, sizeOf(fd)),
-    p_decide_by: decideBy ? parseLocalDateTime(decideBy) : null,
-    p_note: str(fd, "note").slice(0, 300) || null,
-  });
-  if (error || !data) fail(back, rpcMessage(error, "Çağrı açılamadı"));
-  const pollId = data as string;
-  later(async () => {
-    const admin = createAdminClient();
-    const [ids, name] = await Promise.all([groupMemberIds(admin, groupId, { broadcast: true }), groupName(admin, groupId)]);
-    await notify(ids, "poll", text.pollOpened(name, groupId, pollId, callWhen({ play_on: day, starts_at: startsAt }), venue), { excludeUserId: user.id });
-  });
-  redirect(callPath(groupId, pollId));
-}
-
 /** Toplama çağrısını netleştir (saat, saha, kişi sayısı, karar zamanı, not); yanıt verenlere haber gider */
 export async function updateGatherPoll(fd: FormData) {
   const { supabase, user } = await requireUser();
@@ -346,33 +314,6 @@ export async function setPollPublic(fd: FormData) {
   revalidatePath(callPath(groupId, pollId));
   revalidatePath("/kesfet");
   redirect(callPath(groupId, pollId));
-}
-
-/**
- * Maça çağır (maç ekranı): maçın grubundaki açık adam aramaya davet gönderilir; yoksa önce 1 kişilik, herkese kapalı
- * bir adam arama sessizce açılır (gruba duyuru gitmez). Sonra kişi seçme sayfasına gidilir.
- */
-export async function inviteToMatch(fd: FormData) {
-  const { supabase } = await requireUser();
-  const groupId = str(fd, "groupId");
-  const matchId = str(fd, "matchId");
-  const back = `/g/${groupId}/m/${matchId}`;
-  const { data: open } = await supabase
-    .from("match_polls")
-    .select("id")
-    .eq("match_id", matchId)
-    .eq("group_id", groupId)
-    .eq("purpose", "fill")
-    .eq("status", "open")
-    .maybeSingle();
-  let pollId = open?.id as string | undefined;
-  if (!pollId) {
-    const { data, error } = await supabase.rpc("create_fill_poll", { p_match: matchId, p_needed: 1, p_positions: [], p_note: null, p_group: groupId });
-    if (error || !data) fail(back, rpcMessage(error, "Maça çağrı açılamadı"));
-    pollId = data as string;
-    revalidatePath(back);
-  }
-  redirect(`/davet/gonder?tur=poll&ref=${pollId}`);
 }
 
 // ---------------------------------------------------------------------------
