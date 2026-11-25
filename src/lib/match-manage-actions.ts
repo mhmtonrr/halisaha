@@ -147,38 +147,52 @@ export async function cancelApplication(fd: FormData) {
   redirect(back);
 }
 
-/** Adam ara: Keşfet'e (hedef boş) veya bir gruba ilan; grupta yetkisi yoksa o grubun onayına düşer */
+/** Adam ara: seçilen yerlerin (Keşfet = "kesfet", grup = kimlik) hepsine ilan; grupta yetkisi yoksa o grubun onayına düşer */
 export async function createListing(fd: FormData) {
   const { supabase, user } = await requireUser();
   const { matchId, back } = ids(fd);
-  const target = str(fd, "target");
+  const targets = [...new Set(fd.getAll("targets").map(String))].filter((t) => t === "kesfet" || UUID_RE.test(t));
+  if (!targets.length) fail(back, "İlanın paylaşılacağı en az bir yer seç");
   const positions = fd.getAll("positions").map(String).filter((p) => !!asPosition(p));
-  const { data: listingId, error } = await supabase.rpc("create_listing", {
-    p_match: matchId,
-    p_target: UUID_RE.test(target) ? target : null,
-    p_positions: positions,
-    p_note: str(fd, "note").slice(0, 200) || null,
-  });
-  if (error || !listingId) fail(back, rpcMessage(error, "İlan açılamadı"));
-  if (UUID_RE.test(target)) {
+  const note = str(fd, "note").slice(0, 200) || null;
+  const opened: { target: string; listingId: string }[] = [];
+  let failure: string | null = null;
+  for (const t of targets) {
+    const { data, error } = await supabase.rpc("create_listing", {
+      p_match: matchId,
+      p_target: t === "kesfet" ? null : t,
+      p_positions: positions,
+      p_note: note,
+    });
+    if (error || !data) failure ??= rpcMessage(error, "İlan açılamadı");
+    else if (t !== "kesfet") opened.push({ target: t, listingId: data as string });
+  }
+  if (opened.length) {
     later(async () => {
       const admin = createAdminClient();
-      const [m, { data: l }] = await Promise.all([
-        matchInfo(admin, matchId),
-        admin.from("match_listings").select("status").eq("id", listingId as string).maybeSingle(),
-      ]);
-      if (!m || !l) return;
-      const [fromName, targetName] = await Promise.all([groupName(admin, m.group_id), groupName(admin, target)]);
+      const m = await matchInfo(admin, matchId);
+      if (!m) return;
+      const fromName = await groupName(admin, m.group_id);
       const when = matchWhen(m.played_at, m.time_tbd);
-      if (l.status === "pending") {
-        const admins = await groupMemberIds(admin, target, { adminsOnly: true });
-        await notify(admins, "listing", text.listingNeedsApproval(await displayName(admin, user.id), fromName, target, when), { excludeUserId: user.id });
-      } else {
-        const needed = Math.max(1, (m.capacity ?? 0) - m.roster_count);
-        const members = await groupMemberIds(admin, target, { broadcast: true });
-        await notify(members, "listing", text.listingOpened(fromName, targetName, m.group_id, matchId, needed, when), { excludeUserId: user.id });
+      for (const { target, listingId } of opened) {
+        const { data: l } = await admin.from("match_listings").select("status").eq("id", listingId).maybeSingle();
+        if (!l) continue;
+        const targetName = await groupName(admin, target);
+        if (l.status === "pending") {
+          const admins = await groupMemberIds(admin, target, { adminsOnly: true });
+          await notify(admins, "listing", text.listingNeedsApproval(await displayName(admin, user.id), fromName, target, when), { excludeUserId: user.id });
+        } else {
+          const needed = Math.max(1, (m.capacity ?? 0) - m.roster_count);
+          const members = await groupMemberIds(admin, target, { broadcast: true });
+          await notify(members, "listing", text.listingOpened(fromName, targetName, m.group_id, matchId, needed, when), { excludeUserId: user.id });
+        }
       }
     });
+  }
+  // Bir yer açılamazsa diğerleri açık kalır; hata gösterilir
+  if (failure) {
+    revalidatePath(back);
+    fail(back, failure);
   }
   done(back, "ilan");
 }

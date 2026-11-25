@@ -532,7 +532,6 @@ export default async function MatchPage({
       {manage && planned && entries.some((e) => ["reserve", "pending"].includes(e.status)) && (
         <RosterManage groupId={groupId} matchId={matchId} roster={[]} entries={entries} addable={[]} isAdmin={false} full={full} />
       )}
-      {manage && <FeeManage groupId={groupId} matchId={matchId} fee={match.fee_per_person} />}
       {manage && <ListingManage groupId={groupId} matchId={matchId} listings={listings} targets={targets} code={code} full={full} />}
       {manage && match.kind === "external" && !match.challenge_id && (
         <RivalManage
@@ -589,21 +588,23 @@ export default async function MatchPage({
         </Card>
       )}
 
-      <LineupsSection
-        sides={
-          external
-            ? [
-                { key: "me", title: myTeamName, groupId, size: match.team_size, formationId: match.formation_a, roster },
-                ...(opp
-                  ? [{ key: "opp", title: opp.team.name, groupId: opp.team.id, size: opp.match.team_size, formationId: opp.match.formation_a, roster: opp.roster }]
-                  : []),
-              ]
-            : [
-                { key: "A", title: TEAM.A.label, groupId, size: match.team_size, formationId: match.formation_a, roster: teams.A },
-                { key: "B", title: TEAM.B.label, groupId, size: match.team_size, formationId: match.formation_b, roster: teams.B },
-              ]
-        }
-      />
+      {match.status !== "gathering" && (
+        <LineupsSection
+          sides={
+            external
+              ? [
+                  { key: "me", title: myTeamName, groupId, size: match.team_size, formationId: match.formation_a, roster },
+                  ...(opp
+                    ? [{ key: "opp", title: opp.team.name, groupId: opp.team.id, size: opp.match.team_size, formationId: opp.match.formation_a, roster: opp.roster }]
+                    : []),
+                ]
+              : [
+                  { key: "A", title: TEAM.A.label, groupId, size: match.team_size, formationId: match.formation_a, roster: teams.A },
+                  { key: "B", title: TEAM.B.label, groupId, size: match.team_size, formationId: match.formation_b, roster: teams.B },
+                ]
+          }
+        />
+      )}
 
       {match.status === "planned" && (
         <WithdrawalSection
@@ -664,6 +665,8 @@ export default async function MatchPage({
       {match.status === "closed" && (
         <ResultsView groupId={groupId} matchId={matchId} roster={roster} myId={me?.id} external={external} />
       )}
+
+      {manage && <FeeManage groupId={groupId} matchId={matchId} fee={match.fee_per_person} />}
 
       {manage && (
         <ScheduleManage

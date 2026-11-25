@@ -153,8 +153,8 @@ try {
   const mid2 = (await admin.from("matches").insert({ group_id: A, played_at: new Date(Date.now() + 4 * 864e5).toISOString(), created_by: cap.id, kind: "external", opponent_name: "Rakip 2", team_size: 7, capacity: 7 }).select("id").single()).data.id;
   await admin.from("match_players").insert({ match_id: mid2, player_id: await gp(A, cap), team: "A" });
   await capP.goto(`${BASE}/g/${A}/m/${mid2}`, { waitUntil: "networkidle" });
-  await capP.selectOption('select[aria-label="İlan yeri"]', G);
-  await capP.click('button:has-text("İlanı aç")');
+  await capP.click('summary:has-text("Paylaşılacak yerleri seç")'); await capP.check(`input[name="targets"][value="${G || "kesfet"}"]`);
+  await capP.click('button:text-is("Ekle")');
   await capP.waitForURL(/ok=ilan/, { timeout: 20000 });
   const listingN = async (u) => (await notifs(u, "listing")).filter((n) => n.url === `/g/${A}/m/${mid2}`);
   check("ilan: grubun üyesine '6 oyuncu aranıyor' bildirimi", !!(await until(async () => (await listingN(apl)).some((n) => n.title.includes("6 oyuncu aranıyor")))));

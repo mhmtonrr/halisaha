@@ -240,6 +240,7 @@ export function ListingManage({
 }) {
   const open = listings.filter((l) => l.status === "active" || l.status === "pending");
   const hasPublic = open.some((l) => l.targetName === null);
+  const places = [...(hasPublic ? [] : [{ id: "kesfet", name: "Keşfet (herkese açık)" }]), ...targets];
   return (
     <section className="mb-4 space-y-2">
       <SectionTitle>Adam ara</SectionTitle>
@@ -265,31 +266,44 @@ export function ListingManage({
           </ul>
         )}
         {full && <p className="text-xs text-muted">Kadro dolu: ilanlar Keşfet listesinden düşer, yer açılınca geri gelir.</p>}
-        <form action={createListing} className="space-y-2">
-          <Hidden groupId={groupId} matchId={matchId} />
-          <Label>Nerede paylaşılsın?</Label>
-          <select name="target" aria-label="İlan yeri" className={selectCls} defaultValue={hasPublic ? targets[0]?.id ?? "" : ""}>
-            {!hasPublic && <option value="">Keşfet (herkese açık)</option>}
-            {targets.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name} grubunda
-              </option>
-            ))}
-          </select>
-          <div className="flex flex-wrap gap-1.5">
-            {POSITIONS.map((p) => (
-              <label key={p} className="flex min-h-9 cursor-pointer items-center rounded-full border border-line px-3 text-sm has-checked:border-accent has-checked:bg-accent/10">
-                <input type="checkbox" name="positions" value={p} className="sr-only" />
-                {POSITION_NAME[p]}
-              </label>
-            ))}
-          </div>
-          <Input name="note" maxLength={200} placeholder="Not (isteğe bağlı): örn. kaleci şart" aria-label="İlan notu" />
-          <SubmitButton variant="secondary" className="w-full" pendingLabel="Açılıyor…">
-            İlanı aç
-          </SubmitButton>
-          <p className="text-xs text-muted">İlandan gelen istekler senin onayına düşer. Yetkili olmadığın grupta ilan önce o grubun onayına gider.</p>
-        </form>
+        {places.length === 0 ? (
+          <p className="text-xs text-muted">Paylaşabileceğin her yerde açık ilan var.</p>
+        ) : (
+          <form action={createListing} className="space-y-2">
+            <Hidden groupId={groupId} matchId={matchId} />
+            <details className="rounded-xl border border-line bg-pitch-950">
+              <summary className="flex min-h-11 cursor-pointer items-center gap-2 px-3 text-sm font-semibold">
+                <Icon name="checklist" className="text-[20px]" />
+                Paylaşılacak yerleri seç
+                <Icon name="expand_more" className="ml-auto text-[20px] text-muted" />
+              </summary>
+              <ul className="divide-y divide-line border-t border-line">
+                {places.map((t) => (
+                  <li key={t.id}>
+                    <label className="flex min-h-11 cursor-pointer items-center gap-3 px-3 text-sm has-checked:bg-accent/10">
+                      <input type="checkbox" name="targets" value={t.id} className="h-4 w-4 accent-accent" />
+                      <Icon name={t.id === "kesfet" ? "travel_explore" : "groups"} className="text-[18px] text-primary" />
+                      <span className="min-w-0 flex-1 truncate">{t.name}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </details>
+            <div className="flex flex-wrap gap-1.5">
+              {POSITIONS.map((p) => (
+                <label key={p} className="flex min-h-9 cursor-pointer items-center rounded-full border border-line px-3 text-sm has-checked:border-accent has-checked:bg-accent/10">
+                  <input type="checkbox" name="positions" value={p} className="sr-only" />
+                  {POSITION_NAME[p]}
+                </label>
+              ))}
+            </div>
+            <Input name="note" maxLength={200} placeholder="Not (isteğe bağlı): örn. kaleci şart" aria-label="İlan notu" />
+            <SubmitButton variant="secondary" className="w-full" pendingLabel="Ekleniyor…">
+              Ekle
+            </SubmitButton>
+            <p className="text-xs text-muted">İlan seçtiğin yerlerin hepsinde paylaşılır. Gelen istekler senin onayına düşer; yetkili olmadığın grupta ilan önce o grubun onayına gider.</p>
+          </form>
+        )}
         {code && (
           <div className="flex items-center gap-2 border-t border-line pt-3">
             <div className="min-w-0 flex-1">
