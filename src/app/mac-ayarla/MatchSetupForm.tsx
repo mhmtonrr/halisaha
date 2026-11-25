@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { setupMatch } from "@/lib/match-actions";
 import { defaultCapacity, opensConfirmed } from "@/lib/match-rules";
 import { SIZES } from "@/lib/formations";
@@ -22,25 +21,20 @@ interface Member {
 }
 
 export function MatchSetupForm({
-  groups,
   group,
   isAdmin,
   members,
   today,
   maxDay,
   rival,
-  rivalQuery,
 }: {
-  groups: { id: string; name: string; kind: "team" | "community" }[];
   group: { id: string; name: string; kind: "team" | "community" };
   isAdmin: boolean;
   members: Member[];
   today: string;
   maxDay: string;
   rival: { id: string; name: string } | null;
-  rivalQuery: string | null;
 }) {
-  const router = useRouter();
   const team = group.kind === "team";
   const kind = team ? "external" : "internal";
   const [size, setSize] = useState(7);
@@ -96,21 +90,6 @@ export function MatchSetupForm({
       ))}
 
       <Card className="space-y-4">
-        <label className="block">
-          <Label>Nerede</Label>
-          <select
-            aria-label="Takım veya grup"
-            value={group.id}
-            onChange={(e) => router.replace(`/mac-ayarla?grup=${e.target.value}${rivalQuery ? `&rakip=${rivalQuery}` : ""}`)}
-            className={selectCls}
-          >
-            {groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name} · {g.kind === "team" ? "Takım" : "Grup"}
-              </option>
-            ))}
-          </select>
-        </label>
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
             <Label>Gün</Label>

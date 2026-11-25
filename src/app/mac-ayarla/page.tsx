@@ -11,7 +11,7 @@ interface ManagedRow {
   groups: G | G[] | null;
 }
 
-/** Tek "Maç ayarla" formu (yeniden tasarım 4a): takım/grup seçilir, maç toplanmaya açılır veya kadro tamsa direkt kurulur */
+/** Tek "Maç ayarla" formu (yeniden tasarım 4a): takım/grup sayfadan gelir (?grup=), maç toplanmaya açılır veya kadro tamsa direkt kurulur */
 export default async function MatchSetupPage({ searchParams }: { searchParams: Promise<{ grup?: string; rakip?: string; error?: string }> }) {
   const { grup, rakip, error } = await searchParams;
   const { supabase, user } = await requireUser();
@@ -49,18 +49,26 @@ export default async function MatchSetupPage({ searchParams }: { searchParams: P
 
   return (
     <main>
-      <Header title="Maç ayarla" back={`/g/${group.id}`} />
+      <Header
+        title={
+          <>
+            Maç ayarla
+            <span className="block truncate font-sans text-xs font-medium text-muted">
+              {group.name} · {group.kind === "team" ? "Takım" : "Grup"}
+            </span>
+          </>
+        }
+        back={`/g/${group.id}`}
+      />
       <ErrorNote message={error} />
       <MatchSetupForm
         key={group.id}
-        groups={pool.map((m) => ({ id: m.group.id, name: m.group.name, kind: m.group.kind }))}
         group={{ id: group.id, name: group.name, kind: group.kind }}
         isAdmin={isAdmin}
         members={members}
         today={istanbulDate()}
         maxDay={istanbulDate(Date.now() + 60 * 86400_000)}
         rival={rival && rival.id !== group.id ? { id: rival.id, name: rival.name } : null}
-        rivalQuery={rakip ?? null}
       />
     </main>
   );
