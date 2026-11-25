@@ -99,7 +99,7 @@ try {
   await cP.locator("summary:has-text('Gruptan ayrıl')").click();
   await cP.click('button:has-text("Evet, gruptan ayrıl")');
   await cP.waitForURL(/error=/, { timeout: 15000 });
-  await cP.locator("p.text-red-300").waitFor({ timeout: 10000 });
+  await cP.locator("p.text-error").waitFor({ timeout: 10000 });
   check("oylaması süren maçı olan ayrılamaz (açıklayıcı mesaj)", has(await cP.locator("body").innerText(), "Oylaması süren bir maçın var"));
   await cP.screenshot({ path: `${SHOTS}/105-ayrilma-oylama-hatasi.png`, fullPage: true });
 
@@ -120,7 +120,7 @@ try {
   await aP.fill('input[name="confirm"]', "yanlış ad");
   await aP.click('button:has-text("Kalıcı olarak sil")');
   await aP.waitForURL(/error=/, { timeout: 15000 });
-  await aP.locator("p.text-red-300").waitFor({ timeout: 10000 });
+  await aP.locator("p.text-error").waitFor({ timeout: 10000 });
   check("yanlış adla silinmez", has(await aP.locator("body").innerText(), "adını aynen yazmalısın") && (await admin.from("groups").select("id").eq("id", G2)).data.length === 1);
   await aP.goto(`${BASE}/g/${G2}/players`);
   await aP.locator("summary:has-text('Grubu sil')").click();

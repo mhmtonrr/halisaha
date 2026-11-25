@@ -151,28 +151,29 @@ try {
   check("10 dakika içinde ikinci mesaj yeni bildirim üretmedi (birleştirme)", (await notifs(cap, "chat")).length === 1);
   check("mesajı yazana kendi mesajı için bildirim gitmedi", (await notifs(mem, "chat")).length === 0);
 
-  // 8) Adam ara: açılınca takım üyesine; başvuru → açana; kadroya alınınca → başvurana
-  const mid2 = (await admin.from("matches").insert({ group_id: A, played_at: new Date(Date.now() + 4 * 864e5).toISOString(), created_by: cap.id, kind: "external", opponent_name: "Rakip 2", team_size: 7 }).select("id").single()).data.id;
+  // 8) İlan (0043): gruba açılınca o grubun üyelerine; başvuru → maçı yönetene; kabul → başvurana
+  const mid2 = (await admin.from("matches").insert({ group_id: A, played_at: new Date(Date.now() + 4 * 864e5).toISOString(), created_by: cap.id, kind: "external", opponent_name: "Rakip 2", team_size: 7, capacity: 7 }).select("id").single()).data.id;
   await admin.from("match_players").insert({ match_id: mid2, player_id: await gp(A, cap), team: "A" });
-  await capP.goto(`${BASE}/g/${A}/m/${mid2}`);
-  await capP.locator("summary:has-text('Adam ara')").click();
-  await capP.selectOption('select[name="needed"]', "1");
-  await capP.click('button:has-text("Adam ara")');
-  await capP.waitForURL(/cagri\/[0-9a-f-]{36}$/, { timeout: 20000 });
-  const F = capP.url().split("/cagri/")[1];
-  const fillN = async () => (await notifs(mem, "poll")).filter((n) => n.url === `/g/${A}/cagri/${F}`);
-  check("adam ara: takım üyesine '1 oyuncu aranıyor' bildirimi", !!(await until(async () => (await fillN()).some((n) => n.title.includes("1 oyuncu aranıyor")))));
-  check("adam arayana kendi araması için bildirim yok", !(await notifs(cap, "poll")).some((n) => n.url === `/g/${A}/cagri/${F}`));
-  await memP.goto(`${BASE}/g/${A}/cagri/${F}`);
-  await memP.click('button[name="answer"]:has-text("Geliyorum")');
-  await memP.waitForLoadState("networkidle");
-  check("başvuru: açana 'Adam aramana başvuru' bildirimi", !!(await until(async () => (await notifs(cap, "poll")).some((n) => n.title.includes("Adam aramana başvuru")))));
-  check("başvuru bildirimi başvuranın adını taşır", (await notifs(cap, "poll")).find((n) => n.title.includes("Adam aramana başvuru"))?.body.includes("Mert Oyuncu"));
-  await capP.goto(`${BASE}/g/${A}/cagri/${F}`);
-  await capP.click('button:has-text("Kadroya al")');
-  await capP.waitForLoadState("networkidle");
-  check("kadroya alınınca başvurana '⚽ Kadrodasın'", !!(await until(async () => (await notifs(mem, "match")).some((n) => n.title.includes("Kadrodasın")))));
-  check("kabul bildirimi maç adresine gider", (await notifs(mem, "match")).find((n) => n.title.includes("Kadrodasın"))?.url === `/g/${A}/m/${mid2}`);
+  await capP.goto(`${BASE}/g/${A}/m/${mid2}`, { waitUntil: "networkidle" });
+  await capP.selectOption('select[aria-label="İlan yeri"]', G);
+  await capP.click('button:has-text("İlanı aç")');
+  await capP.waitForURL(/ok=ilan/, { timeout: 20000 });
+  const listingN = async (u) => (await notifs(u, "listing")).filter((n) => n.url === `/g/${A}/m/${mid2}`);
+  check("ilan: grubun üyesine '6 oyuncu aranıyor' bildirimi", !!(await until(async () => (await listingN(apl)).some((n) => n.title.includes("6 oyuncu aranıyor")))));
+  check("ilanı açana kendi ilanı için bildirim yok", (await listingN(cap)).length === 0);
+  await aplP.goto(`${BASE}/g/${A}/m/${mid2}`, { waitUntil: "networkidle" });
+  await aplP.click('button:has-text("Başvur")');
+  await aplP.waitForURL(/ok=basvuru/, { timeout: 20000 });
+  const applied = async () => (await notifs(cap, "match")).find((n) => n.title.includes("Maça başvuru"));
+  check("başvuru: maçı yönetene 'Maça başvuru' bildirimi", !!(await until(async () => !!(await applied()))));
+  check("başvuru bildirimi başvuranın adını taşır", (await applied())?.body.includes(apl.name));
+  await capP.goto(`${BASE}/g/${A}/m/${mid2}`, { waitUntil: "networkidle" });
+  await capP.click('#basvurular button:has-text("Kadroya al")');
+  await capP.waitForURL(/ok=basvuru-in/, { timeout: 20000 });
+  check("kabul edilince başvurana 'Başvurun kabul edildi'", !!(await until(async () => (await notifs(apl, "match")).some((n) => n.title.includes("Başvurun kabul edildi")))));
+  check("kabul bildirimi maç adresine gider", (await notifs(apl, "match")).find((n) => n.title.includes("Başvurun kabul edildi"))?.url === `/g/${A}/m/${mid2}`);
+  // 9. adım için takım üyesi kadroda
+  await admin.from("match_players").insert({ match_id: mid2, player_id: await gp(A, mem), team: "A" });
 
   // 9) Elle kadrodan çıkarma / ekleme → oyuncuya bildirim
   const memA = await gp(A, mem);
@@ -185,12 +186,14 @@ try {
   await capP.locator("summary:has-text('Kadroya oyuncu ekle')").click();
   await capP.locator(`label:has(input[value="${memA}"])`).click();
   await capP.click('button:has-text("Seçilenleri ekle")');
-  check("elle eklenene '⚽ Kadrodasın'", !!(await until(async () => (await kadrodasin()) === 2)));
+  check("elle eklenene '⚽ Kadrodasın'", !!(await until(async () => (await kadrodasin()) === 1)));
 
   // 10) Maç iptali → kadroya bildirim (iptal edene gitmez)
   await capP.goto(`${BASE}/g/${A}/m/${mid2}`);
-  await capP.click('button:has-text("Maçı iptal et")');
-  await capP.waitForURL(`${BASE}/g/${A}`);
+  // 4b: iptal silmez; açılır formdan, maç ekranında kalır
+  await capP.click("summary:has-text('Maçı iptal et')");
+  await capP.click('form:has(input[aria-label="İptal sebebi"]) button:has-text("İptal et")');
+  await capP.waitForURL(/ok=iptal/);
   check("maç iptal edilince kadroya '❌ Maç iptal edildi'", !!(await until(async () => (await notifs(mem, "match")).some((n) => n.title.includes("Maç iptal edildi")))));
   check("iptal edene bildirim yok", !(await notifs(cap, "match")).some((n) => n.title.includes("Maç iptal edildi")));
 
