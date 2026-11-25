@@ -204,7 +204,7 @@ export default async function MatchPage({
   if (!first) notFound();
   if (first.status === "voting") await finalizeExpired(groupId);
 
-  const [{ data: match }, roster, players, { data: canManage }, { data: myTeam }] = await Promise.all([
+  const [{ data: match }, roster, players, { data: canManage }, { data: myTeam }, { data: isAdmin }] = await Promise.all([
     supabase
       .from("matches")
       .select("id, played_at, venue, status, score_a, score_b, voting_deadline, kind, opponent_name, challenge_id, opponent_group_id, team_size, formation_a, formation_b")
@@ -214,6 +214,8 @@ export default async function MatchPage({
     getGroupPlayers(supabase, groupId),
     supabase.rpc("can_manage_match", { p_match_id: matchId }),
     supabase.from("groups").select("name, color, kind").eq("id", groupId).single(),
+    // Misafiri sadece kaptan/yetkili ekler (0042)
+    supabase.rpc("is_group_admin", { p_group_id: groupId }),
   ]);
   if (!match) notFound();
   const myTeamName = myTeam?.name ?? "Biz";
@@ -405,6 +407,7 @@ export default async function MatchPage({
           teams={teams}
           avg={avg}
           canManage={!!canManage}
+          isAdmin={!!isAdmin}
           external={external}
           labels={labels}
           linked={linked}
@@ -462,6 +465,7 @@ async function PlannedView({
   teams,
   avg,
   canManage,
+  isAdmin,
   external,
   labels,
   linked,
@@ -478,6 +482,7 @@ async function PlannedView({
   teams: Record<Team, RosterEntry[]>;
   avg: (t: RosterEntry[]) => number;
   canManage: boolean;
+  isAdmin: boolean;
   external: boolean;
   labels: Labels;
   linked: boolean;
@@ -689,7 +694,7 @@ async function PlannedView({
                   </SubmitButton>
                 </form>
               )}
-              <GuestForm groupId={groupId} matchId={matchId} />
+              {isAdmin && <GuestForm groupId={groupId} matchId={matchId} />}
             </Card>
           </details>
 

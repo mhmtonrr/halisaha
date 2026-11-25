@@ -37,7 +37,7 @@ Büyük tasarım kararlarını kodlamadan önce kullanıcıyla netleştir; küç
 | Uygulama | https://halisaha-tawny.vercel.app (Vercel, `main`'e her push otomatik yayınlanır) |
 | Repo | https://github.com/mhmtonrr/halisaha (public; gizli anahtar asla commit edilmez) |
 | Supabase | proje ref `hbdhbquczlvjnsmrgqxj`, bölge eu-central-1 (Frankfurt) |
-| Gerçek veri | Canlı veritabanında gerçek kullanıcılar ve bir grup var. Test verisi bırakma. |
+| Veri | Uygulama henüz kullanıma açılmadı (geliştirme aşaması, 2026-11-25): takım/grup/maç/çağrı verisi gerektiğinde silinebilir, veri göçü/geriye uyum gerekmez. Kullanıcı hesaplarına (Auth) sorulmadan dokunma. Açılınca bu satır değişir. |
 
 Vercel ortam değişkenleri: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
 `SUPABASE_SERVICE_ROLE_KEY` (+ isteğe bağlı `NEXT_PUBLIC_CONTACT_EMAIL`). Kullanıcı Vercel panelinden girdi.
@@ -47,7 +47,7 @@ Vercel ortam değişkenleri: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_A
 - Klasör: `C:\Users\PC1\Desktop\halisaha`. Windows + Git Bash/PowerShell, Node 24. **Python yok**; betikleri Node ile yaz.
 - `.env.local` kullanıcının bilgisayarında hazır (gitignore'da). Değerleri **asla ekrana basma**; yalnızca dolu/boş kontrolü yap.
   Eksikse kullanıcı Supabase panelinden (Project Settings > API) kendisi doldurur; chat'e yapıştırtma.
-- `npm run dev` → http://localhost:3000. Yerel uygulama **canlı veritabanına** bağlıdır: test verisi bırakma.
+- `npm run dev` → http://localhost:3000. Yerel uygulama **canlı veritabanına** bağlıdır (geliştirme aşaması: veri silinebilir, ama e2e yine kendi verisini temizler).
 - Google girişi yerelde çalışsın diye Supabase Auth > URL Configuration > Redirect URLs'te `http://localhost:3000/**` olmalı.
 - Bulut ortamındaki `NODE_USE_ENV_PROXY=1` yerelde gerekmez (betik yorumlarında geçiyorsa yok say).
 
