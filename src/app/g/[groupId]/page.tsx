@@ -8,7 +8,8 @@ import { formatRegion } from "@/lib/regions";
 import { ROLE_LABEL, canCreateMatch, teamRating, type GroupKind, type Role } from "@/lib/teams-data";
 import { TeamBadge } from "@/components/TeamBadge";
 import { RosterTabs } from "@/components/RosterTabs";
-import { Badge, Button, Card, Header, LinkButton, SectionTitle, cx } from "@/components/ui";
+import { Badge, Button, Card, ErrorNote, Header, LinkButton, SectionTitle, cx } from "@/components/ui";
+import { JoinRequest } from "@/components/JoinRequest";
 import { Icon } from "@/components/Icon";
 import { OvrBadge } from "@/components/PlayerCard";
 import { Avatar } from "@/components/Avatar";
@@ -31,10 +32,10 @@ export default async function GroupPage({
   searchParams,
 }: {
   params: Promise<{ groupId: string }>;
-  searchParams: Promise<{ sekme?: string; oner?: string; oneri?: string }>;
+  searchParams: Promise<{ sekme?: string; oner?: string; oneri?: string; istek?: string; error?: string }>;
 }) {
   const { groupId } = await params;
-  const { sekme, oner, oneri } = await searchParams;
+  const { sekme, oner, oneri, istek, error } = await searchParams;
   const { supabase, user } = await requireUser();
 
   const { data: group } = await supabase
@@ -68,6 +69,14 @@ export default async function GroupPage({
   const myRole = (me?.role ?? null) as Role | null;
   const canManage = myRole === "captain" || myRole === "admin";
   const canCreate = canCreateMatch(myRole) && !group.archived_at;
+  // Üye olmayan takım sayfasında katılma isteği (0044): istek açık mı, bekleyen isteğim var mı
+  const [{ data: acceptsJoin }, { data: myJoin }] = !me && isTeam
+    ? await Promise.all([
+        supabase.rpc("accepts_join_requests", { p_group: groupId }),
+        supabase.from("group_join_requests").select("id").eq("group_id", groupId).eq("user_id", user.id).eq("status", "pending").maybeSingle(),
+      ])
+    : [{ data: false }, { data: null }];
+  const joinOpen = !!acceptsJoin || !!myJoin;
   // Öneriler (RLS: kendi önerim veya maç açabiliyorsam hepsi) ve sessize alma durumu
   const [{ data: proposalRows }, { data: myRow }] = me
     ? await Promise.all([
@@ -209,6 +218,19 @@ export default async function GroupPage({
         </Link>
       )}
 
+      {isTeam && !me && (
+        <>
+          <ErrorNote message={error} />
+          {istek === "gonderildi" && (
+            <p className="mb-2 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">İsteğin gönderildi. Kaptan karar verince haber gelir.</p>
+          )}
+          {joinOpen && (
+            <div className="mb-2">
+              <JoinRequest groupId={groupId} back={`/g/${groupId}`} pending={!!myJoin} isTeam />
+            </div>
+          )}
+        </>
+      )}
       {isTeam && !me && !group.archived_at && (
         <LinkButton href={`/g/${groupId}/teklif`} className="mb-2 w-full">
           <Icon name="handshake" className="text-[20px]" />
@@ -268,7 +290,7 @@ export default async function GroupPage({
         sent={oneri === "gonderildi"}
       />
 
-      {!me && isTeam && (
+      {!me && isTeam && !joinOpen && (
         <p className="mt-3 text-center text-xs text-on-surface-variant">
           Bu takımın oyuncusu değilsin. Katılmak için kaptandan davet linki iste.
         </p>

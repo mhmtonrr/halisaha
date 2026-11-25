@@ -1,5 +1,6 @@
-// Katılma isteği + bekleyen istekler sayfası (Parça 6a): Grubu yönet'te Keşfet/istek ayarı, istek → ana sayfa yapılacaklar,
-// grup sayfasında "Bekleyen istekler", /istekler'de kabul (üye olur) ve ret, isteyene bildirim.
+// Katılma isteği (Parça 6a/6b): Grubu yönet'te Keşfet/istek ayarı, Keşfet "Gruplar" sekmesinden istek (mesaj, geri al),
+// yetkiliye bildirim, ana sayfa yapılacaklar, grup sayfasında "Bekleyen istekler", /istekler'de kabul (üye olur) ve ret,
+// isteyene bildirim; takım sayfasından istek (istek açık/kapalı).
 // Çalıştırma: npm run dev açıkken `node scripts/e2e/join-requests.mjs [ekran-klasörü]`
 import { createRequire } from "module";
 import fs from "fs";
@@ -63,9 +64,29 @@ try {
   const { data: g1 } = await admin.from("groups").select("discoverable, join_requests_open").eq("id", G).single();
   check("ayar kaydedildi (görünür, istek açık)", g1.discoverable === true && g1.join_requests_open === true);
 
-  // 3) İki istek
-  r = await ci.rpc("request_join", { p_group: G, p_message: "Salı akşamları boşum" });
-  check("istek gönderildi", !r.error);
+  // 3) Keşfet "Gruplar" sekmesinden istek: gönder → geri al → mesajla tekrar gönder
+  const IP = await login(I);
+  const kesfet = `${BASE}/kesfet?sekme=grup&il=%C4%B0stanbul&ilce=Kad%C4%B1k%C3%B6y&tur=topluluk`;
+  await IP.goto(kesfet);
+  const card = IP.locator("div.rounded-xl", { hasText: "E2E İstek Topluluğu" }).last();
+  check("Keşfet Gruplar sekmesinde topluluk listede", (await card.count()) >= 1);
+  await IP.screenshot({ path: `${SHOTS}/join-00-kesfet.png`, fullPage: true });
+  await card.locator("summary").click();
+  await card.locator('button:has-text("katılma isteği gönder")').click();
+  await IP.waitForURL(/istek=gonderildi/, { timeout: 20000 }); await IP.waitForLoadState("networkidle");
+  check("istek gönderildi (Keşfet)", (await body(IP)).includes("İsteğin gönderildi") && (await body(IP)).includes("İsteğin onay bekliyor"));
+  await IP.screenshot({ path: `${SHOTS}/join-00b-kesfet-bekliyor.png`, fullPage: true });
+  await IP.locator('button:has-text("Geri al")').click();
+  for (let i = 0; i < 40 && (await admin.from("group_join_requests").select("id").eq("group_id", G).eq("status", "pending")).data.length; i++) await sleep(500);
+  check("istek geri alındı", (await admin.from("group_join_requests").select("id").eq("group_id", G).eq("status", "pending")).data.length === 0);
+  await IP.goto(kesfet);
+  await card.locator("summary").click();
+  await card.locator('input[name="message"]').fill("Salı akşamları boşum");
+  await card.locator('button:has-text("katılma isteği gönder")').click();
+  await IP.waitForURL(/istek=gonderildi/, { timeout: 20000 });
+  let nK = null;
+  for (let i = 0; i < 15 && !nK; i++) { nK = (await admin.from("notifications").select("title, url").eq("user_id", K.id).like("title", "%Katılma isteği%")).data?.[0]; if (!nK) await sleep(1000); }
+  check("kurucuya 'Katılma isteği' bildirimi gitti", !!nK);
   const cr = await asUser(R);
   r = await cr.rpc("request_join", { p_group: G });
   check("ikinci istek gönderildi", !r.error);
@@ -105,9 +126,22 @@ try {
   check("reddedilen bir hafta tekrar isteyemez", !!r.error);
 
   // 7) Üye istekler sayfasına giremez
-  const IP = await login(I);
   await IP.goto(`${BASE}/g/${G}/istekler`); await IP.waitForURL(new RegExp(`/g/${G}$`), { timeout: 15000 }).catch(() => null);
   check("sıradan üye istekler sayfasından grup sayfasına döner", new URL(IP.url()).pathname === `/g/${G}`);
+
+  // 8) Takım sayfası: istek kapalıyken (takım varsayılanı) düğme yok; açınca üye olmayan istek gönderir
+  const T = (await admin.from("groups").insert({ name: "E2E İstek Takımı", kind: "team", created_by: K.id, city: "İstanbul", district: "Kadıköy" }).select("id").single()).data.id;
+  groupIds.push(T);
+  const RP = await login(R);
+  await RP.goto(`${BASE}/g/${T}`);
+  check("istek kapalı takımda düğme yok, davet yazısı var", (await RP.locator("summary:has-text('Katılma isteği gönder')").count()) === 0 && (await body(RP)).includes("davet linki iste"));
+  await admin.from("groups").update({ join_requests_open: true }).eq("id", T);
+  await RP.goto(`${BASE}/g/${T}`);
+  await RP.locator("summary:has-text('Katılma isteği gönder')").click();
+  await RP.screenshot({ path: `${SHOTS}/join-04-takim-sayfasi.png`, fullPage: true });
+  await RP.click('button:has-text("Takıma katılma isteği gönder")');
+  await RP.waitForURL(/istek=gonderildi/, { timeout: 20000 }); await RP.waitForLoadState("networkidle");
+  check("takım sayfasından istek gönderildi", (await body(RP)).includes("İsteğin onay bekliyor") && !!(await admin.from("group_join_requests").select("id").eq("group_id", T).eq("user_id", R.id).eq("status", "pending").maybeSingle()).data);
   await browser.close();
 } finally {
   for (const id of groupIds) await admin.from("groups").delete().eq("id", id);

@@ -15,7 +15,7 @@ src/app/g/[groupId]/m/[matchId]/ManageSections.tsx  Maç ekranı yönetim bölü
 src/app/g/[groupId]/m/[matchId]/GatheringPanel.tsx  Toplanan/kesin maç şeridi: sayaç, benim durumum, Geliyorum/Gelemem
 src/lib/listings-data.ts Maç özeti (match_overview) ve Keşfet "Adam arayan" ilanları (open_listings, engellenen süzülür)
 src/lib/match-rules.ts   Maç kuralları (saf, testli): varsayılan kadro, saat belli değil metni, direkt kesin mi
-src/lib/join-actions.ts  Katılma isteği kararı (kabul/ret) + bildirim
+src/lib/join-actions.ts  Katılma isteği: gönder, geri al, karar (kabul/ret) + bildirimler
 src/lib/proposal-actions.ts  Üye maç önerisi eylemleri (öner, onayla → toplanan maç, geri çek) + bildirimler
 src/lib/match-notify.ts  Kadroda yer açılınca (yedek varsa) maçı yönetenlere bildirim (service role)
 src/lib/membership-notify.ts  Üye katıldı (yetkililere) ve rol değişti (kişiye) bildirimleri
@@ -53,6 +53,7 @@ src/components/LiveRefresh.tsx  Canlı güncelleme: Realtime dinler, router.refr
 src/components/SubmitButton.tsx  Form gönderilirken anında "…" durumu (useFormStatus)
 src/components/PlayerCard.tsx  Oyuncu kartları (FullCard tam kart, saha/kompakt kart); bronz/gümüş/altın eşikleri
 src/components/LineupPitch.tsx  Diziliş sahası parçaları (Pitch, SlotBox, PitchCard, EmptySlot)
+src/components/JoinRequest.tsx  Katılma isteği düğmesi (mesajlı gönder / bekliyor · geri al); Keşfet Gruplar ve takım sayfası
 src/components/Avatar.tsx  Yuvarlak avatar: kart fotoğrafı varsa o, yoksa baş harfler
 src/components/CardPhotoUploader.tsx  Kart fotoğrafı yükleme: küçült, arka plan kaldır, önizle, kaydet/sil; PhotoCropper.tsx elle kırpma
 src/components/BottomNav.tsx  Alt gezinme çubuğu (sohbet ekranında gizlenir); NotificationBadge.tsx okunmamış bildirim rozeti (Realtime)

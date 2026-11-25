@@ -14,6 +14,7 @@ import { Icon } from "@/components/Icon";
 import { openListings } from "@/lib/listings-data";
 import { matchWhen } from "@/lib/match-rules";
 import { POSITION_NAME, type Position } from "@/lib/data";
+import { JoinRequest } from "@/components/JoinRequest";
 
 export default async function DiscoverPage({
   searchParams,
@@ -30,6 +31,7 @@ export default async function DiscoverPage({
   const district = canonicalDistrict(city, sp.ilce) ?? undefined;
   if (players) return <PlayersTab sp={sp} userId={user.id} city={city} district={district} />;
   if (sp.sekme === "mac") return <FillCallsTab city={city} district={district} />;
+  if (sp.sekme === "grup") return <GroupsTab sp={sp} city={city} district={district} />;
 
   const [allTeams, { data: teamBlocks }] = await Promise.all([
     findTeams(supabase, { city: city || undefined, district, q: sp.q, limit: 100 }),
@@ -109,7 +111,7 @@ export default async function DiscoverPage({
   );
 }
 
-type Tab = "takim" | "oyuncu" | "mac";
+type Tab = "takim" | "oyuncu" | "mac" | "grup";
 
 function Tabs({ active, city, district }: { active: Tab; city: string; district?: string }) {
   // Sekme değişince seçili bölge korunur
@@ -118,14 +120,134 @@ function Tabs({ active, city, district }: { active: Tab; city: string; district?
     <Link
       href={`/kesfet?${key === "takim" ? "" : `sekme=${key}&`}${region}`}
       className={cx(
-        "flex min-h-10 flex-1 items-center justify-center rounded-lg text-sm font-semibold transition",
+        "flex min-h-10 flex-1 items-center justify-center whitespace-nowrap rounded-lg px-1 text-[13px] font-semibold transition",
         active === key ? "bg-accent text-pitch-950" : "text-muted hover:text-white",
       )}
     >
       {label}
     </Link>
   );
-  return <div className="mb-3 flex gap-1 rounded-xl border border-line bg-pitch-900/80 p-1">{tab("takim", "Takımlar")}{tab("oyuncu", "Oyuncular")}{tab("mac", "Adam arayan")}</div>;
+  return <div className="mb-3 flex gap-1 rounded-xl border border-line bg-pitch-900/80 p-1">{tab("takim", "Takımlar")}{tab("oyuncu", "Oyuncular")}{tab("mac", "Adam arayan")}{tab("grup", "Gruplar")}</div>;
+}
+
+interface DiscoverGroup {
+  group_id: string;
+  name: string;
+  kind: "team" | "community";
+  city: string | null;
+  district: string | null;
+  description: string | null;
+  color: string | null;
+  member_count: number;
+  accepts_requests: boolean;
+  is_member: boolean;
+  my_request: string | null;
+}
+
+/** Katılınabilecek takım ve gruplar (0044 discover_groups): Keşfet'te görünen topluluklar + takımlar; katılma isteği */
+async function GroupsTab({ sp, city, district }: { sp: Record<string, string | undefined>; city: string; district?: string }) {
+  const { supabase } = await requireUser();
+  const kind = sp.tur === "takim" ? "team" : sp.tur === "topluluk" ? "community" : null;
+  const [{ data }, { data: blocks }] = await Promise.all([
+    supabase.rpc("discover_groups", { p_city: city || null, p_district: district ?? null, p_kind: kind }),
+    supabase.from("user_blocks").select("blocked_group_id").not("blocked_group_id", "is", null),
+  ]);
+  const blocked = new Set((blocks ?? []).map((b) => b.blocked_group_id as string));
+  const q = (sp.q ?? "").trim().toLocaleLowerCase("tr");
+  const groups = ((data ?? []) as DiscoverGroup[])
+    .filter((g) => !blocked.has(g.group_id))
+    .filter((g) => !q || g.name.toLocaleLowerCase("tr").includes(q))
+    // Katılabileceklerim önce
+    .sort((a, b) => Number(b.accepts_requests && !b.is_member) - Number(a.accepts_requests && !a.is_member));
+  const params = (extra: Record<string, string>) =>
+    new URLSearchParams({ sekme: "grup", il: city, ...(district ? { ilce: district } : {}), ...(sp.tur ? { tur: sp.tur } : {}), ...extra }).toString();
+  const back = `/kesfet?${params({})}`;
+  const chip = (key: string, label: string) => {
+    const on = (sp.tur ?? "") === key;
+    return (
+      <Link
+        key={key}
+        href={`/kesfet?${new URLSearchParams({ sekme: "grup", il: city, ...(district ? { ilce: district } : {}), ...(key ? { tur: key } : {}) }).toString()}`}
+        className={cx("rounded-full border px-3 py-1.5 text-xs font-semibold", on ? "border-accent bg-accent/15 text-accent" : "border-line text-muted")}
+      >
+        {label}
+      </Link>
+    );
+  };
+  return (
+    <main>
+      <Header title="Keşfet" />
+      <ErrorNote message={sp.error} />
+      {sp.istek === "gonderildi" && (
+        <p className="mb-3 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">İsteğin gönderildi. Kaptan ya da yetkili karar verince haber gelir.</p>
+      )}
+      <Tabs active="grup" city={city} district={district} />
+      <form className="space-y-2" action="/kesfet">
+        <input type="hidden" name="sekme" value="grup" />
+        {sp.tur && <input type="hidden" name="tur" value={sp.tur} />}
+        <RegionSelect
+          key={`${city}-${district ?? ""}`}
+          cityName="il"
+          districtName="ilce"
+          defaultCity={city}
+          defaultDistrict={district}
+          requireCity={false}
+          showLabels={false}
+          anyLabel={{ city: "Tüm Türkiye", district: "Tüm ilçeler" }}
+          onChangeSubmit
+        />
+        <div className="flex gap-2">
+          <Input name="q" defaultValue={sp.q ?? ""} placeholder="Ad ara" />
+          <Button variant="secondary">Ara</Button>
+        </div>
+      </form>
+      <div className="mt-3 flex gap-2">{[chip("", "Hepsi"), chip("takim", "Takımlar"), chip("topluluk", "Gruplar")]}</div>
+
+      <SectionTitle>
+        {city ? `${city}${district ? ` · ${district}` : ""}` : "Türkiye"} · katılabileceğin yerler · {groups.length}
+      </SectionTitle>
+      {groups.length === 0 ? (
+        <Card className="text-center text-sm text-muted">Bu bölgede listelenen takım ya da grup yok. Gruplar, kurucusu &quot;Keşfet&apos;te görünsün&quot; derse burada çıkar.</Card>
+      ) : (
+        <div className="space-y-2">
+          {groups.map((g) => {
+            const isTeam = g.kind === "team";
+            const head = (
+              <div className="flex items-center gap-3">
+                <TeamBadge name={g.name} color={g.color} size="sm" />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-semibold">{g.name}</div>
+                  <div className="truncate text-xs text-muted">
+                    {isTeam ? "Takım" : "Grup"} · {[g.district, g.city].filter(Boolean).join(", ") || "Bölge yok"} · {g.member_count} {isTeam ? "oyuncu" : "üye"}
+                  </div>
+                </div>
+                {g.is_member && <Badge tone="accent">Üyesin</Badge>}
+                {isTeam && !g.is_member && <Icon name="chevron_right" className="text-[18px] text-on-surface-variant" />}
+              </div>
+            );
+            return (
+              <Card key={g.group_id} className="space-y-2 p-3">
+                {isTeam || g.is_member ? (
+                  <Link href={`/g/${g.group_id}`} className="block">
+                    {head}
+                  </Link>
+                ) : (
+                  head
+                )}
+                {g.description && <p className="line-clamp-2 text-xs text-on-surface-variant">{g.description}</p>}
+                {!g.is_member &&
+                  (g.my_request === "pending" || g.accepts_requests ? (
+                    <JoinRequest groupId={g.group_id} back={back} pending={g.my_request === "pending"} isTeam={isTeam} />
+                  ) : (
+                    <p className="text-[11px] text-muted">{isTeam ? "Takım şu an katılma isteği almıyor; kaptandan davet bağlantısı iste." : "Grup şu an katılma isteği almıyor."}</p>
+                  ))}
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </main>
+  );
 }
 
 /** Herkese açık adam aramalar (0041): bölgedeki eksiği olan maçlar; "Başvur" çağrı sayfasına götürür */

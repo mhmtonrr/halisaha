@@ -108,6 +108,13 @@ export const text = {
     url: `/g/${groupId}/players`,
     tag: `member-joined:${groupId}`,
   }),
+  /** Kaptan/yetkililere: biri katılmak istiyor */
+  joinRequested: (who: string, groupName: string, groupId: string, kind: "team" | "community"): Content => ({
+    title: "🙋 Katılma isteği",
+    body: truncate(`${who}, “${oneLine(groupName)}” ${kind === "team" ? "takımına" : "grubuna"} katılmak istiyor`, 300),
+    url: `/g/${groupId}/istekler?sekme=katilma`,
+    tag: `join-request:${groupId}`,
+  }),
   joinDecided: (groupName: string, groupId: string, kind: "team" | "community", accepted: boolean): Content => ({
     title: accepted ? "✅ Katılma isteğin kabul edildi" : "Katılma isteğin reddedildi",
     body: truncate(
