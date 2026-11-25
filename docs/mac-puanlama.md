@@ -74,3 +74,5 @@ Maça 3 saatten az kala istek `late` ("Son dakika") olur. Kaptan/yetkili kendi a
 kadrodan çıkarsa (kaptan çıkardı, "gelmedi", ayrıldı) bekleyen istek `closed` olur (tetikleyiciler). Bağlı maçta onayı oyuncunun kendi takımının kaptanı/yetkilisi verir. Bildirimler (tür `match`): istek → kaptan/yetkililer ve maçı kuran,
 karar → oyuncu, yetkili çıkışı → diğer yetkililer. UI: `m/[matchId]/WithdrawalSection.tsx` ("Çekilme istekleri" yetkilide, "Maça katılımım" oyuncuda). RLS: istek sahibi ve yetkililer görür; yazma sadece RPC.
 Onaydan sonra çağrının yedeği organizatöre bildirilir, organizatör çağrı sayfasından "Kadroya al" der (otomatik girmez). Test: `db-checks/withdrawals.mjs`, `e2e/withdrawal.mjs`.
+
+**Sihirbaz verisi (0049)**: `matches.fee_per_person` (kişi başı TL, isteğe bağlı; `create_match_v2(p_fee)`). `p_confirmed` üyeler + takım dışından yalnızca kabul edilmiş arkadaşlar (ödünç olarak doğrudan kadroya, bildirim alır, "Gelemem" diyebilir). Teklif bekleyen rakibin adı maçı gören herkese `match_pending_rivals(ids)` ile. Kontrol: `db-checks/wizard-setup.mjs`.
