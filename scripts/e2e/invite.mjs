@@ -58,6 +58,7 @@ try {
   // 2) Oyuncu ana sayfada ayrı 'Takıma katıl' ve 'Gruba katıl' görür
   await bP.goto(BASE + "/");
   check("ana sayfada 'Takıma katıl' ve 'Gruba katıl' bağlantıları", (await bP.locator('a[href="/katil?tur=takim"]').count()) >= 1 && (await bP.locator('a[href="/katil?tur=grup"]').count()) >= 1);
+  await bP.click('[role="tab"]:has-text("Gruplar")');
   await bP.locator('a[href="/katil?tur=grup"]').first().click();
   await bP.waitForURL(/\/katil\?tur=grup/);
   await bP.screenshot({ path: `${SHOTS}/111-gruba-katil.png`, fullPage: true });

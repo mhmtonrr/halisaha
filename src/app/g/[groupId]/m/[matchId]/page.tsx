@@ -631,7 +631,6 @@ export default async function MatchPage({
           teams={teams}
           avg={avg}
           canManage={!!canManage}
-          isAdmin={!!isAdmin}
           external={external}
           labels={labels}
           linked={linked}
@@ -716,7 +715,6 @@ async function PlannedView({
   teams,
   avg,
   canManage,
-  isAdmin,
   external,
   labels,
   linked,
@@ -729,7 +727,6 @@ async function PlannedView({
   teams: Record<Team, RosterEntry[]>;
   avg: (t: RosterEntry[]) => number;
   canManage: boolean;
-  isAdmin: boolean;
   external: boolean;
   labels: Labels;
   linked: boolean;

@@ -40,8 +40,8 @@ export function JoinMatchPopup() {
   const ref = useRef<HTMLDialogElement>(null);
   return (
     <>
-      <button type="button" onClick={() => ref.current?.showModal()} className="flex min-h-9 shrink-0 items-center gap-1 rounded-full border border-primary/40 px-3 text-xs font-bold text-primary">
-        <Icon name="add" className="text-[16px]" />
+      <button type="button" onClick={() => ref.current?.showModal()} className="flex min-h-8 shrink-0 items-center gap-0.5 whitespace-nowrap rounded-full border border-primary/40 px-2.5 text-[11px] font-bold text-primary">
+        <Icon name="add" className="!text-[14px]" />
         Maça katıl
       </button>
       {/* Dışına (karartmaya) dokununca da kapanır */}

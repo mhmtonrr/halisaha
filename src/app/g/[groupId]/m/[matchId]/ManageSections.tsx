@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { SubmitButton } from "@/components/SubmitButton";
-import { Card, Input, Label, SectionTitle, cx } from "@/components/ui";
+import { Card, Input, SectionTitle, cx } from "@/components/ui";
 import { OvrBadge, PositionChip } from "@/components/PlayerCard";
 import { POSITION_NAME, POSITIONS, type Position } from "@/lib/data";
 import { matchWhen } from "@/lib/match-rules";

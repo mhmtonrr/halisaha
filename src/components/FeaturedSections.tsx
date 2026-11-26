@@ -249,7 +249,7 @@ export function FeaturedSections(props: Viewer) {
   const key = `${props.city ?? ""}|${props.district ?? ""}`;
   return (
     <div className="mt-8">
-      <RegionFilter key={key} city={props.city ?? ""} district={props.district ?? ""} label={regionLabel(props.city, props.district)} />
+      <RegionFilter key={`filtre:${key}`} city={props.city ?? ""} district={props.district ?? ""} label={regionLabel(props.city, props.district)} />
       <Suspense key={key} fallback={<Skeleton />}>
         <FeaturedAsync {...props} />
       </Suspense>
