@@ -187,7 +187,7 @@ export default async function MatchInvitePage({
       {inside && (
         <p className="mt-4 text-center text-sm">
           <Link href={matchUrl} className="text-accent underline">
-            Maç ekranını aç
+            Maça git
           </Link>
         </p>
       )}

@@ -173,8 +173,8 @@ export function ListingManage({
               ))}
             </div>
             <Input name="note" maxLength={200} placeholder="Not (isteğe bağlı): örn. kaleci şart" aria-label="İlan notu" />
-            <SubmitButton variant="secondary" className="w-full" pendingLabel="Ekleniyor…">
-              Ekle
+            <SubmitButton variant="secondary" className="w-full" pendingLabel="Paylaşılıyor…">
+              Adam ara
             </SubmitButton>
             <p className="text-xs text-muted">İlan seçtiğin yerlerin hepsinde paylaşılır. Gelen istekler senin onayına düşer; yetkili olmadığın grupta ilan önce o grubun onayına gider.</p>
           </form>

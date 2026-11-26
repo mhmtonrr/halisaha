@@ -313,6 +313,8 @@ export default async function MatchPage({
       ? (((await supabase.rpc("match_pending_rivals", { p_ids: [matchId] })).data ?? []) as { name: string }[])[0]?.name ?? null
       : null;
 
+  const matchTitle = external ? (oppName || pendingRival ? `vs ${oppName ?? pendingRival}` : "Rakip belli değil") : "Kendi aramızda";
+
   const me = roster.find((r) => r.userId === user.id);
   // Maçtan çekilme istekleri (RLS: oyuncu kendininkini, yetkili hepsini görür); sadece planlanmış maçta anlamlı
   let withdrawals: WithdrawalRow[] = [];
@@ -434,9 +436,16 @@ export default async function MatchPage({
             : []),
         ]}
       />
-      <Header title={external ? (oppName || pendingRival ? `vs ${oppName ?? pendingRival}` : "Rakip belli değil") : "Kendi aramızda"} back={isMember || myTeam?.kind === "team" ? `/g/${groupId}` : "/"} />
+      <Header title={open ? "Taktik Odası" : matchTitle} back={isMember || myTeam?.kind === "team" ? `/g/${groupId}` : "/"} />
       <div className="-mt-3 mb-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-on-surface-variant">
         {statusBadge}
+        {/* Açık maçta başlık "Taktik Odası"; kimle oynandığı burada */}
+        {open && (
+          <span className="inline-flex min-w-0 items-center gap-1 font-semibold text-on-surface">
+            <Icon name="swords" className="text-[16px]" />
+            <span className="truncate">{matchTitle}</span>
+          </span>
+        )}
         {pendingRival && <Badge tone="warn">Rakip onay bekliyor</Badge>}
         <span className="inline-flex items-center gap-1">
           <Icon name="calendar_today" className="text-[16px]" />

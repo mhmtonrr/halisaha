@@ -54,9 +54,9 @@ try {
 
   // 1) Mert çekilme isteği gönderir
   await bP.goto(url(m1));
-  check("kadrodaki oyuncu 'Maça katılımım' bölümünü görür", has(await body(bP), "Maça katılımım"));
+  check("kadrodaki oyuncu 'Maça gelemeyeceğim' bölümünü görür", has(await body(bP), "Maça gelemeyeceğim"));
   await cP.goto(url(m1));
-  await bP.locator("summary:has-text('Maçtan çekilmek istiyorum')").click();
+  await bP.locator("summary:has-text('Maça gelemeyeceğim')").click();
   await bP.fill('textarea[name="reason"]', "Dizim ağrıyor");
   await bP.screenshot({ path: `${SHOTS}/107-cekilme-formu.png`, fullPage: true });
   await bP.click('button:has-text("Çekilme isteği gönder")');
@@ -70,7 +70,7 @@ try {
   check("kaptana bildirim gitti (isim ve sebep)", !!n1 && n1.body.includes("Mert Çekilen") && n1.body.includes("Dizim ağrıyor") && n1.url === `/g/${G}/m/${m1}`);
 
   // 2) Diğer üye (Cem) isteği görmez; kaptan görür
-  check("başka üye çekilme isteklerini görmez", !has(await body(cP), "Çekilme istekleri") && has(await body(cP), "Maça katılımım"));
+  check("başka üye çekilme isteklerini görmez", !has(await body(cP), "Çekilme istekleri") && has(await body(cP), "Maça gelemeyeceğim"));
   await aP.goto(url(m1));
   let t = await body(aP);
   check("kaptan 'Çekilme istekleri · 1' ve sebebi görür", has(t, "Çekilme istekleri · 1") && has(t, "Dizim ağrıyor") && has(t, "Mert Çekilen"));
@@ -85,10 +85,10 @@ try {
   const n2 = await waitNotif(b.id, "%reddedildi%");
   check("oyuncuya 'reddedildi' bildirimi gitti", !!n2 && n2.body.includes("kadroda kalıyorsun"));
   await bP.goto(url(m1));
-  check("reddedilen oyuncu notu görür, tekrar istek gönderebilir", has(await body(bP), "reddedildi, kadroda kalıyorsun") && (await bP.locator("summary:has-text('Maçtan çekilmek istiyorum')").count()) === 1);
+  check("reddedilen oyuncu notu görür, tekrar istek gönderebilir", has(await body(bP), "reddedildi, kadroda kalıyorsun") && (await bP.locator("summary:has-text('Maça gelemeyeceğim')").count()) === 1);
 
   // 4) Tekrar istek → geri çek
-  await bP.locator("summary:has-text('Maçtan çekilmek istiyorum')").click();
+  await bP.locator("summary:has-text('Maça gelemeyeceğim')").click();
   await bP.click('button:has-text("Çekilme isteği gönder")');
   await bP.waitForURL(/cekilme=pending/, { timeout: 15000 });
   await bP.locator("button:has-text('İsteği geri çek')").click();
@@ -98,7 +98,7 @@ try {
 
   // 5) Yeniden istek → kaptan onaylar → kadrodan çıkar, gelmedi sayılmaz
   await bP.goto(url(m1));
-  await bP.locator("summary:has-text('Maçtan çekilmek istiyorum')").click();
+  await bP.locator("summary:has-text('Maça gelemeyeceğim')").click();
   await bP.click('button:has-text("Çekilme isteği gönder")');
   await bP.waitForURL(/cekilme=pending/, { timeout: 15000 });
   await aP.goto(url(m1));
@@ -112,11 +112,11 @@ try {
   check("oyuncuya 'onaylandı' bildirimi gitti", !!n3);
   await bP.goto(url(m1));
   t = await body(bP);
-  check("kadrodan çıkan oyuncu artık çekilme bölümü görmez", !has(t, "Maça katılımım"));
+  check("kadrodan çıkan oyuncu artık çekilme bölümü görmez", !has(t, "Maça gelemeyeceğim"));
 
   // 6) Son dakika (2 saat kala)
   await bP.goto(url(m2));
-  check("2 saat kala formda 'son dakika' uyarısı", (await bP.locator("summary:has-text('Maçtan çekilmek istiyorum')").click(), has(await body(bP), "3 saatten az kaldı")));
+  check("2 saat kala formda 'son dakika' uyarısı", (await bP.locator("summary:has-text('Maça gelemeyeceğim')").click(), has(await body(bP), "3 saatten az kaldı")));
   await bP.click('button:has-text("Çekilme isteği gönder")');
   await bP.waitForURL(/cekilme=pending/, { timeout: 15000 });
   await aP.goto(url(m2));
@@ -124,7 +124,7 @@ try {
   await aP.screenshot({ path: `${SHOTS}/109-cekilme-son-dakika.png`, fullPage: true });
 
   // 7) Kaptan kendi adına doğrudan çıkar
-  await aP.locator("summary:has-text('Maçtan çekilmek istiyorum')").click();
+  await aP.locator("summary:has-text('Maça gelemeyeceğim')").click();
   await aP.click('button:text-is("Kadrodan çık")');
   await aP.waitForURL(/cekilme=approved(?!-)/, { timeout: 15000 });
   check("kaptan kendini doğrudan kadrodan çıkarır (onay beklemez)", !(await inRoster(m2, aG)));

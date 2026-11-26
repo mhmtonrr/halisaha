@@ -279,7 +279,7 @@ async function FillCallsTab({ city, district }: { city: string; district?: strin
       </SectionTitle>
       {calls.length === 0 ? (
         <Card className="text-center text-sm text-muted">
-          Bu bölgede şu an oyuncu arayan maç yok. Kendi maçında eksik varsa maç ekranında &quot;Adam ara&quot; → &quot;Keşfet (herkese açık)&quot;.
+          Bu bölgede şu an oyuncu arayan maç yok. Kendi maçında eksik varsa Taktik Odası&apos;nda &quot;Adam ara&quot; → &quot;Keşfet (herkese açık)&quot;.
         </Card>
       ) : (
         <div className="space-y-2">

@@ -186,7 +186,7 @@ function ChallengeCard({
 
       {c.status === "accepted" && c.myMatchId && (
         <Link href={`/g/${groupId}/m/${c.myMatchId}`} className="block text-sm font-medium text-accent">
-          Maç ekranına git ›
+          Maça git ›
         </Link>
       )}
 

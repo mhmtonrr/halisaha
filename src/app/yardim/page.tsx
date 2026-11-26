@@ -26,7 +26,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "Maçta gelemeyeceksem ne olur?",
-    a: "Kadro kurulmadan önce çağrıda \"gelemem\" diyebilirsin. Maç kurulup kadroya girdikten sonra maç ekranından \"Maçtan çekilmek istiyorum\" dersin; kaptan veya yetkili onaylarsa güvenilirliğin bozulmaz. Onaysız gelmezsen \"gelmedi\" işaretlenir ve güvenilirlik oranını düşürür.",
+    a: "Kadro kurulmadan önce çağrıda \"gelemem\" diyebilirsin. Maç kurulup kadroya girdikten sonra Taktik Odası'ndan \"Maça gelemeyeceğim\" dersin; kaptan veya yetkili onaylarsa güvenilirliğin bozulmaz. Onaysız gelmezsen \"gelmedi\" işaretlenir ve güvenilirlik oranını düşürür.",
   },
   {
     q: "Profilimi kimler görür?",

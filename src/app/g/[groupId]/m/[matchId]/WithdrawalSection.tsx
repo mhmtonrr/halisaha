@@ -99,7 +99,6 @@ export function WithdrawalSection({
 
       {showMine && (
         <>
-          <SectionTitle>Maça katılımım</SectionTitle>
           {pending ? (
             <Card className="space-y-3 border-amber-400/40 bg-amber-400/10">
               <p className="text-sm text-amber-100">

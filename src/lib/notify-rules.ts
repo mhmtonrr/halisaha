@@ -175,7 +175,7 @@ export const text = {
   /** Organizatöre: kadroda yer açıldı, yedek var */
   spotOpened: (who: string, groupId: string, matchId: string, reserves: number): Content => ({
     title: "🔄 Kadroda yer açıldı",
-    body: truncate(`${who} kadrodan çıktı. ${reserves} yedek var; maç ekranından kadroya alabilirsin.`, 300),
+    body: truncate(`${who} kadrodan çıktı. ${reserves} yedek var; Taktik Odası'ndan kadroya alabilirsin.`, 300),
     url: `/g/${groupId}/m/${matchId}`,
     tag: `spot:${matchId}`,
   }),
@@ -202,7 +202,7 @@ export const text = {
   /** Yöneten kişi seni kadroya yazdı (kesin gelen / yedekten / başvurun kabul) */
   addedToRoster: (who: string, groupName: string, groupId: string, matchId: string, when: string): Content => ({
     title: "⚽ Kadrodasın",
-    body: truncate(join(`${who} seni kadroya yazdı`, groupName, when, "gelemezsen maç ekranından çık"), 300),
+    body: truncate(join(`${who} seni kadroya yazdı`, groupName, when, "gelemezsen Taktik Odası'ndan bildir"), 300),
     url: `/g/${groupId}/m/${matchId}`,
     tag: `match:${matchId}`,
   }),

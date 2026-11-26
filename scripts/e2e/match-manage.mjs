@@ -58,13 +58,13 @@ try {
   check("yöneten maç ekranında 'Adam ara', 'Rakip', 'Maçı kesinleştir', 'Maçı iptal et' görür", (await PO.locator("text=Adam ara").count()) >= 1 && (await PO.locator("text=Maçı kesinleştir").count()) >= 1 && (await PO.locator("text=Maçı iptal et").count()) >= 1);
   await PO.click('summary:has-text("Paylaşılacak yerleri seç")'); await PO.check(`input[name="targets"][value="kesfet"]`);
   await PO.click('label:has-text("Forvet")');
-  await PO.click('form:has(input[name="targets"]) button:text-is("Ekle")'); await PO.waitForURL(/ok=ilan/); await PO.waitForLoadState("networkidle"); await PO.locator("main").waitFor();
+  await PO.click('form:has(input[name="targets"]) button:text-is("Adam ara")'); await PO.waitForURL(/ok=ilan/); await PO.waitForLoadState("networkidle"); await PO.locator("main").waitFor();
   check("Keşfet ilanı açıldı", (await PO.locator("text=Keşfet (herkese açık)").count()) >= 1);
   await PO.screenshot({ path: `${SHOTS}/manage-owner.png`, fullPage: true });
 
   // --- Başka gruba ilan (Onur orada sıradan üye → Lale'nin onayına)
   await PO.click('summary:has-text("Paylaşılacak yerleri seç")'); await PO.check(`input[name="targets"][value="${C || "kesfet"}"]`);
-  await PO.click('form:has(input[name="targets"]) button:text-is("Ekle")'); await PO.waitForSelector("text=onay bekliyor", { timeout: 20000 }).catch(() => null);
+  await PO.click('form:has(input[name="targets"]) button:text-is("Adam ara")'); await PO.waitForSelector("text=onay bekliyor", { timeout: 20000 }).catch(() => null);
   check("gruba ilan onay bekliyor", (await PO.locator("text=onay bekliyor").count()) >= 1);
   const PL = await login(L);
   await go(PL, `${BASE}/g/${C}`);

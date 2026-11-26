@@ -38,7 +38,7 @@ export interface LiveMatch {
 const MY: Record<string, string> = {
   in: "Kadrodasın",
   reserve: "Yedektesin",
-  invited: "Davetlisin: maç ekranından 'Geliyorum' de",
+  invited: "Davetlisin: Taktik Odası'ndan 'Geliyorum' de",
   pending: "Katılma isteğin onay bekliyor",
   declined: "Gelemem dedin",
   rejected: "Bu maça alınmadın",

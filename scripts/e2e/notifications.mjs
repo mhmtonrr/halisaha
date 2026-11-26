@@ -154,7 +154,7 @@ try {
   await admin.from("match_players").insert({ match_id: mid2, player_id: await gp(A, cap), team: "A" });
   await capP.goto(`${BASE}/g/${A}/m/${mid2}`, { waitUntil: "networkidle" });
   await capP.click('summary:has-text("Paylaşılacak yerleri seç")'); await capP.check(`input[name="targets"][value="${G || "kesfet"}"]`);
-  await capP.click('form:has(input[name="targets"]) button:text-is("Ekle")');
+  await capP.click('form:has(input[name="targets"]) button:text-is("Adam ara")');
   await capP.waitForURL(/ok=ilan/, { timeout: 20000 });
   const listingN = async (u) => (await notifs(u, "listing")).filter((n) => n.url === `/g/${A}/m/${mid2}`);
   check("ilan: grubun üyesine '6 oyuncu aranıyor' bildirimi", !!(await until(async () => (await listingN(apl)).some((n) => n.title.includes("6 oyuncu aranıyor")))));
