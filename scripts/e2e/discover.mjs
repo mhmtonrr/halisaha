@@ -84,6 +84,30 @@ try {
   await p.waitForURL(/\/oyuncu\//);
   check("sonuç satırı oyuncu profiline gider", (await body(p)).includes("zeki forvet"));
 
+  console.log("Sekmeler ve sıralama");
+  await p.goto(`${BASE}/kesfet?il=Edirne`);
+  t = await body(p);
+  check("1 üyeli takım 'Yeni takımlar' listesinde", t.includes("yeni takımlar") && t.includes("e2e keşfet fk"));
+  await p.screenshot({ path: `${SHOTS}/discover-teams.png`, fullPage: true });
+  await p.selectOption('select[aria-label="Sırala"]', "oran");
+  await p.waitForURL(/sirala=oran/);
+  check("takım sıralaması seçilince uygulanır", (await p.locator('select[aria-label="Sırala"]').inputValue()) === "oran");
+  await search(p, "");
+  await p.selectOption('select[aria-label="Sırala"]', "isim");
+  await p.waitForURL(/sirala=isim/);
+  check("oyuncu sıralaması filtre açmadan uygulanır", !(await p.locator("[data-filtre-paneli]").isVisible()));
+  await p.locator('button:has-text("Filtreler")').click();
+  check("Filtreler düğmesi paneli açar", await p.locator("[data-filtre-paneli]").isVisible());
+  await p.screenshot({ path: `${SHOTS}/discover-filters.png`, fullPage: true });
+  for (const [tab, value] of [["mac", "cok"], ["grup", "uye"]]) {
+    await p.goto(`${BASE}/kesfet?sekme=${tab}&il=Edirne`);
+    await p.selectOption('select[aria-label="Sırala"]', value);
+    await p.waitForURL(new RegExp(`sirala=${value}`));
+    check(`${tab}: sıralama uygulanır, sekmede kalır`, new URL(p.url()).searchParams.get("sekme") === tab);
+    check(`${tab}: yatay taşma yok`, !(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth)));
+    await p.screenshot({ path: `${SHOTS}/discover-${tab}.png`, fullPage: true });
+  }
+
   console.log("Ayar: aramada görün");
   await p.goto(`${BASE}/profil/ayarlar/gorunurluk`);
   const box = p.locator('input[name="discoverable"]');

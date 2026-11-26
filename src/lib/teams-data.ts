@@ -89,10 +89,13 @@ const TEAM_SELECT =
 /** Keşfet ve öne çıkanlarda listelenmek için en az bu kadar hesaplı asıl üye (kullanıcı kararı) */
 export const MIN_LISTED_MEMBERS = 5;
 
-/** Bölgedeki takımlar, rating'e göre sıralı. Geçici, dağıtılmış ve MIN_LISTED_MEMBERS'tan az üyeli takımlar listelenmez. */
+/**
+ * Bölgedeki takımlar, rating'e göre sıralı. Geçici ve dağıtılmış takımlar listelenmez; MIN_LISTED_MEMBERS'tan az üyeliler
+ * sadece `minMembers` düşürülürse döner (Keşfet "Yeni takımlar").
+ */
 export async function findTeams(
   supabase: SupabaseClient,
-  filter: { city?: string; district?: string; q?: string; limit?: number },
+  filter: { city?: string; district?: string; q?: string; limit?: number; minMembers?: number },
 ): Promise<TeamSummary[]> {
   let query = supabase.from("groups").select(TEAM_SELECT).eq("kind", "team").eq("is_temporary", false).is("archived_at", null);
   if (filter.city) query = query.eq("city", filter.city);
@@ -103,7 +106,7 @@ export async function findTeams(
   const cards = await loadUserCards(supabase, (data ?? []).flatMap((g) => (g.group_players as GPRow[]).map((p) => p.user_id)));
   return (data ?? [])
     .map((g) => summarize(g as Parameters<typeof summarize>[0], cards))
-    .filter((t) => t.members >= MIN_LISTED_MEMBERS)
+    .filter((t) => t.members >= (filter.minMembers ?? MIN_LISTED_MEMBERS))
     .sort((a, b) => Number(b.rated) - Number(a.rated) || b.rating - a.rating || a.name.localeCompare(b.name, "tr"))
     .slice(0, filter.limit ?? 100);
 }

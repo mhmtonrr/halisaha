@@ -7,7 +7,8 @@ import { loadRisingDeltas, loadTeamForms } from "@/lib/featured-data";
 import { NO_FORM, TEAM_SORTS, parseTeamSort, sortTeams, winRate, type TeamSort } from "@/lib/team-sort";
 import type { TeamForm } from "@/lib/featured-rules";
 import { isSkillKey } from "@/lib/skills";
-import { findTeams } from "@/lib/teams-data";
+import { MIN_LISTED_MEMBERS, findTeams, type TeamSummary } from "@/lib/teams-data";
+import { CALL_SORTS, GROUP_SORTS, parseCallSort, parseGroupSort, sortCalls, sortGroups } from "@/lib/discover-sort";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadCandidates } from "@/lib/players-data";
 import { fold, parseFilter, searchCandidates } from "@/lib/player-search";
@@ -35,19 +36,22 @@ export default async function DiscoverPage({
   const city = sp.il === undefined ? (profile?.city ?? "") : isProvince(sp.il) ? sp.il : "";
   const district = canonicalDistrict(city, sp.ilce) ?? undefined;
   if (players) return <PlayersTab sp={sp} userId={user.id} city={city} district={district} />;
-  if (sp.sekme === "mac") return <FillCallsTab q={sp.q} city={city} district={district} />;
+  if (sp.sekme === "mac") return <FillCallsTab sp={sp} city={city} district={district} />;
   if (sp.sekme === "grup") return <GroupsTab sp={sp} city={city} district={district} />;
 
   const sort = parseTeamSort(sp.sirala);
   const [allTeams, { data: teamBlocks }, forms] = await Promise.all([
-    findTeams(supabase, { city: city || undefined, district, q: sp.q, limit: 500 }),
+    findTeams(supabase, { city: city || undefined, district, q: sp.q, limit: 500, minMembers: 1 }),
     supabase.from("user_blocks").select("blocked_group_id").not("blocked_group_id", "is", null),
     loadTeamForms(),
   ]);
   // Engellediğim takımlar listede görünmez
   const blockedTeams = new Set((teamBlocks ?? []).map((b) => b.blocked_group_id as string));
+  const visible = allTeams.filter((t) => !blockedTeams.has(t.id));
   // Önce sırala, sonra ilk 100
-  const teams = sortTeams(allTeams.filter((t) => !blockedTeams.has(t.id)), sort, forms).slice(0, 100);
+  const teams = sortTeams(visible.filter((t) => t.members >= MIN_LISTED_MEMBERS), sort, forms).slice(0, 100);
+  // Kadrosu henüz tamamlanmamış takımlar sıralamaya girmez; tamamlanmaya en yakın olan önde
+  const fresh = visible.filter((t) => t.members < MIN_LISTED_MEMBERS).sort((a, b) => b.members - a.members || a.name.localeCompare(b.name, "tr")).slice(0, 20);
 
   return (
     <main>
@@ -64,9 +68,9 @@ export default async function DiscoverPage({
       </SectionTitle>
       {teams.length === 0 ? (
         <Card className="text-center text-sm text-muted">
-          Bu bölgede takım bulunamadı.{" "}
+          {fresh.length ? "Bu bölgede sıralamaya giren takım henüz yok." : "Bu bölgede takım bulunamadı."}{" "}
           <Link href="/takim-kur" className="text-accent">
-            İlk takımı sen kur
+            {fresh.length ? "Sen de takım kur" : "İlk takımı sen kur"}
           </Link>
         </Card>
       ) : (
@@ -91,6 +95,7 @@ export default async function DiscoverPage({
           </ol>
         </Card>
       )}
+      <NewTeams teams={fresh} />
       <p className="mt-2 text-center text-xs text-muted">
         Takım puanı: kadronun en iyi 7 oyuncusunun ortalaması; soluk puanlı takımlar henüz puanlı maç oynamadı. Maç ve galibiyet sayıları sadece uygulamadaki takımlarla oynanan, skoru onaylı maçlardandır.
       </p>
@@ -109,6 +114,35 @@ function InviteCode({ href, label }: { href: string; label: string }) {
       <LinkButton href={href} variant="secondary" className="w-full">
         {label}
       </LinkButton>
+    </>
+  );
+}
+
+/** MIN_LISTED_MEMBERS'tan az üyeli takımlar: puansız, sırasız ayrı liste */
+function NewTeams({ teams }: { teams: TeamSummary[] }) {
+  if (!teams.length) return null;
+  return (
+    <>
+      <SectionTitle>Yeni takımlar · {teams.length}</SectionTitle>
+      <Card className="p-0">
+        <ul className="divide-y divide-line">
+          {teams.map((t) => (
+            <li key={t.id}>
+              <Link href={`/g/${t.id}`} className="flex items-center gap-3 px-4 py-3 transition hover:bg-pitch-800">
+                <TeamBadge id={t.id} name={t.name} color={t.color} logo={t.logo} size="sm" />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-medium">{t.name}</div>
+                  <div className="truncate text-xs text-muted">
+                    {[t.district, t.city].filter(Boolean).join(", ") || "Bölge yok"} · {t.members} oyuncu
+                  </div>
+                </div>
+                <Icon name="chevron_right" className="text-[18px] text-on-surface-variant" />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </Card>
+      <p className="mt-2 text-center text-xs text-muted">Takımlar {MIN_LISTED_MEMBERS} oyuncuya ulaşınca sıralamaya girer.</p>
     </>
   );
 }
@@ -172,12 +206,12 @@ async function GroupsTab({ sp, city, district }: { sp: Record<string, string | u
   ]);
   const blocked = new Set((blocks ?? []).map((b) => b.blocked_group_id as string));
   const q = fold(sp.q ?? "");
-  const groups = ((data ?? []) as DiscoverGroup[])
-    .filter((g) => !blocked.has(g.group_id))
-    .filter((g) => !q || fold(g.name).includes(q))
-    // Katılabileceklerim önce
-    .sort((a, b) => Number(b.accepts_requests && !b.is_member) - Number(a.accepts_requests && !a.is_member));
-  const back = `/kesfet?${new URLSearchParams({ sekme: "grup", il: city, ...(district ? { ilce: district } : {}), ...(sp.q ? { q: sp.q } : {}) }).toString()}`;
+  const sort = parseGroupSort(sp.sirala);
+  const groups = sortGroups(
+    ((data ?? []) as DiscoverGroup[]).filter((g) => !blocked.has(g.group_id) && (!q || fold(g.name).includes(q))),
+    sort,
+  );
+  const back = `/kesfet?${new URLSearchParams({ sekme: "grup", il: city, ...(district ? { ilce: district } : {}), ...(sp.q ? { q: sp.q } : {}), sirala: sort }).toString()}`;
   return (
     <main>
       <Header title="Keşfet" />
@@ -186,7 +220,9 @@ async function GroupsTab({ sp, city, district }: { sp: Record<string, string | u
         <p className="mb-3 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">İsteğin gönderildi. Kaptan ya da yetkili karar verince haber gelir.</p>
       )}
       <Tabs active="grup" city={city} district={district} />
-      <DiscoverForm tab="grup" city={city} district={district} q={sp.q} placeholder="Grup adı ara" />
+      <DiscoverForm key={sort} tab="grup" city={city} district={district} q={sp.q} placeholder="Grup adı ara">
+        <SortSelect value={sort} groups={[{ options: [...GROUP_SORTS] }]} />
+      </DiscoverForm>
 
       <SectionTitle>
         {where(city, district)} grupları · {groups.length}
@@ -235,18 +271,24 @@ async function GroupsTab({ sp, city, district }: { sp: Record<string, string | u
 }
 
 /** Herkese açık adam aramalar (0041): bölgedeki eksiği olan maçlar; "Başvur" çağrı sayfasına götürür */
-async function FillCallsTab({ q, city, district }: { q?: string; city: string; district?: string }) {
+async function FillCallsTab({ sp, city, district }: { sp: Record<string, string | undefined>; city: string; district?: string }) {
   const { supabase } = await requireUser();
-  const needle = fold(q ?? "");
-  const calls = (await openListings(supabase, city || undefined, district)).filter(
-    (c) => !needle || [c.group_name, c.venue, c.opponent_name].some((v) => v && fold(v).includes(needle)),
+  const needle = fold(sp.q ?? "");
+  const sort = parseCallSort(sp.sirala);
+  const calls = sortCalls(
+    (await openListings(supabase, city || undefined, district)).filter(
+      (c) => !needle || [c.group_name, c.venue, c.opponent_name].some((v) => v && fold(v).includes(needle)),
+    ),
+    sort,
   );
   const extras = await matchExtras(supabase, calls.map((c) => c.match_id));
   return (
     <main>
       <Header title="Keşfet" />
       <Tabs active="mac" city={city} district={district} />
-      <DiscoverForm tab="mac" city={city} district={district} q={q} placeholder="Takım, grup veya saha ara" />
+      <DiscoverForm key={sort} tab="mac" city={city} district={district} q={sp.q} placeholder="Takım, grup veya saha ara">
+        <SortSelect value={sort} groups={[{ options: [...CALL_SORTS] }]} />
+      </DiscoverForm>
 
       <SectionTitle>
         {where(city, district)} · adam arayan maçlar · {calls.length}

@@ -47,6 +47,7 @@ src/lib/invite.ts        Davet kodu: linkten/yazıdan kodu çıkarma, XXXXX-XXXX
 src/lib/fetch-in.ts      Büyük `in (...)` sorgularını parçalayıp sayfalayan yardımcı
 src/components/profile/ProfileView.tsx  Sekmeli profil (Genel/İstatistik/Maçlar/Ayarlar); /profil ve /oyuncu/[id] aynı bileşeni kullanır
 src/lib/team-stats.ts    Takım karnesi, form, seri, rakip bazlı geçmiş, puan tablosu (saf, testli)
+src/lib/discover-sort.ts  Keşfet grup ve "Adam arayan" sıralamaları (saf, testli)
 src/lib/team-sort.ts      Keşfet takım sıralama seçenekleri (saf, testli)
 src/app/kesfet/           DiscoverForm (ortak arama formu), DiscoverControls (sıralama/filtre düğmesi), PlayerSearch (oyuncu filtreleri/sonuçları)
 src/lib/player-search.ts  Oyuncu arama süzgeçleri/sıralama/URL ayrıştırma (saf, testli); veri: src/lib/players-data.ts (service role, sadece `discoverable` kişiler)
