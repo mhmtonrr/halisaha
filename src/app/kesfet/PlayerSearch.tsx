@@ -152,19 +152,18 @@ export function PlayerRow({ c, me, skill, delta }: { c: PlayerCandidate; me: boo
     <Link href={me ? "/profil" : `/oyuncu/${c.userId}`} className="flex min-w-0 flex-1 items-center gap-3 py-3 pl-4">
       <OvrBadge overall={c.overall} className={c.matches === 0 ? "opacity-50" : ""} />
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <span className="truncate font-medium">{c.name}</span>
+        <div className="flex flex-wrap items-center gap-x-1.5">
+          <span className="min-w-0 break-words font-medium">{c.name}</span>
           {me && <span className="rounded-full bg-accent/15 px-1.5 text-[10px] font-semibold text-accent">Sen</span>}
           <PositionChip position={c.position} />
           {c.secondary.map((p) => <PositionChip key={p} position={p} className="opacity-60" />)}
         </div>
-        <div className="truncate text-xs text-muted">
-          {formatRegion(c.city, c.district) || "Bölge yok"}
-          {" · "}
+        <div className="truncate text-xs text-muted">{formatRegion(c.city, c.district) || "Bölge yok"}</div>
+        <div className="text-xs text-muted">
           {c.matches > 0 ? `${c.matches} maç` : "yeni oyuncu"}
           {rel.pct !== null && rel.tone !== "new" && <span className={cx(rel.tone === "bad" && "text-red-300")}>{` · %${rel.pct} güvenilir`}</span>}
         </div>
-        <div className="mt-0.5 flex items-center gap-2 text-xs">
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
           {c.teams.length > 0 ? (
             <span className="flex min-w-0 items-center gap-1 text-muted">
               <span className="inline-block h-3 w-3 shrink-0 rounded" style={{ background: c.teams[0].color ?? "#1a5a36" }} />
