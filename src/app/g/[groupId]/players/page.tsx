@@ -93,17 +93,21 @@ function RoleButton({ groupId, playerId, role, children, danger }: { groupId: st
   );
 }
 
-/** Yetkilinin üyeyi/misafiri çıkarma düğmesi */
-function RemoveButton({ groupId, playerId, label }: { groupId: string; playerId: string; label: string }) {
+/** Yetkilinin üyeyi/misafiri çıkarma düğmesi: önce onay ister */
+function RemoveButton({ groupId, playerId, label, note }: { groupId: string; playerId: string; label: string; note: string }) {
   return (
-    <form action={removePlayer} className="border-t border-line pt-3">
-      <input type="hidden" name="groupId" value={groupId} />
-      <input type="hidden" name="playerId" value={playerId} />
-      <button className={cx(ACTION, "border-red-900 text-red-300 hover:bg-red-950")}>
+    <details className="border-t border-line pt-3">
+      <summary className={cx(ACTION, "cursor-pointer list-none border-red-900 text-red-300 hover:bg-red-950 [&::-webkit-details-marker]:hidden")}>
         <Icon name="person_remove" className="text-[18px]" />
-        {label}
-      </button>
-    </form>
+        {label}…
+      </summary>
+      <form action={removePlayer} className="mt-2 space-y-2 text-xs">
+        <input type="hidden" name="groupId" value={groupId} />
+        <input type="hidden" name="playerId" value={playerId} />
+        <p className="text-muted">{note}</p>
+        <button className={cx(ACTION, "border-red-900 bg-red-950 text-red-200 hover:bg-red-900")}>Evet, çıkar</button>
+      </form>
+    </details>
   );
 }
 
@@ -227,7 +231,14 @@ export default async function ManagePage({
                       </details>
                     </div>
                   )}
-                  {canRemove(p) && <RemoveButton groupId={groupId} playerId={p.id} label={isTeam ? "Takımdan çıkar" : "Gruptan çıkar"} />}
+                  {canRemove(p) && (
+                    <RemoveButton
+                      groupId={groupId}
+                      playerId={p.id}
+                      label={isTeam ? "Takımdan çıkar" : "Gruptan çıkar"}
+                      note={`${p.display_name} ${isTeam ? "takımdan" : "gruptan"} çıkarılacak. Geçmiş maçları ve puanı korunur; gelecekteki maç kadrolarından çıkarılır.`}
+                    />
+                  )}
                 </PlayerRow>
               );
             })}
@@ -299,7 +310,18 @@ export default async function ManagePage({
                         </p>
                       </form>
                     )}
-                    {canRemove(p) && <RemoveButton groupId={groupId} playerId={p.id} label="Misafiri çıkar" />}
+                    {canRemove(p) && (
+                      <RemoveButton
+                        groupId={groupId}
+                        playerId={p.id}
+                        label="Misafiri çıkar"
+                        note={
+                          p.user_id
+                            ? `${p.display_name} listeden çıkarılacak. Geçmiş maçları ve puanı korunur.`
+                            : `${p.display_name} adlı misafir kaydı silinecek. Geri alamazsın.`
+                        }
+                      />
+                    )}
                   </PlayerRow>
                 ))}
               </ul>

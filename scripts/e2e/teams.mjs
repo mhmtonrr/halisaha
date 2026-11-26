@@ -43,7 +43,7 @@ try {
   // 1) Kaptan takımı kurar, iki oyuncu davet koduyla katılır
   await A.goto(BASE + "/takim-kur");
   await A.fill('input[name="name"]', "Kadıköy Kartalları");
-  await A.locator('input[name="color"]').nth(5).check({ force: true });
+  await A.fill('input[aria-label="Birinci renk hex kodu"]', "#7C3AED");
   await A.fill('textarea[name="description"]', "Perşembe akşamları Moda'da oynuyoruz, maç tekliflerine açığız.");
   await A.click('button:has-text("Takımı kur")'); await A.waitForURL(/\/g\/[0-9a-f-]{36}$/, { timeout: 20000 });
   const teamId = A.url().split("/g/")[1]; groupIds.push(teamId);

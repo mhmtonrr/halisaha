@@ -52,21 +52,6 @@ export function TeamFields({
           className="w-full rounded-xl border border-line bg-pitch-950 p-3 text-sm outline-none placeholder:text-muted/60 focus:border-accent"
         />
       </label>
-      <div>
-        <Label>Birinci renk</Label>
-        <div className="flex flex-wrap gap-2">
-          {TEAM_COLORS.map((c) => (
-            <label key={c} className="cursor-pointer">
-              <input type="radio" name="color" value={c} defaultChecked={c === color} className="peer sr-only" />
-              <span
-                className="block h-9 w-9 rounded-full border-2 border-transparent ring-offset-2 ring-offset-pitch-900 peer-checked:ring-2 peer-checked:ring-white"
-                style={{ background: c }}
-                aria-label={c}
-              />
-            </label>
-          ))}
-        </div>
-      </div>
       <LogoPicker id={values?.id} logo={values?.logo ?? null} name={values?.name ?? ""} color={color} />
     </>
   );
