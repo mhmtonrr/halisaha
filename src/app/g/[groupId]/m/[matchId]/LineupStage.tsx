@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Icon } from "@/components/Icon";
 import { SubmitButton } from "@/components/SubmitButton";
 import { PitchCard, type PitchPlayer } from "@/components/LineupPitch";
@@ -9,6 +9,7 @@ import { initials, shortName } from "@/components/PlayerCard";
 import { cx } from "@/components/ui";
 import { movePlayer, reshuffleTeams, setLineup } from "@/lib/actions";
 import { autoLineup, cardWidthPct, formationsFor, getFormation, type Formation, type Slot } from "@/lib/formations";
+import { moveRoster } from "@/lib/match-manage-actions";
 import { Field, project } from "./StageField";
 
 type Assign = Record<string, number | null>;
@@ -16,6 +17,22 @@ type Assign = Record<string, number | null>;
 export interface StagePlayer extends PitchPlayer {
   /** Kaydedilmiş yeri; boşsa kulübede */
   slot: number | null;
+  /** Misafirde boş */
+  userId: string | null;
+  /** Yetkim varsa kadro dışı bırakabilir miyim (misafir sadece kaptan/yetkili) */
+  movable: boolean;
+}
+
+/** Yedek sırasındaki kişi: maç kadrosunda değil, kulübede bekler */
+export interface StageReserve {
+  key: string;
+  userId: string | null;
+  /** Takım dışından yedekte oyuncu satırı olmayabilir */
+  playerId: string | null;
+  name: string;
+  overall: number;
+  photoUrl: string | null;
+  movable: boolean;
 }
 
 export interface StageSide {
@@ -30,17 +47,29 @@ export interface StageSide {
   /** Takım gücü (en iyi 7) */
   rating: number;
   players: StagePlayer[];
+  /** Yedek sırası (sadece planlanmış maçta, bizim tarafta) */
+  reserves: StageReserve[];
   editable: boolean;
 }
 
 interface Draft {
-  sig: string;
+  /** Taslağın dayandığı sunucu durumu */
+  base: Base;
   formationId: string;
   assign: Assign;
 }
 
-/** Sunucudaki durumun imzası: kadro veya kayıtlı diziliş değişince yereldeki taslak düşer */
-const signature = (s: StageSide) => `${s.size}:${s.formationId}:${s.players.map((p) => `${p.id}=${p.slot}`).join()}`;
+interface Base {
+  size: number;
+  formationId: string | null;
+  slots: Record<string, number | null>;
+}
+
+const baseOf = (s: StageSide): Base => ({ size: s.size, formationId: s.formationId, slots: Object.fromEntries(s.players.map((p) => [p.id, p.slot])) });
+
+/** Kayıtlı diziliş değişince yereldeki taslak düşer; kadroya biri girip çıkınca kalanların taslaktaki yeri korunur */
+const stillValid = (d: Draft, s: StageSide) =>
+  d.base.size === s.size && d.base.formationId === s.formationId && s.players.every((p) => !(p.id in d.base.slots) || d.base.slots[p.id] === p.slot);
 
 const isSaved = (s: StageSide) => s.players.some((p) => p.slot !== null);
 
@@ -48,7 +77,7 @@ const isSaved = (s: StageSide) => s.players.some((p) => p.slot !== null);
 function initialDraft(s: StageSide): Draft {
   const formation = getFormation(s.size, s.formationId) ?? formationsFor(s.size)[0];
   const assign: Assign = isSaved(s) ? Object.fromEntries(s.players.map((p) => [p.id, p.slot])) : autoLineup(s.players, formation);
-  return { sig: signature(s), formationId: formation.id, assign };
+  return { base: baseOf(s), formationId: formation.id, assign };
 }
 
 const formationOf = (s: StageSide, d: Draft): Formation => getFormation(s.size, d.formationId) ?? formationsFor(s.size)[0];
@@ -76,7 +105,13 @@ export function LineupStage({
 }) {
   const [tab, setTab] = useState(initialTab ?? sides[0].key);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
-  const draftOf = (s: StageSide) => (drafts[s.key]?.sig === signature(s) ? drafts[s.key] : initialDraft(s));
+  const isTouched = (s: StageSide) => !!drafts[s.key] && stillValid(drafts[s.key], s);
+  /** Kadrodan çıkanlar taslaktan düşer (görünmeyen biri yer tutmasın) */
+  const draftOf = (s: StageSide): Draft => {
+    if (!isTouched(s)) return initialDraft(s);
+    const d = drafts[s.key];
+    return { ...d, assign: Object.fromEntries(s.players.map((p) => [p.id, d.assign[p.id] ?? null])) };
+  };
   const side = sides.find((s) => s.key === tab);
   const showFaceOff = faceOff && sides.length === 2;
   const tabs = [...sides.map((s) => ({ id: s.key as string, label: s.title, color: s.color })), ...(showFaceOff ? [{ id: "vs", label: "Karşılaşma", color: null }] : [])];
@@ -112,8 +147,8 @@ export function LineupStage({
             matchId={matchId}
             side={side}
             draft={draftOf(side)}
-            touched={drafts[side.key]?.sig === signature(side)}
-            onDraft={(d) => setDrafts((all) => ({ ...all, [side.key]: d }))}
+            touched={isTouched(side)}
+            onDraft={(d) => setDrafts((all) => ({ ...all, [side.key]: { ...d, base: baseOf(side) } }))}
             onReset={() =>
               setDrafts((all) => {
                 const next = { ...all };
@@ -161,12 +196,20 @@ function SideStage({
   onReset: () => void;
   canSwitchTeam: boolean;
 }) {
-  const { editable, players, color } = side;
+  const { editable, players, reserves, color } = side;
   const formation = formationOf(side, draft);
   const { assign } = draft;
   const [selected, setSelected] = useState<string | null>(null);
   const [drag, setDrag] = useState<{ id: string; x: number; y: number; over: string | null } | null>(null);
   const gesture = useRef<{ id: string; sx: number; sy: number; moved: boolean } | null>(null);
+  /** Sürükleyip bırakılan kart yeni yerinde hemen görünür (eski yerinden kayma efekti olmaz) */
+  const [dropped, setDropped] = useState<string | null>(null);
+  /** İlk sürüklemeden sonra giriş animasyonu kapanır: bırakılan kart yeniden "düşmez" */
+  const [intro, setIntro] = useState(true);
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  /** Yedekten sahaya bırakılan oyuncu: kadroya girince bu yere konur */
+  const [wanted, setWanted] = useState<{ id: string; slot: number } | null>(null);
 
   const slotOf = (id: string) => {
     const s = assign[id];
@@ -176,12 +219,49 @@ function SideStage({
   const bench = players.filter((p) => !slotOf(p.id));
   const taken = new Set(onPitch.map((p) => assign[p.id]));
   const picked = players.find((p) => p.id === selected);
+  // Yedeklerin seçim/sürükleme kimliği oyuncu kimlikleriyle karışmasın
+  const reserveOf = (id: string | null) => reserves.find((r) => `r:${r.key}` === id);
+  const pickedReserve = reserveOf(selected);
   const dragged = drag ? players.find((p) => p.id === drag.id) : null;
+  const draggedReserve = drag ? reserveOf(drag.id) : null;
   const cardPct = cardWidthPct(formation);
   const draftOnly = !isSaved(side) && players.length > 0;
 
+  /** Kadroya al / kadro dışı bırak: hemen kaydedilir (kapasiteyi sunucu denetler) */
+  function move(who: { userId: string | null; playerId: string | null }, to: "in" | "out") {
+    setSelected(null);
+    setError(null);
+    startTransition(async () => {
+      const res = await moveRoster({ groupId, matchId, userId: who.userId, playerId: who.userId ? null : who.playerId, to });
+      if (res.error) {
+        setError(res.error);
+        setWanted(null);
+      }
+    });
+  }
+
+  function bringIn(r: StageReserve, slot: number | null) {
+    if (!r.movable || pending) return;
+    setWanted(slot !== null && r.playerId ? { id: r.playerId, slot } : null);
+    move(r, "in");
+  }
+
+  useEffect(() => {
+    if (!wanted || !players.some((p) => p.id === wanted.id)) return;
+    setDropped(wanted.id);
+    place(wanted.id, wanted.slot);
+    setWanted(null);
+    // Yalnızca kadro güncellendiğinde çalışır
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [players, wanted]);
+
   /** Oyuncuyu bir slota ya da kulübeye taşır; dolu slottaki oyuncu eski yerine geçer (takas) */
   function place(id: string, target: number | null) {
+    const reserve = reserveOf(id);
+    if (reserve) {
+      if (target !== null) bringIn(reserve, target);
+      return;
+    }
     const next = { ...assign };
     const from = assign[id] ?? null;
     // Kendi yerine bırakmak değişiklik sayılmaz
@@ -199,6 +279,7 @@ function SideStage({
     const f = getFormation(side.size, id);
     if (!f) return;
     // Sahadakiler eşit uygunlukta sahada kalır
+    setDropped(null);
     onDraft({ ...draft, formationId: id, assign: autoLineup(players, f, onPitch.map((p) => p.id)) });
     setSelected(null);
   }
@@ -212,7 +293,9 @@ function SideStage({
     return null;
   }
   function tap(id: string) {
-    if (selected && selected !== id) place(selected, assign[id] ?? null);
+    setDropped(null);
+    // Yedeğe dokunmak her zaman onu seçer; yedek seçiliyken sahadaki karta dokunmak o yere ister
+    if (selected && selected !== id && !reserveOf(id)) place(selected, assign[id] ?? null);
     else setSelected(selected === id ? null : id);
   }
   const tokenProps = (id: string) => ({
@@ -225,6 +308,7 @@ function SideStage({
       if (!g) return;
       if (!g.moved && Math.hypot(e.clientX - g.sx, e.clientY - g.sy) < 6) return;
       g.moved = true;
+      setIntro(false);
       setDrag({ id: g.id, x: e.clientX, y: e.clientY, over: dropAt(e.clientX, e.clientY) });
     },
     onPointerUp: (e: React.PointerEvent) => {
@@ -234,7 +318,9 @@ function SideStage({
       if (!g) return;
       if (!g.moved) return tap(g.id);
       const target = dropAt(e.clientX, e.clientY);
-      if (target) place(g.id, target === "bench" ? null : Number(target.slice(5)));
+      if (!target) return;
+      setDropped(g.id);
+      place(g.id, target === "bench" ? null : Number(target.slice(5)));
     },
     onPointerCancel: () => {
       gesture.current = null;
@@ -330,7 +416,11 @@ function SideStage({
             <Spot key={`slot-${slot.index}`} slot={slot} top={0.8}>
               <div
                 data-drop={editable ? `slot:${slot.index}` : undefined}
-                onClick={() => selected && place(selected, slot.index)}
+                onClick={() => {
+                  if (!selected) return;
+                  setDropped(null);
+                  place(selected, slot.index);
+                }}
                 className="flex items-center justify-center"
                 style={{ width: "calc(var(--cw) * 1cqw)", height: "calc(var(--cw) * 1.35cqw)" }}
               >
@@ -345,8 +435,8 @@ function SideStage({
           if (!slot) return null;
           const over = drag?.over === `slot:${slot.index}` && drag.id !== p.id;
           return (
-            <Spot key={p.id} slot={slot} top={0.8} z={selected === p.id ? 200 : undefined}>
-              <div className="hs-slot-in relative" style={{ animationDelay: `${slot.index * 45}ms` }}>
+            <Spot key={p.id} slot={slot} top={0.8} z={selected === p.id ? 200 : undefined} instant={dropped === p.id}>
+              <div className={cx("relative", intro && "hs-slot-in")} style={{ animationDelay: `${slot.index * 45}ms` }}>
                 {/* Kartın altındaki ışık halkası */}
                 <span className="pointer-events-none absolute -bottom-[6%] left-1/2 h-[16%] w-[92%] -translate-x-1/2 rounded-[100%] blur-[3px]" style={{ background: color, opacity: 0.55 }} />
                 <div data-drop={editable ? `slot:${slot.index}` : undefined} className={cx("relative rounded-xl", over && "ring-2 ring-white")}>
@@ -363,6 +453,36 @@ function SideStage({
         )}
       </Field>
 
+      {error && (
+        <p role="alert" className="mx-3 mt-3 rounded-xl bg-red-950/60 px-3 py-2 text-sm text-error">
+          {error}
+        </p>
+      )}
+
+      {/* Seçili yedeğin işlemleri */}
+      {editable && pickedReserve && (
+        <div className="flex flex-wrap items-center gap-2 px-4 pt-3 text-sm text-white">
+          <span className="min-w-0 flex-1 truncate">
+            <b>{shortName(pickedReserve.name)}</b> <span className="text-white/55">yedek</span>
+          </span>
+          {pickedReserve.movable && (
+            <>
+              <button type="button" disabled={pending} onClick={() => bringIn(pickedReserve, null)} className="min-h-9 rounded-full bg-white px-3 font-semibold text-[#060d14] disabled:opacity-40">
+                Kadroya al
+              </button>
+              <button type="button" disabled={pending} onClick={() => move(pickedReserve, "out")} className="min-h-9 rounded-full border border-red-300/40 px-3 font-semibold text-red-300 disabled:opacity-40">
+                Kadro dışı bırak
+              </button>
+            </>
+          )}
+          {pickedReserve.playerId && (
+            <Link href={`/g/${side.groupId}/p/${pickedReserve.playerId}`} className="flex min-h-9 items-center px-1 font-semibold text-accent">
+              Kartı gör
+            </Link>
+          )}
+        </div>
+      )}
+
       {/* Seçili oyuncunun işlemleri */}
       {picked && (
         <div className="flex flex-wrap items-center gap-2 px-4 pt-3 text-sm text-white">
@@ -372,6 +492,11 @@ function SideStage({
           {slotOf(picked.id) && (
             <button type="button" onClick={() => place(picked.id, null)} className="min-h-9 rounded-full border border-white/20 px-3 font-semibold">
               Kulübeye
+            </button>
+          )}
+          {picked.movable && (
+            <button type="button" disabled={pending} onClick={() => move({ userId: picked.userId, playerId: picked.id }, "out")} className="min-h-9 rounded-full border border-red-300/40 px-3 font-semibold text-red-300 disabled:opacity-40">
+              Kadro dışı bırak
             </button>
           )}
           {canSwitchTeam &&
@@ -395,7 +520,7 @@ function SideStage({
       )}
 
       {/* Yedek kulübesi */}
-      {(bench.length > 0 || (editable && players.length > 0)) && (
+      {(bench.length > 0 || reserves.length > 0 || (editable && players.length > 0)) && (
         <div
           data-drop={editable ? "bench" : undefined}
           onClick={() => selected && place(selected, null)}
@@ -403,9 +528,9 @@ function SideStage({
         >
           <div className="t-label-caps mb-2 flex items-center gap-1.5 uppercase text-white/55">
             <Icon name="chair" className="text-[16px]" />
-            Kulübe · {bench.length}
+            Yedek Kulübesi · {bench.length + reserves.length}
           </div>
-          {bench.length === 0 ? (
+          {bench.length + reserves.length === 0 ? (
             <p className="py-1 text-xs text-white/45">Herkes sahada. Birini kenara almak için buraya sürükle.</p>
           ) : (
             <ul className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
@@ -414,6 +539,25 @@ function SideStage({
                   {card(p, "6.5px")}
                 </li>
               ))}
+              {reserves.map((r, i) => {
+                const id = `r:${r.key}`;
+                return (
+                  <li key={id} className="shrink-0 self-center">
+                    {editable && r.movable ? (
+                      <div
+                        {...tokenProps(id)}
+                        aria-label={`${r.name} yedek`}
+                        aria-pressed={selected === id}
+                        className={cx(tokenProps(id).className, "rounded-xl transition", selected === id && "bg-white/15", drag?.id === id && "opacity-25")}
+                      >
+                        <ReserveToken reserve={r} order={i + 1} />
+                      </div>
+                    ) : (
+                      <ReserveToken reserve={r} order={i + 1} />
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
@@ -438,11 +582,16 @@ function SideStage({
         </form>
       )}
       {editable && players.length > 0 && !selected && (
-        <p className="px-4 pb-3 text-center text-xs text-white/45">Kartı sürükle ya da dokunup hedefi seç. Dolu yere bırakırsan yer değiştirirler.</p>
+        <p className="px-4 pb-3 text-center text-xs text-white/45">Kartı sürükle ya da dokunup hedefi seç. Dolu yere bırakırsan yer değiştirirler. Kadro dışı bırakmak için karta dokun.</p>
       )}
       {!editable && <div className="h-3" />}
 
       {/* Sürüklenen kartın parmağı izleyen kopyası */}
+      {drag && draggedReserve && (
+        <div className="pointer-events-none fixed z-[60] -translate-x-1/2 -translate-y-[70%] rotate-3 scale-110" style={{ left: drag.x, top: drag.y }}>
+          <ReserveToken reserve={draggedReserve} />
+        </div>
+      )}
       {drag && dragged && (
         <div className="pointer-events-none fixed z-[60] -translate-x-1/2 -translate-y-[70%] rotate-3 scale-110" style={{ left: drag.x, top: drag.y }}>
           <PitchCard player={dragged} fontSize="8px" />
@@ -453,16 +602,35 @@ function SideStage({
 }
 
 /** Sahada perspektife göre konum: arkadakiler biraz küçük, öndekiler üstte */
-function Spot({ slot, top, z, children }: { slot: Pick<Slot, "x" | "y">; top: number; z?: number; children: React.ReactNode }) {
+function Spot({ slot, top, z, instant, children }: { slot: Pick<Slot, "x" | "y">; top: number; z?: number; instant?: boolean; children: React.ReactNode }) {
   const at = project(slot.x, slot.y, top);
   const scale = 0.88 + (0.12 * slot.y) / 100;
   return (
     <div
-      className="absolute transition-[left,top,transform] duration-500 ease-[cubic-bezier(.2,.8,.2,1)] motion-reduce:transition-none"
+      className={cx("absolute", !instant && "transition-[left,top,transform] duration-500 ease-[cubic-bezier(.2,.8,.2,1)] motion-reduce:transition-none")}
       style={{ left: `${at.x}%`, top: `${at.y}%`, transform: `translate(-50%, -50%) scale(${scale})`, zIndex: z ?? Math.round(slot.y) }}
     >
       {children}
     </div>
+  );
+}
+
+/** Kulübede yedek sırasındaki kişi: yuvarlak rozet, sıra numarası */
+function ReserveToken({ reserve, order }: { reserve: StageReserve; order?: number }) {
+  return (
+    <span className="flex w-16 flex-col items-center gap-1 py-1">
+      <span className="relative flex h-11 w-11 items-center justify-center rounded-full border-2 border-dashed border-amber-300/70 bg-[#0b1620]">
+        {reserve.photoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={reserve.photoUrl} alt="" className="h-full w-full rounded-full object-contain object-bottom" draggable={false} />
+        ) : (
+          <span className="text-sm font-bold text-white">{initials(reserve.name)}</span>
+        )}
+        <span className="absolute -right-2 -top-1 rounded-md bg-amber-300 px-1 text-[11px] font-black leading-snug text-[#060d14]">{reserve.overall}</span>
+      </span>
+      <span className="max-w-full truncate text-[11px] font-semibold text-white">{shortName(reserve.name)}</span>
+      {order && <span className="text-[10px] leading-none text-white/45">{order}. yedek</span>}
+    </span>
   );
 }
 
@@ -482,6 +650,7 @@ function Marker({ role, active, color }: { role: Slot["role"]; active: boolean; 
 /** İki takım aynı sahada karşı karşıya: altta ilk takım, üstte rakibi (küçük yuvarlak oyuncular) */
 function FaceOff({ sides }: { sides: { side: StageSide; draft: Draft }[] }) {
   const [home, away] = sides;
+  const { reserves } = home.side;
   return (
     <div className="pb-3">
       <div className="flex items-center gap-3 px-4 py-3 text-white">
@@ -508,6 +677,21 @@ function FaceOff({ sides }: { sides: { side: StageSide; draft: Draft }[] }) {
           });
         })}
       </Field>
+      {reserves.length > 0 && (
+        <div className="mx-3 mt-3 rounded-2xl border border-white/10 bg-white/5 p-2.5">
+          <div className="t-label-caps mb-1 flex items-center gap-1.5 uppercase text-white/55">
+            <Icon name="chair" className="text-[16px]" />
+            Yedek Kulübesi · {reserves.length}
+          </div>
+          <ul className="no-scrollbar flex gap-2 overflow-x-auto">
+            {reserves.map((r, i) => (
+              <li key={r.key} className="shrink-0">
+                <ReserveToken reserve={r} order={i + 1} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

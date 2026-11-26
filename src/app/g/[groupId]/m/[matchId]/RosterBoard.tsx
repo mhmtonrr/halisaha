@@ -19,7 +19,8 @@ export interface BoardPerson {
   overall: number;
   position: Position | null;
   zone: Zone;
-  /** Gelmeyenlerde sebep: "Gelemem dedi", "Yanıt vermedi"… */
+  photoUrl?: string | null;
+  /** Kadro dışındakilerde sebep: "Gelemem dedi", "Yanıt vermedi"… */
   tag?: string;
   /** Yetkim varsa bu kişiyi taşıyabilir miyim */
   movable: boolean;
@@ -28,11 +29,12 @@ export interface BoardPerson {
 const ZONES: { id: Zone; title: string; icon: string; empty: string; accent: string }[] = [
   { id: "in", title: "Kadromuz", icon: "groups", empty: "Henüz kimse yok.", accent: "text-primary" },
   { id: "reserve", title: "Yedekler", icon: "chair", empty: "Yedek yok.", accent: "text-amber-300" },
-  { id: "out", title: "Gelmeyenler", icon: "person_off", empty: "Herkes kadroda veya yedekte.", accent: "text-muted" },
+  { id: "out", title: "Kadro dışı", icon: "person_off", empty: "Herkes kadroda veya yedekte.", accent: "text-muted" },
 ];
 
 /**
- * Kadro / Yedek / Gelmeyenler. Yönetenler kişiyi tutamacından sürükleyip bölüme bırakır
+ * Planlanmış maçta (`outOnly`) kadro ve yedekler diziliş sahnesindedir: yalnızca "Kadro dışı" listesi,
+ * satırda "Kadroya ekle". Toplanırken Kadro / Yedek / Kadro dışı. Yönetenler kişiyi tutamacından sürükleyip bölüme bırakır
  * (sürüklerken altta üç hedef çıkar) ya da adına dokunup hedefi seçer; değişiklik hemen kaydedilir.
  */
 export function RosterBoard({
@@ -42,6 +44,7 @@ export function RosterBoard({
   capacity,
   canManage,
   onlyRoster = false,
+  outOnly = false,
 }: {
   groupId: string;
   matchId: string;
@@ -50,6 +53,7 @@ export function RosterBoard({
   canManage: boolean;
   /** Takım dışından bakana yalnızca kadro */
   onlyRoster?: boolean;
+  outOnly?: boolean;
 }) {
   const [shown, applyMove] = useOptimistic(people, (cur, m: { key: string; to: Zone | "delete" }) => {
     const rest = cur.filter((p) => p.key !== m.key);
@@ -71,7 +75,7 @@ export function RosterBoard({
     setSelected(null);
     if (!p || p.zone === to) return;
     if (to === "in" && full) {
-      setError("Kadro dolu; önce birini yedeklere veya gelmeyenlere al.");
+      setError(outOnly ? "Kadro dolu; önce sahadan birini kadro dışı bırak." : "Kadro dolu; önce birini yedeklere veya kadro dışına al.");
       return;
     }
     setError(null);
@@ -126,7 +130,7 @@ export function RosterBoard({
           {error}
         </p>
       )}
-      {ZONES.filter((z) => !onlyRoster || z.id === "in").map((z) => {
+      {ZONES.filter((z) => (outOnly ? z.id === "out" : !onlyRoster || z.id === "in")).map((z) => {
         const list = shown.filter((p) => p.zone === z.id);
         return (
           <div key={z.id} data-zone={z.id}>
@@ -162,7 +166,16 @@ export function RosterBoard({
                             </span>
                             <PositionChip position={p.position} />
                           </button>
-                          {editable ? (
+                          {editable && outOnly ? (
+                            <button
+                              type="button"
+                              disabled={pending || full}
+                              onClick={() => move(p.key, "in")}
+                              className="min-h-9 shrink-0 rounded-lg border border-line px-3 text-sm font-semibold text-primary disabled:opacity-40"
+                            >
+                              {full ? "Kadro dolu" : "Kadroya ekle"}
+                            </button>
+                          ) : editable ? (
                             <span
                               {...handleProps(p.key)}
                               style={{ touchAction: "none" }}
@@ -172,13 +185,13 @@ export function RosterBoard({
                               <Icon name="drag_indicator" className="text-[22px]" />
                             </span>
                           ) : (
-                            canManage && <span className="w-7 shrink-0" />
+                            canManage && !outOnly && <span className="w-7 shrink-0" />
                           )}
                         </div>
                         {open && (
                           <div className="flex flex-wrap gap-1.5 px-3 pb-2.5">
                             {editable &&
-                              ZONES.filter((t) => t.id !== z.id).map((t) => (
+                              ZONES.filter((t) => t.id !== z.id && !(outOnly && t.id === "in")).map((t) => (
                                 <button
                                   key={t.id}
                                   type="button"
@@ -186,7 +199,7 @@ export function RosterBoard({
                                   onClick={() => move(p.key, t.id)}
                                   className="min-h-9 rounded-lg border border-line px-3 text-sm font-semibold disabled:opacity-40"
                                 >
-                                  {t.id === "in" ? (full ? "Kadro dolu" : "Kadroya") : t.id === "reserve" ? "Yedeğe" : "Gelmeyenlere"}
+                                  {t.id === "in" ? (full ? "Kadro dolu" : "Kadroya") : t.id === "reserve" ? (outOnly ? "Yedek kulübesine" : "Yedeğe") : "Kadro dışına"}
                                 </button>
                               ))}
                             {p.playerId && (
@@ -210,7 +223,7 @@ export function RosterBoard({
           </div>
         );
       })}
-      {canManage && <p className="px-1 text-xs text-muted">Kişiyi sağındaki tutamaçtan sürükle ya da adına dokunup nereye gideceğini seç.</p>}
+      {canManage && !outOnly && <p className="px-1 text-xs text-muted">Kişiyi sağındaki tutamaçtan sürükle ya da adına dokunup nereye gideceğini seç.</p>}
 
       {/* Sürüklerken ekranın altında üç hedef: uzun listede kaydırmaya gerek kalmaz */}
       {drag && dragged && (

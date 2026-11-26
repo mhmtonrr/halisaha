@@ -334,7 +334,7 @@ export default async function MatchPage({
     }));
   }
   const teams = { A: roster.filter((r) => r.team === "A"), B: roster.filter((r) => r.team === "B") };
-  // Kadro / Yedek / Gelmeyenler: takımdaki herkes bu üç bölümden birinde
+  // Kadro / Yedek / Kadro dışı: takımdaki herkes bu üç bölümden birinde
   let board: BoardPerson[] = [];
   if (open) {
     // Takımdan ayrılanlar listelenmez
@@ -377,7 +377,12 @@ export default async function MatchPage({
     size: size ?? inferSize(list.length),
     formationId,
     rating: teamRating(list.map((p) => p.overall)),
-    players: list.map((r) => ({ ...toPitch(r), slot: r.slot })),
+    players: list.map((r) => ({ ...toPitch(r), slot: r.slot, userId: r.userId, movable: !!r.userId || !!isAdmin })),
+    // Yedek sırası takıma bağlı değil: kendi aramızda iki tarafın kulübesinde de görünür
+    reserves:
+      planned && key !== "opp"
+        ? board.filter((p) => p.zone === "reserve").map((p) => ({ key: p.key, userId: p.userId, playerId: p.playerId, name: p.name, overall: p.overall, photoUrl: p.photoUrl ?? null, movable: p.movable }))
+        : [],
     editable,
   });
   const canEdit = planned && !!canManage;
@@ -577,7 +582,10 @@ export default async function MatchPage({
 
       {!planned && stage}
 
-      {open && <RosterBoard groupId={groupId} matchId={matchId} people={board} capacity={match.capacity} canManage={manage} onlyRoster={!manage && !isMember} />}
+      {/* Planlanmış maçta kadro ve yedekler sahnede; altta yalnızca kadro dışı kalanlar */}
+      {open && (!planned || manage || isMember) && (
+        <RosterBoard groupId={groupId} matchId={matchId} people={board} capacity={match.capacity} canManage={manage} onlyRoster={!manage && !isMember} outOnly={planned} />
+      )}
 
       {manage && (
         <AutoOpenDetails
@@ -693,7 +701,7 @@ interface RawEntry {
   group_players: { display_name: string; position: Position | null } | { display_name: string; position: Position | null }[] | null;
 }
 
-/** Gelmeyenlerdeki sebep metni ve sıralaması */
+/** Kadro dışındakilerde sebep metni ve sıralaması */
 const OUT_TAG: Record<string, string> = {
   declined: "Gelemem dedi",
   left: "Kadrodan çıktı",
@@ -703,7 +711,7 @@ const OUT_TAG: Record<string, string> = {
 };
 const OUT_ORDER = Object.keys(OUT_TAG);
 
-/** Kadro panosunun kişileri: kadro (maç kadrosu), yedek (sıra ile), gelmeyenler (kalan herkes) */
+/** Kadro panosunun kişileri: kadro (maç kadrosu), yedek (sıra ile), kadro dışı (kalan herkes) */
 function buildBoard({
   roster,
   entries,
@@ -752,6 +760,7 @@ function buildBoard({
       playerId: e.user_id ? (member?.id ?? null) : e.player_id,
       name: member?.display_name ?? one(e.profiles)?.display_name ?? guest?.display_name ?? "Oyuncu",
       overall: member?.overall ?? (e.user_id ? ratings.get(e.user_id) : undefined) ?? 65,
+      photoUrl: member?.photo_url ?? null,
       position: e.position ?? member?.position ?? guest?.position ?? null,
       // Takım dışından davetli / gelemem diyen elle kadroya yazılamaz
       movable: e.user_id ? !!member || e.status === "reserve" || e.status === "left" : isAdmin,
