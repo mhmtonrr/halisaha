@@ -416,7 +416,8 @@ export default async function MatchPage({
 
   // Maç özeti (oylamada ve sonrasında): skor + gol/asist/kurtarış
   const summarized = match.status === "voting" || match.status === "closed";
-  const summarySide = (s: StageSide, score: number | null, list: RosterEntry[]): SummarySide => ({
+  const summarySide = (s: StageSide, score: number | null, list: RosterEntry[], team?: SummarySide["team"]): SummarySide => ({
+    team,
     key: s.key,
     title: s.title,
     color: s.color,
@@ -425,9 +426,9 @@ export default async function MatchPage({
   });
   const summarySides: SummarySide[] = external
     ? [
-        summarySide(stageSides[0], match.score_a, roster),
+        summarySide(stageSides[0], match.score_a, roster, { id: groupId, name: myTeamName, color: myTeamColor, logo: myTeam?.logo ?? null }),
         // Rakibin skoru bizim kaydımızdaki score_b (iki takımın girişi eşleşmiş)
-        ...(opp ? [summarySide(stageSides[1], match.score_b, opp.roster)] : []),
+        ...(opp ? [summarySide(stageSides[1], match.score_b, opp.roster, opp.team)] : []),
       ]
     : [summarySide(stageSides[0], match.score_a, teams.A), summarySide(stageSides[1], match.score_b, teams.B)];
 

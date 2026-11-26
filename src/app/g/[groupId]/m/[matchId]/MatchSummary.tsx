@@ -1,3 +1,5 @@
+import { Icon } from "@/components/Icon";
+import { TeamBadge } from "@/components/TeamBadge";
 import { cx } from "@/components/ui";
 
 export interface SummarySide {
@@ -5,6 +7,8 @@ export interface SummarySide {
   title: string;
   color: string;
   score: number | null;
+  /** Sistemdeki takım: skorun üstünde logosu gösterilir (kendi aramızda maçta yok) */
+  team?: { id: string; name: string; color: string | null; logo: string | null };
   players: { id: string; name: string; goals: number; assists: number; saves: number }[];
 }
 
@@ -20,6 +24,7 @@ export function MatchSummary({ sides, rival }: { sides: SummarySide[]; rival?: {
       .filter((p) => p.goals || p.assists || p.saves)
       .sort((a, b) => b.goals - a.goals || b.assists - a.assists || b.saves - a.saves || a.name.localeCompare(b.name, "tr")),
   }));
+  const logos = sides.some((s) => s.team);
   const any = lists.some((s) => s.contributors.length > 0);
 
   return (
@@ -27,11 +32,23 @@ export function MatchSummary({ sides, rival }: { sides: SummarySide[]; rival?: {
       <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-3 px-4 py-5">
         {scores.map((s, i) => (
           <div key={i} className="contents">
-            {i === 1 && <span className="text-2xl leading-[3rem] text-white/35">-</span>}
+            {i === 1 && <span className={cx("text-2xl leading-[3rem] text-white/35", logos && "mt-[4.5rem]")}>-</span>}
             <div className="min-w-0 text-center">
+              {logos && (
+                <div className="mb-2 flex justify-center">
+                  {"team" in s && s.team ? (
+                    <TeamBadge {...(s as SummarySide).team!} size="lg" />
+                  ) : (
+                    // Uygulamada olmayan rakibin logosu yok
+                    <span className="flex h-16 w-16 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white/40">
+                      <Icon name="shield" className="text-[32px]" />
+                    </span>
+                  )}
+                </div>
+              )}
               <div className="font-display text-5xl font-black tabular-nums leading-none">{s.score}</div>
               <div className="mt-2 line-clamp-2 break-words text-xs font-bold uppercase text-white/60">
-                {"color" in s && <span className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full" style={{ background: (s as SummarySide).color }} />}
+                {!logos && "color" in s && <span className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full" style={{ background: (s as SummarySide).color }} />}
                 {s.title}
               </div>
             </div>

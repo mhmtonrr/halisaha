@@ -127,7 +127,8 @@ try {
   const mine = must(await admin.from("votes").select("target_id, score").eq("match_id", m1).eq("voter_id", gp.a));
   check("3 oy yazıldı (Barış 9, diğerleri 7)", mine.length === 3 && mine.find((v) => v.target_id === gp.b)?.score === 9 && mine.filter((v) => v.score === 7).length === 2);
   check("MVP oyu yazıldı", must(await admin.from("mvp_votes").select("target_id").eq("match_id", m1).eq("voter_id", gp.a))[0]?.target_id === gp.b);
-  await A.waitForTimeout(500);
+  // Taslak, yenilenen form ekrana gelince silinir (geliştirme sunucusunda birkaç saniye sürebilir)
+  await A.waitForFunction(() => !Object.keys(localStorage).some((k) => k.startsWith("hs-oy-")), null, { timeout: 15000 }).catch(() => {});
   const draftKeys = () => A.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("hs-oy-")));
   check("gönderince taslak silindi", (await draftKeys()).length === 0);
   check("başlık 'Oylarını güncelle', 1/4 oy verdi", (await text(vs)).includes("oylarını güncelle") && (await text(vs)).includes("1/4"));
