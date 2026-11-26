@@ -30,7 +30,7 @@ Durum: planned → voting (skor girilince, 24 saat) → closed. Takımlar arası
 **Puanlama** (src/lib/rating.ts): oy veren bazlı normalizasyon (z), 5+ oyda uç değer kırpma, ikili/klik tespiti,
 ağırlık = katılım (oy verebilecek hesap sahiplerinin yarısı → tam) × örneklem (4+ oy → tam), tek oyla 0;
 galibiyet ±0.15; maçın önemi çarpanı (`MatchInput.importance`: takım rakip maçı 1, grup/iç maç 0.5; ağırlığı çarpar, eşikleri değiştirmez); yakın maçlar ağır basar; yeni oyuncu ortalamaya (65) çekilir; 40-99 FIFA ölçeği.
-Oylama süre dolunca **grup/maç sayfası açıldığında** veya en geç **günlük cron**da (`/api/cron/vote-reminders`, tüm gruplar, en fazla 50 maç) kapanır (`finalizeExpired`), herkes oy verince anında kapanır. Kapanınca kadroya "🏆 Sonuçlar açıklandı" bildirimi gider.
+Oylama süre dolunca **grup/maç sayfası açıldığında** veya en geç **günlük cron**da (`/api/cron/vote-reminders`, tüm gruplar, en fazla 50 maç) kapanır (`finalizeExpired`), herkes oy verince anında kapanır. "Oylama kapanmak üzere" sadece son 6 saatte, oy vermeyenlere gider (cron yolları aynı pencere); oy gönderen kişinin o maça ait "oylama açıldı"/hatırlatma bildirimleri silinir (`submitVotes`). Kapanınca kadroya "🏆 Sonuçlar açıklandı" bildirimi gider.
 Formül değişirse `recomputeGroup(groupId)` ile grubun tüm sonuçları yeniden yazılabilir (oylara dokunmaz).
 
 **Oylama ekranı** (`VoteForm.tsx`): puanlar boş başlar, 1–10 düğmeleri + MVP (isteğe bağlı), takım arkadaşı/rakip sekmeleri. Kendi dışındaki **tüm oyuncuları puanlamak zorunlu** (düğme kapalı kalır; `submitVotes` eksik puanı reddeder). Gönderilmemiş puan/MVP cihazda taslak kalır (`localStorage` `hs-oy-<maç>-<oyuncu>`), sunucudakiyle eşleşince silinir.

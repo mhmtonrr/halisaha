@@ -955,7 +955,7 @@ function announceVoting(matchId: string, actorId: string) {
 }
 
 export async function submitVotes(fd: FormData) {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
   const groupId = str(fd, "groupId");
   const matchId = str(fd, "matchId");
   const back = `/g/${groupId}/m/${matchId}`;
@@ -990,6 +990,9 @@ export async function submitVotes(fd: FormData) {
       );
     if (mvpError) fail(back, "MVP oyu kaydedilemedi");
   }
+
+  // Oy veren için "oy ver" / "kapanmak üzere" bildirimleri artık geçersiz: kutusundan kaldır
+  await createAdminClient().from("notifications").delete().eq("user_id", user.id).in("tag", [`vote:${matchId}`, `vote-reminder:${matchId}`]);
 
   // Herkes oy verdiyse sonuçları hemen açıkla
   const { data: progress } = await supabase.rpc("voting_progress", { p_match_id: matchId });

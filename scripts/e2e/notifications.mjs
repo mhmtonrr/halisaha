@@ -115,6 +115,8 @@ try {
   check("hatırlatma cron'u anahtarsız 401", unauthorized.status === 401);
   const wrong = await fetch(`${BASE}/api/cron/vote-reminders`, { headers: { authorization: "Bearer yanlis" } });
   check("yanlış anahtarla da 401", wrong.status === 401);
+  // Hatırlatma sadece son 6 saatte gider
+  await admin.from("matches").update({ voting_deadline: new Date(Date.now() + 3 * 3600e3).toISOString() }).eq("id", mid);
   const res1 = await fetch(`${BASE}/api/cron/vote-reminders`, { headers: { authorization: `Bearer ${env.CRON_SECRET}` } });
   if (res1.status === 401) {
     console.log("  – ATLANDI: hatırlatma cron'u (sunucu .env.local CRON_SECRET ile başlatılmamış)");
