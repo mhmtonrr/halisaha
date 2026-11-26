@@ -6,11 +6,11 @@ import { one } from "@/lib/data";
 import { findTeams, type TeamSummary } from "@/lib/teams-data";
 import { loadCandidates, loadCandidatesByIds } from "@/lib/players-data";
 import type { PlayerCandidate } from "@/lib/player-search";
-import { rankFeaturedPlayers, type FeaturedLevel } from "@/lib/featured-rules";
+import { rankFeaturedPlayers, teamForms, type TeamFormRow } from "@/lib/featured-rules";
 
 /**
  * Ana sayfadaki "öne çıkanlar": herkese aynı gösterilir. Havuzlar (bölgedeki oyuncular/takımlar, Türkiye geneli MVP ve
- * yükselenler) 5 dakika önbellekte; her bölüm sadece seçilen kademeyi (ilçe/il/Türkiye) gösterir, üst kademeye geçmez.
+ * yükselenler, takım formu) 5 dakika önbellekte; her bölüm sadece seçilen bölgeyi gösterir, genişletmez.
  */
 
 export interface MvpEntry {
@@ -25,9 +25,17 @@ export interface RiserEntry {
   delta: number;
   matches: number;
 }
+export interface RankedTeam {
+  team: TeamSummary;
+  value: number;
+}
 export interface Featured {
   players: PlayerCandidate[];
   teams: TeamSummary[];
+  /** Süren galibiyet serisine göre (en az 1) */
+  streaks: RankedTeam[];
+  /** Son 30 günde en çok maç yapanlar */
+  actives: RankedTeam[];
   mvps: MvpEntry[];
   risers: RiserEntry[];
 }
@@ -125,10 +133,36 @@ async function playersPool(city: string | null, district: string | null): Promis
   return rankFeaturedPlayers(list).slice(0, 50);
 }
 
-/** Bölgedeki puanı oluşmuş takımlar (ilk 20) */
+/** Bölgede listelenebilen takımlar (puanlı olsun olmasın), rating sırasıyla */
 async function teamsPool(city: string | null, district: string | null): Promise<TeamSummary[]> {
-  const teams = await findTeams(createAdminClient(), { city: city ?? undefined, district: district ?? undefined, limit: 40 });
-  return teams.filter((t) => t.rated).slice(0, 20);
+  return findTeams(createAdminClient(), { city: city ?? undefined, district: district ?? undefined, limit: 500 });
+}
+
+/**
+ * Takım formu için maç satırları; Türkiye geneli. Sadece uygulamadaki takımlarla oynanan (challenge_id dolu) ve skoru
+ * onaylanmış maçlar sayılır: elle yazılan rakiple seri şişirilemesin (kullanıcı kararı 2026-11-26).
+ */
+async function linkedResults(): Promise<TeamFormRow[]> {
+  const admin = createAdminClient();
+  const rows: TeamFormRow[] = [];
+  for (let from = 0; from < 5000; from += 1000) {
+    const { data, error } = await admin
+      .from("matches")
+      .select("group_id, played_at, score_a, score_b")
+      .eq("kind", "external")
+      .not("challenge_id", "is", null)
+      .in("status", ["voting", "closed"])
+      .order("played_at", { ascending: false })
+      .order("id")
+      .range(from, from + 999);
+    if (error) throw error;
+    for (const m of data ?? []) {
+      if (m.score_a === null || m.score_b === null) continue;
+      rows.push({ teamId: m.group_id as string, playedAt: m.played_at as string, won: (m.score_a as number) > (m.score_b as number) });
+    }
+    if ((data?.length ?? 0) < 1000) break;
+  }
+  return rows;
 }
 
 /** Aramada görünme ayarı değişince hemen yenilenir (actions.ts) */
@@ -137,30 +171,39 @@ const opts = { revalidate: 300, tags: [FEATURED_TAG] };
 const cachedMvps = unstable_cache(weeklyMvps, ["featured-mvps-v2"], opts);
 const cachedRisers = unstable_cache(risingStars, ["featured-risers-v2"], opts);
 const cachedPlayers = unstable_cache(playersPool, ["featured-players-v3"], opts);
-const cachedTeams = unstable_cache(teamsPool, ["featured-teams-v2"], opts);
+const cachedTeams = unstable_cache(teamsPool, ["featured-teams-v3"], opts);
+const cachedResults = unstable_cache(linkedResults, ["featured-results-v1"], opts);
 
 const same = (a: string | null, b: string | null) => (a ?? "").toLocaleLowerCase("tr") === (b ?? "").toLocaleLowerCase("tr");
 
 /**
- * Seçilen kademe için öne çıkanlar. `level` kullanıcının bölgesine göre: ilçe (il + ilçe), il, Türkiye.
- * Her bölüm sadece o kademeyi gösterir; üst kademeye geçilmez (kullanıcı kararı 2026-11-24).
+ * Seçilen bölge için öne çıkanlar (il boş: Türkiye; ilçe boş: ilin tamamı).
+ * Her bölüm sadece o bölgeyi gösterir, kendiliğinden genişletilmez (kullanıcı kararı 2026-11-24).
  */
-export async function loadFeatured(city: string | null, district: string | null, level: FeaturedLevel): Promise<Featured> {
-  const region = (l: FeaturedLevel) => (l === "tr" ? { c: null, d: null } : l === "il" ? { c: city, d: null } : { c: city, d: district });
-  const inRegion = (p: PlayerCandidate, l: FeaturedLevel) => {
-    const r = region(l);
-    return (!r.c || same(p.city, r.c)) && (!r.d || same(p.district, r.d));
-  };
-  const [mvpsAll, risersAll] = await Promise.all([cachedMvps(), cachedRisers()]);
-
-  // Her bölüm SADECE seçilen bölgeyi gösterir (kullanıcı kararı 2026-11-24): üst kademeye kendiliğinden çıkılmaz;
-  // bölgede kayıt yoksa bölüm o bölgenin adıyla boş görünür. Oyuncular: çok maçlılar önce, maçı olmayanlar sonda.
-  const r = region(level);
-  const [players, teams] = await Promise.all([cachedPlayers(r.c, r.d), cachedTeams(r.c, r.d)]);
+export async function loadFeatured(city: string | null, district: string | null): Promise<Featured> {
+  const inRegion = (p: PlayerCandidate) => (!city || same(p.city, city)) && (!district || same(p.district, district));
+  const [mvpsAll, risersAll, results, players, teams] = await Promise.all([
+    cachedMvps(),
+    cachedRisers(),
+    cachedResults(),
+    cachedPlayers(city, district),
+    cachedTeams(city, district),
+  ]);
+  const forms = teamForms(results);
+  const ranked = (key: "streak" | "recent") =>
+    teams
+      .map((team) => ({ team, value: forms.get(team.id)?.[key] ?? 0 }))
+      .filter((t) => t.value > 0)
+      // Eşitlikte takım listesinin sırası (rating) korunur
+      .sort((a, b) => b.value - a.value)
+      .slice(0, LIST);
+  // Oyuncular: çok maçlılar önce, maçı olmayanlar sonda
   return {
     players: rankFeaturedPlayers(players).slice(0, LIST),
-    teams: teams.slice(0, LIST),
-    mvps: mvpsAll.filter((m) => inRegion(m.player, level)).slice(0, LIST),
-    risers: risersAll.filter((x) => inRegion(x.player, level)).slice(0, LIST),
+    teams: teams.filter((t) => t.rated).slice(0, LIST),
+    streaks: ranked("streak"),
+    actives: ranked("recent"),
+    mvps: mvpsAll.filter((m) => inRegion(m.player)).slice(0, LIST),
+    risers: risersAll.filter((x) => inRegion(x.player)).slice(0, LIST),
   };
 }

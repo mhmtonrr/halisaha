@@ -1,19 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { availableLevels, levelLabel, rankFeaturedPlayers } from "./featured-rules";
+import { rankFeaturedPlayers, regionLabel, teamForms } from "./featured-rules";
 
-describe("availableLevels", () => {
-  it("ilçe, il ve Türkiye", () => {
-    expect(availableLevels("Kırklareli", "Lüleburgaz")).toEqual(["ilce", "il", "tr"]);
-    expect(availableLevels("Kırklareli", null)).toEqual(["il", "tr"]);
-    expect(availableLevels(null, null)).toEqual(["tr"]);
+describe("regionLabel", () => {
+  it("bölge adları", () => {
+    expect(regionLabel("Kırklareli", "Lüleburgaz")).toBe("Lüleburgaz, Kırklareli");
+    expect(regionLabel("Kırklareli", null)).toBe("Kırklareli");
+    expect(regionLabel(null, null)).toBe("Tüm Türkiye");
   });
 });
 
-describe("levelLabel", () => {
-  it("bölge adları", () => {
-    expect(levelLabel("ilce", "Kırklareli", "Lüleburgaz")).toBe("Lüleburgaz");
-    expect(levelLabel("il", "Kırklareli", "Lüleburgaz")).toBe("Kırklareli");
-    expect(levelLabel("tr", "Kırklareli", "Lüleburgaz")).toBe("Türkiye");
+describe("teamForms", () => {
+  it("seri ilk yenilgide/beraberlikte durur; eski maçlar etkinliğe girmez", () => {
+    const now = Date.parse("2026-11-26T12:00:00Z");
+    const row = (playedAt: string, won: boolean) => ({ teamId: "a", playedAt, won });
+    const f = teamForms([row("2026-09-01T18:00:00Z", true), row("2026-11-20T18:00:00Z", true), row("2026-11-10T18:00:00Z", false), row("2026-11-24T18:00:00Z", true)], now);
+    expect(f.get("a")).toEqual({ streak: 2, recent: 3 });
   });
 });
 

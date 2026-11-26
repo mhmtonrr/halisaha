@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/supabase/server";
 import { finalizeExpired } from "@/lib/finalize";
 import { respondMatch } from "@/lib/match-actions";
 import { formatDate, POSITION_NAME, type Position } from "@/lib/data";
-import { formatRegion } from "@/lib/regions";
+import { PROVINCES, canonicalDistrict, formatRegion } from "@/lib/regions";
 import { DEFAULT_OVERALL } from "@/lib/rating";
 import { cardDateTime, daysLeftLabel, rosterCapacity, tierProgress } from "@/lib/home";
 import { ROLE_LABEL, canCreateMatch, getMemberships, type Membership } from "@/lib/teams-data";
@@ -29,8 +29,8 @@ import { HomeTabs } from "@/components/home/HomeTabs";
 /** Yapılacaklar kutusunda açık görünen satır sayısı; gerisi "+n daha" altında */
 const VISIBLE_ACTIONS = 3;
 
-export default async function Home({ searchParams }: { searchParams: Promise<{ error?: string; left?: string; deleted?: string }> }) {
-  const { error, left, deleted } = await searchParams;
+export default async function Home({ searchParams }: { searchParams: Promise<{ error?: string; left?: string; deleted?: string; il?: string; ilce?: string }> }) {
+  const { error, left, deleted, il, ilce } = await searchParams;
   const { supabase, user } = await requireUser();
 
   const [{ data: profile }, memberships] = await Promise.all([
@@ -179,6 +179,13 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
       <SubmitButton name="answer" value="no" variant="secondary" pendingLabel="…" className="min-h-10 flex-1">Gelemem</SubmitButton>
     </form>
   );
+
+  // Öne çıkanların bölgesi: adreste seçim yoksa profildeki il/ilçe; il boş seçildiyse Türkiye
+  const cityParam = il === undefined ? (profile?.city ?? "") : (PROVINCES as readonly string[]).includes(il) ? il : "";
+  const region = {
+    city: cityParam || null,
+    district: !cityParam ? null : il === undefined ? (profile?.district ?? null) : (canonicalDistrict(cityParam, ilce) ?? null),
+  };
 
   // Yaklaşan maç kartları: boş bilgiler de "belli değil" / "-" olarak görünür
   const cards: UpcomingCard[] = upcoming.map((m) => {
@@ -498,8 +505,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
       />
 
       <FeaturedSections
-        city={profile?.city ?? null}
-        district={profile?.district ?? null}
+        city={region.city}
+        district={region.district}
         challengerTeamIds={memberships.filter((m) => m.group.kind === "team" && m.role !== "member" && !m.group.archived).map((m) => m.group.id)}
         myTeamIds={memberships.filter((m) => m.group.kind === "team").map((m) => m.group.id)}
       />

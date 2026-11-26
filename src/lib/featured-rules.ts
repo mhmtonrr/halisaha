@@ -1,9 +1,7 @@
 /**
- * Öne çıkanların bölge kademeleri ve oyuncu sırası (saf, testli).
+ * Öne çıkanların bölge adı, takım formu ve oyuncu sırası (saf, testli).
  * Kullanıcı kararı (2026-11-24): her kademe sadece kendi bölgesini gösterir; kayıt azsa üst kademeye geçilmez.
  */
-
-export type FeaturedLevel = "ilce" | "il" | "tr";
 
 /** Bu kadar puanlı maçı olan önde sıralanır (tek maçlık yıldız öne geçmesin) */
 export const FEATURED_MIN_MATCHES = 3;
@@ -17,11 +15,35 @@ export function rankFeaturedPlayers<T extends { matches: number; overall: number
   return [...list].sort((a, b) => band(b) - band(a) || b.overall - a.overall || b.matches - a.matches);
 }
 
-/** Kullanıcının bölgesine göre seçilebilen kademeler, dar → geniş */
-export function availableLevels(city: string | null, district: string | null): FeaturedLevel[] {
-  return [...(city && district ? (["ilce"] as const) : []), ...(city ? (["il"] as const) : []), "tr"];
+/** Seçili bölgenin düğmede ve boş listelerde görünen adı */
+export function regionLabel(city: string | null, district: string | null): string {
+  return city ? (district ? `${district}, ${city}` : city) : "Tüm Türkiye";
 }
 
-export function levelLabel(level: FeaturedLevel, city: string | null, district: string | null): string {
-  return level === "ilce" ? (district ?? "İlçe") : level === "il" ? (city ?? "İl") : "Türkiye";
+export interface TeamFormRow {
+  teamId: string;
+  playedAt: string;
+  won: boolean;
+}
+export interface TeamForm {
+  /** Süren üst üste galibiyet */
+  streak: number;
+  /** Son ACTIVE_DAYS günde oynanan maç */
+  recent: number;
+}
+
+export const ACTIVE_DAYS = 30;
+
+/** Takım başına süren galibiyet serisi ve son günlerdeki maç sayısı (satırlar sırasız olabilir) */
+export function teamForms(rows: TeamFormRow[], now = Date.now()): Map<string, TeamForm> {
+  const out = new Map<string, TeamForm>();
+  const broken = new Set<string>();
+  for (const r of [...rows].sort((a, b) => Date.parse(b.playedAt) - Date.parse(a.playedAt))) {
+    const f = out.get(r.teamId) ?? { streak: 0, recent: 0 };
+    if (!r.won) broken.add(r.teamId);
+    else if (!broken.has(r.teamId)) f.streak += 1;
+    if (Date.parse(r.playedAt) >= now - ACTIVE_DAYS * 864e5) f.recent += 1;
+    out.set(r.teamId, f);
+  }
+  return out;
 }

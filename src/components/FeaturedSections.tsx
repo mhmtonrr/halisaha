@@ -7,11 +7,13 @@ import { Icon } from "@/components/Icon";
 import { HomeTabs } from "@/components/home/HomeTabs";
 import { SectionTitle, cx } from "@/components/ui";
 import { formatRegion } from "@/lib/regions";
-import { loadFeatured, type Featured } from "@/lib/featured-data";
-import { availableLevels, levelLabel, type FeaturedLevel } from "@/lib/featured-rules";
+import { RegionFilter } from "@/components/home/RegionFilter";
+import { loadFeatured, type Featured, type RankedTeam } from "@/lib/featured-data";
+import { regionLabel } from "@/lib/featured-rules";
 import type { PlayerCandidate } from "@/lib/player-search";
 
 interface Viewer {
+  /** Gösterilen bölge (varsayılan profildeki il/ilçe); il boşsa Türkiye */
   city: string | null;
   district: string | null;
   /** Kaptan/yetkili olduğum takımlar: "Meydan oku" sadece bunlar varsa görünür */
@@ -57,42 +59,69 @@ function MiniCard({ c, i, children }: { c: PlayerCandidate; i: number; children:
   );
 }
 
-function TeamsList({ s, where, v }: { s: Featured["teams"]; where: string; v: Viewer }) {
-  if (!s.length) return <Empty>{where} için henüz sıralanacak takım yok. Takımlar maç oynadıkça burada sıralanır.</Empty>;
+function TeamsList({ rows, unit, empty, v }: { rows: RankedTeam[]; unit: string; empty: string; v: Viewer }) {
+  if (!rows.length) return <Empty>{empty}</Empty>;
   const canChallenge = v.challengerTeamIds.length > 0;
   return (
-    <>
-      <div className={listBox}>
-        {s.slice(0, 5).map((t, i) => (
-          <div key={t.id} className="flex items-center gap-2.5 p-3">
-            <span className={rankClass(i)}>#{i + 1}</span>
-            <Link href={`/g/${t.id}`} className="flex min-w-0 flex-1 items-center gap-2.5">
-              <TeamBadge name={t.name} color={t.color} size="sm" />
-              <span className="flex min-w-0 flex-col">
-                <span className="truncate font-semibold">{t.name}</span>
-                <span className="truncate text-xs text-on-surface-variant">
-                  {formatRegion(t.city, t.district)} · {t.members} oyuncu
-                </span>
+    <div className={listBox}>
+      {rows.slice(0, 5).map(({ team: t, value }, i) => (
+        <div key={t.id} className="flex items-center gap-2.5 p-3">
+          <span className={rankClass(i)}>#{i + 1}</span>
+          <Link href={`/g/${t.id}`} className="flex min-w-0 flex-1 items-center gap-2.5">
+            <TeamBadge name={t.name} color={t.color} size="sm" />
+            <span className="flex min-w-0 flex-col">
+              <span className="truncate font-semibold">{t.name}</span>
+              <span className="truncate text-xs text-on-surface-variant">
+                {formatRegion(t.city, t.district)} · {t.members} oyuncu
               </span>
-            </Link>
-            <span className="flex min-w-9 shrink-0 flex-col items-center rounded-lg bg-surface-high px-2 py-1">
-              <span className="font-display text-[9px] font-bold tracking-wider text-on-surface-variant">PUAN</span>
-              <span className="font-display text-lg font-bold leading-5 tabular-nums">{t.rating}</span>
             </span>
-            {canChallenge && !v.myTeamIds.includes(t.id) && (
-              <Link
-                href={`/g/${t.id}/teklif`}
-                aria-label={`${t.name} takımına meydan oku`}
-                className="flex min-h-9 shrink-0 items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2.5 text-xs font-bold text-primary transition hover:bg-primary/20"
-              >
-                <Icon name="swords" className="text-[16px]" />
-                <span className="hidden min-[400px]:inline">Meydan oku</span>
-              </Link>
-            )}
-          </div>
-        ))}
-      </div>
-    </>
+          </Link>
+          <span className="flex min-w-9 shrink-0 flex-col items-center rounded-lg bg-surface-high px-2 py-1">
+            <span className="font-display text-[9px] font-bold tracking-wider text-on-surface-variant">{unit}</span>
+            <span className="font-display text-lg font-bold leading-5 tabular-nums">{value}</span>
+          </span>
+          {canChallenge && !v.myTeamIds.includes(t.id) && (
+            <Link
+              href={`/g/${t.id}/teklif`}
+              aria-label={`${t.name} takımına meydan oku`}
+              className="flex min-h-9 shrink-0 items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2.5 text-xs font-bold text-primary transition hover:bg-primary/20"
+            >
+              <Icon name="swords" className="text-[16px]" />
+              <span className="hidden min-[400px]:inline">Meydan oku</span>
+            </Link>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TeamsTabs({ f, where, v }: { f: Featured; where: string; v: Viewer }) {
+  return (
+    <HomeTabs
+      variant="chips"
+      label="Takım sıralaması"
+      initial="rating"
+      tabs={[
+        {
+          key: "rating",
+          label: "Rating",
+          content: (
+            <TeamsList rows={f.teams.map((team) => ({ team, value: team.rating }))} unit="PUAN" v={v} empty={`${where} için henüz sıralanacak takım yok. Takımlar maç oynadıkça burada sıralanır.`} />
+          ),
+        },
+        {
+          key: "seri",
+          label: "Galibiyet serisi",
+          content: <TeamsList rows={f.streaks} unit="SERİ" v={v} empty={`${where} için süren galibiyet serisi yok (uygulamadaki takımlarla oynanan maçlar sayılır).`} />,
+        },
+        {
+          key: "aktif",
+          label: "En aktif",
+          content: <TeamsList rows={f.actives} unit="MAÇ" v={v} empty={`${where} için son 30 günde uygulamadaki takımlar arasında maç yok.`} />,
+        },
+      ]}
+    />
   );
 }
 
@@ -159,9 +188,9 @@ function PlayersTabs({ f, where }: { f: Featured; where: string }) {
   );
 }
 
-function LevelBody({ f, level, v }: { f: Featured; level: FeaturedLevel; v: Viewer }) {
-  const region = new URLSearchParams(level === "tr" ? { il: "" } : { il: v.city ?? "", ...(level === "ilce" && v.district ? { ilce: v.district } : {}) }).toString();
-  const where = levelLabel(level, v.city, v.district);
+function Body({ f, v }: { f: Featured; v: Viewer }) {
+  const region = new URLSearchParams({ il: v.city ?? "", ...(v.city && v.district ? { ilce: v.district } : {}) }).toString();
+  const where = regionLabel(v.city, v.district);
   return (
     <>
       <SectionTitle
@@ -177,7 +206,7 @@ function LevelBody({ f, level, v }: { f: Featured; level: FeaturedLevel; v: View
           Öne çıkan takımlar
         </span>
       </SectionTitle>
-      <TeamsList s={f.teams} where={where} v={v} />
+      <TeamsTabs f={f} where={where} v={v} />
 
       <SectionTitle
         action={
@@ -207,31 +236,23 @@ function Skeleton() {
 }
 
 async function FeaturedAsync(v: Viewer) {
-  const levels = availableLevels(v.city, v.district);
   // Hata ana sayfayı bozmasın: öne çıkanlar süs, asıl içerik değil
-  const all = await Promise.all(levels.map((l) => loadFeatured(v.city, v.district, l))).catch((e) => {
+  const f = await loadFeatured(v.city, v.district).catch((e) => {
     console.error("[öne çıkanlar]", e);
     return null;
   });
-  if (!all) return null;
-  if (levels.length === 1) return <LevelBody f={all[0]} level="tr" v={v} />;
-  return (
-    <div className="mt-8">
-      <HomeTabs
-        variant="chips"
-        label="Öne çıkanların bölgesi"
-        initial={levels[0]}
-        tabs={levels.map((l, i) => ({ key: l, label: levelLabel(l, v.city, v.district), content: <div className="[&>div:first-child]:mt-1"><LevelBody f={all[i]} level={l} v={v} /></div> }))}
-      />
-    </div>
-  );
+  return f ? <Body f={f} v={v} /> : null;
 }
 
-/** Ana sayfa "öne çıkanlar": ana içeriği bekletmesin diye akışla gelir; bölge seçici İlçe · İl · Türkiye */
+/** Ana sayfa "öne çıkanlar": ana içeriği bekletmesin diye akışla gelir; üstte bölge filtresi (il/ilçe/Türkiye) */
 export function FeaturedSections(props: Viewer) {
+  const key = `${props.city ?? ""}|${props.district ?? ""}`;
   return (
-    <Suspense fallback={<Skeleton />}>
-      <FeaturedAsync {...props} />
-    </Suspense>
+    <div className="mt-8">
+      <RegionFilter key={key} city={props.city ?? ""} district={props.district ?? ""} label={regionLabel(props.city, props.district)} />
+      <Suspense key={key} fallback={<Skeleton />}>
+        <FeaturedAsync {...props} />
+      </Suspense>
+    </div>
   );
 }

@@ -102,29 +102,25 @@ try {
   check("'Öne çıkan oyuncular' bölümü", t.includes("öne çıkan oyuncular"));
   check("öne çıkanlarda yüksek ratingli oyuncu", t.includes("zeki forvet"));
   check("gizlenen (kaleci, defans) öne çıkanlarda yok", !t.includes("zeki kaleci") && !t.includes("zeki defans"));
-  const chips = other.locator('[role="tablist"][aria-label="Öne çıkanların bölgesi"] [role="tab"]');
-  check("bölge çipleri İlçe · İl · Türkiye (Merkez, Edirne, Türkiye)", (await chips.allInnerTexts()).join("|") === "Merkez|Edirne|Türkiye");
-  const ilcePanel = other.locator('[role="tabpanel"]:visible').filter({ hasText: /öne çıkan oyuncular/i }).first();
-  const ilceText = (await ilcePanel.innerText()).toLowerCase();
-  // Defans gizlendi: Merkez'de 2 oyuncu kaldı (eski kural 3 kişi isteyip Türkiye'ye çıkıyordu: Lüleburgaz hatası)
-  check("ilçe panelinde hiçbir bölüm üst kademeye geçmez ('yeterli kayıt yok' yok)", !ilceText.includes("yeterli kayıt yok") && !ilceText.includes("gösteriliyor"));
-  check("ilçede takım yoksa boş durum ilçe adıyla", ilceText.includes("merkez için henüz sıralanacak takım yok"));
-  for (const tab of ["Haftanın MVP'leri", "Yükselenler"]) {
-    await ilcePanel.locator(`[role="tab"]:has-text("${tab}")`).click();
-    const tt = (await ilcePanel.innerText()).toLowerCase();
-    check(`${tab}: ilçede kalır, Türkiye'ye geçmez`, !tt.includes("yeterli kayıt yok") && tt.includes("merkez için"));
+  const filter = other.locator('button[aria-label="Öne çıkanların bölgesi"]');
+  check("bölge düğmesi profildeki ilçe ve il ile gelir", (await filter.innerText()).includes("Merkez, Edirne"));
+  check("ilçede takım yoksa boş durum ilçe adıyla", (await body(other)).includes("merkez, edirne için henüz sıralanacak takım yok"));
+  for (const tab of ["Galibiyet serisi", "En aktif", "Haftanın MVP'leri", "Yükselenler"]) {
+    await other.locator(`[role="tab"]:has-text("${tab}")`).click();
+    check(`${tab}: seçili bölgede kalır`, (await body(other)).includes("merkez, edirne için"));
   }
-  await ilcePanel.locator('[role="tab"]:has-text("En yüksek")').click();
-  const cards = ilcePanel.locator('[role="tabpanel"]:visible a[href^="/oyuncu/"]');
+  await other.locator('[role="tab"]:has-text("En yüksek")').click();
+  const cards = other.locator('[role="tabpanel"]:visible a[href^="/oyuncu/"]');
   const names = (await cards.allInnerTexts()).map((x) => x.toLowerCase());
   check("öne çıkan oyuncular yan yana kart (Merkez: forvet, orta)", names.length === 2 && names[0].includes("zeki forvet") && names[1].includes("zeki orta"));
   check("kart altında sıra ve maç sayısı", names[0].includes("#1") && names[0].includes("5 maç"));
   await other.screenshot({ path: `${SHOTS}/discover-home.png`, fullPage: true });
-  await chips.filter({ hasText: "Türkiye" }).click();
-  const trPanel = other.locator('[role="tabpanel"]:visible').filter({ hasText: /öne çıkan takımlar/i }).first();
-  check("Türkiye çipi seçilince Türkiye listesi görünür", await trPanel.isVisible());
-  await trPanel.locator('[role="tab"]:has-text("Yükselenler")').click();
-  check("oyuncu sekmesi değişir (Yükselenler)", (await trPanel.locator('[role="tab"][aria-selected="true"]').last().innerText()) === "Yükselenler");
+  await filter.click();
+  await other.selectOption('dialog select[aria-label="İl"]', "");
+  await other.click('dialog button:text-is("Göster")');
+  await other.waitForURL(/\?il=$/);
+  await other.waitForLoadState("networkidle");
+  check("Tüm Türkiye seçilince düğme güncellenir", (await filter.innerText()).includes("Tüm Türkiye"));
   await other.screenshot({ path: `${SHOTS}/discover-home-tr.png`, fullPage: true });
   const bad = await other.evaluate(() => document.documentElement.scrollWidth > innerWidth);
   check("yatay taşma yok (390px)", !bad);
