@@ -593,21 +593,23 @@ export default async function MatchPage({
       )}
 
       {match.status !== "gathering" && (
-        <LineupsSection
-          sides={
-            external
-              ? [
-                  { key: "me", title: myTeamName, groupId, size: match.team_size, formationId: match.formation_a, roster },
-                  ...(opp
-                    ? [{ key: "opp", title: opp.team.name, groupId: opp.team.id, size: opp.match.team_size, formationId: opp.match.formation_a, roster: opp.roster }]
-                    : []),
-                ]
-              : [
-                  { key: "A", title: TEAM.A.label, groupId, size: match.team_size, formationId: match.formation_a, roster: teams.A },
-                  { key: "B", title: TEAM.B.label, groupId, size: match.team_size, formationId: match.formation_b, roster: teams.B },
-                ]
-          }
-        />
+        <div id="dizilis" className="scroll-mt-4">
+          <LineupsSection
+            sides={
+              external
+                ? [
+                    { key: "me", title: myTeamName, groupId, size: match.team_size, formationId: match.formation_a, roster },
+                    ...(opp
+                      ? [{ key: "opp", title: opp.team.name, groupId: opp.team.id, size: opp.match.team_size, formationId: opp.match.formation_a, roster: opp.roster }]
+                      : []),
+                  ]
+                : [
+                    { key: "A", title: TEAM.A.label, groupId, size: match.team_size, formationId: match.formation_a, roster: teams.A },
+                    { key: "B", title: TEAM.B.label, groupId, size: match.team_size, formationId: match.formation_b, roster: teams.B },
+                  ]
+            }
+          />
+        </div>
       )}
 
       {match.status === "planned" && (

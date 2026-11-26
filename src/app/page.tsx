@@ -8,12 +8,12 @@ import { respondMatch } from "@/lib/match-actions";
 import { formatDate, POSITION_NAME, type Position } from "@/lib/data";
 import { formatRegion } from "@/lib/regions";
 import { DEFAULT_OVERALL } from "@/lib/rating";
-import { daysLeftLabel, rosterCapacity, tierProgress } from "@/lib/home";
+import { cardDateTime, daysLeftLabel, rosterCapacity, tierProgress } from "@/lib/home";
 import { ROLE_LABEL, canCreateMatch, getMemberships, type Membership } from "@/lib/teams-data";
 import { countIncoming } from "@/lib/challenges-data";
 import { FeaturedSections } from "@/components/FeaturedSections";
 import { ErrorNote, LinkButton, SectionTitle, cx } from "@/components/ui";
-import { JoinMatchCard, JoinMatchPopup } from "@/components/JoinMatchCard";
+import { UpcomingMatches, type UpcomingCard } from "@/components/home/UpcomingMatches";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { inList } from "@/lib/live";
 import { OvrBadge, initials, tierOf } from "@/components/PlayerCard";
@@ -179,6 +179,38 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
       <SubmitButton name="answer" value="no" variant="secondary" pendingLabel="…" className="min-h-10 flex-1">Gelemem</SubmitButton>
     </form>
   );
+
+  // Yaklaşan maç kartları: boş bilgiler de "belli değil" / "-" olarak görünür
+  const cards: UpcomingCard[] = upcoming.map((m) => {
+    const x = extras.get(m.id);
+    const capacity = m.capacity ?? rosterCapacity(m.team_size, m.kind);
+    const count = m.match_players.length;
+    const status: UpcomingCard["status"] =
+      m.status === "voting"
+        ? { label: "Oylama", icon: "how_to_vote", tone: "warn" }
+        : m.status === "played"
+          ? { label: "Skor onayı", icon: "scoreboard", tone: "warn" }
+          : m.inRoster
+            ? { label: "Kadrodasın", icon: "check_circle", tone: "on" }
+            : m.status === "gathering"
+              ? { label: "Toplanıyor", icon: "group_add", tone: "warn" }
+              : { label: "Planlandı", icon: null, tone: "neutral" };
+    const past = m.status === "voting" || m.status === "played";
+    return {
+      id: m.id,
+      href: `/g/${m.group_id}/m/${m.id}`,
+      status,
+      days: past ? "Oynandı" : (daysLeftLabel(m.played_at) ?? "Tarihi geçti"),
+      title: m.kind === "external" ? `${m.group.name} vs ${m.opponent_name ?? x?.pendingRival ?? "Belli değil"}` : `${m.group.name} · Kendi aramızda`,
+      ...cardDateTime(m.played_at, m.time_tbd),
+      venue: m.venue || "Saha: -",
+      fee: x?.fee ? feeText(x.fee) : "Ücret: -",
+      pendingRival: !m.opponent_name && !!x?.pendingRival,
+      count,
+      capacity,
+      tactics: m.status === "planned" && !!capacity && count >= capacity,
+    };
+  });
 
   // Yapılacaklar: önem sırasıyla (oy > kesinleştir > teklif > bekleyen istekler > çağrıldın > geliyor musun > adam aranıyor > bekleyiş)
   const actions: { key: string; node: ReactNode }[] = [
@@ -385,146 +417,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
         </section>
       )}
 
-      <SectionTitle
-        action={
-          upcoming.length > 0 && (
-            <JoinMatchPopup />
-          )
-        }
-      >
-        Yaklaşan maçlar
-      </SectionTitle>
-      {upcoming.length === 0 ? (
-        <JoinMatchCard />
-      ) : (
-          <div className="no-scrollbar -mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1">
-            {upcoming.map((m) => {
-              const days = daysLeftLabel(m.played_at);
-              const cap = m.capacity ?? rosterCapacity(m.team_size, m.kind);
-              const count = m.match_players.length;
-              const status =
-                m.status === "voting"
-                  ? { label: "Oylama", icon: "how_to_vote", warn: true }
-                  : m.status === "played"
-                    ? { label: "Skor onayı", icon: "scoreboard", warn: true }
-                    : m.status === "gathering" && !m.inRoster
-                      ? { label: `Toplanıyor ${count}/${cap ?? "?"}`, icon: "group_add", warn: true }
-                    : m.inRoster
-                      ? { label: "Kadrodasın", icon: "check_circle", warn: false, on: true }
-                      : { label: "Planlandı", icon: "event", warn: false };
-              return (
-                <Link
-                  key={m.id}
-                  href={`/g/${m.group_id}/m/${m.id}`}
-                  className={cx(
-                    "flex w-[17.5rem] shrink-0 snap-start flex-col gap-3 rounded-2xl border bg-gradient-to-br from-primary/10 via-surface-container to-surface-container p-3.5 transition",
-                    "on" in status ? "border-primary/35 shadow-[0_0_24px_-6px_rgba(34,197,94,0.3)]" : "border-line hover:border-primary/40",
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span
-                      className={cx(
-                        "inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 font-display text-[11px] font-bold tracking-wide",
-                        status.warn ? "bg-amber-400/15 text-amber-300" : "on" in status ? "bg-primary/15 text-primary" : "bg-surface-highest text-on-surface",
-                      )}
-                    >
-                      <Icon name={status.icon} fill className="text-[14px]" />
-                      {status.label}
-                    </span>
-                    {days && m.status === "planned" && <span className="whitespace-nowrap font-display text-xs font-bold text-primary">{days}</span>}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <TeamBadge name={m.group.name} color={m.group.color} size="sm" />
-                    <span className="min-w-0 truncate font-display text-[17px] font-bold leading-snug">
-                      {m.kind === "external" ? `${m.group.name} vs ${m.opponent_name ?? extras.get(m.id)?.pendingRival ?? "?"}` : m.group.name}
-                    </span>
-                  </div>
-                  <div className="space-y-1 text-[13px] text-on-surface-variant">
-                    <div className="flex items-center gap-1.5">
-                      <Icon name="calendar_today" className="text-[16px]" />
-                      {m.time_tbd ? matchWhen(m.played_at, true) : formatDate(m.played_at)}
-                      {m.kind !== "external" && " · kendi aramızda"}
-                    </div>
-                    {m.venue && (
-                      <div className="flex items-center gap-1.5">
-                        <Icon name="stadium" className="text-[16px]" />
-                        <span className="truncate">{m.venue}</span>
-                      </div>
-                    )}
-                    {!m.opponent_name && extras.get(m.id)?.pendingRival && (
-                      <div className="flex items-center gap-1.5 text-amber-300">
-                        <Icon name="hourglass_top" className="text-[16px]" />
-                        Rakip onay bekliyor
-                      </div>
-                    )}
-                    {extras.get(m.id)?.fee && (
-                      <div className="flex items-center gap-1.5">
-                        <Icon name="payments" className="text-[16px]" />
-                        {feeText(extras.get(m.id)!.fee!)}
-                      </div>
-                    )}
-                  </div>
-                  <div className="mt-auto">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-on-surface-variant">Kadro</span>
-                      <span className="font-display font-bold tabular-nums">{cap ? `${count}/${cap}` : `${count} oyuncu`}</span>
-                    </div>
-                    {cap && (
-                      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-surface-highest">
-                        <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, Math.round((count / cap) * 100))}%` }} />
-                      </div>
-                    )}
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-      )}
-
-      {/* Takımlarım / Gruplarım */}
-      <SectionTitle>Takımlarım ve gruplarım</SectionTitle>
-      <HomeTabs
-        initial={teams.length || tempTeams.length || !groups.length ? "takim" : "grup"}
-        tabs={[
-          {
-            key: "takim",
-            label: `Takımlar · ${teams.length}`,
-            content: (
-              <>
-                <JoinLinks kind="takim" />
-                {teams.length === 0 ? (
-                  <EmptyNote>Henüz bir takımda değilsin. Takımını kur ya da kaptanından davet kodunu iste ve &quot;Takıma katıl&quot; ile gir.</EmptyNote>
-                ) : (
-                  <div className="space-y-2">{teams.map((m) => <MembershipRow key={m.playerId} m={m} unread={unread.get(m.group.id) ?? 0} next={nextByGroup.get(m.group.id)} />)}</div>
-                )}
-                {tempTeams.length > 0 && (
-                  <details className="mt-2">
-                    <summary className="flex cursor-pointer items-center gap-1.5 py-2 text-sm text-on-surface-variant">
-                      <Icon name="hourglass_top" className="text-[16px]" />
-                      Geçici ve dağıtılmış takımlarım · {tempTeams.length}
-                    </summary>
-                    <div className="space-y-2">{tempTeams.map((m) => <MembershipRow key={m.playerId} m={m} unread={unread.get(m.group.id) ?? 0} next={nextByGroup.get(m.group.id)} />)}</div>
-                  </details>
-                )}
-              </>
-            ),
-          },
-          {
-            key: "grup",
-            label: `Gruplar · ${groups.length}`,
-            content: (
-              <>
-                <JoinLinks kind="grup" />
-                {groups.length === 0 ? (
-                  <EmptyNote>Gruplar arkadaş toplulukların içindir: kendi aranızda maç kurup puanlaşırsınız. Kurucudan davet kodunu iste ve &quot;Gruba katıl&quot; ile gir.</EmptyNote>
-                ) : (
-                  <div className="space-y-2">{groups.map((m) => <MembershipRow key={m.playerId} m={m} unread={unread.get(m.group.id) ?? 0} next={nextByGroup.get(m.group.id)} />)}</div>
-                )}
-              </>
-            ),
-          },
-        ]}
-      />
+      <UpcomingMatches matches={cards} />
 
       {/* Duruma göre eylem şeridi: yönettiğin yer varsa maç ayarla, hiçbir yerde değilsen kur/katıl */}
       {managed.length > 0 ? (
@@ -559,6 +452,51 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
         </section>
       ) : null}
 
+      {/* Takımlarım / Gruplarım */}
+      <SectionTitle>Takımlarım ve gruplarım</SectionTitle>
+      <HomeTabs
+        initial={teams.length || tempTeams.length || !groups.length ? "takim" : "grup"}
+        tabs={[
+          {
+            key: "takim",
+            label: `Takımlar · ${teams.length}`,
+            content: (
+              <>
+                {teams.length === 0 ? (
+                  <EmptyNote>Henüz bir takımda değilsin. Takımını kur ya da kaptanından davet kodunu iste ve &quot;Takıma katıl&quot; ile gir.</EmptyNote>
+                ) : (
+                  <div className="space-y-2">{teams.map((m) => <MembershipRow key={m.playerId} m={m} unread={unread.get(m.group.id) ?? 0} next={nextByGroup.get(m.group.id)} />)}</div>
+                )}
+                {tempTeams.length > 0 && (
+                  <details className="mt-2">
+                    <summary className="flex cursor-pointer items-center gap-1.5 py-2 text-sm text-on-surface-variant">
+                      <Icon name="hourglass_top" className="text-[16px]" />
+                      Geçici ve dağıtılmış takımlarım · {tempTeams.length}
+                    </summary>
+                    <div className="space-y-2">{tempTeams.map((m) => <MembershipRow key={m.playerId} m={m} unread={unread.get(m.group.id) ?? 0} next={nextByGroup.get(m.group.id)} />)}</div>
+                  </details>
+                )}
+                <JoinLinks kind="takim" />
+              </>
+            ),
+          },
+          {
+            key: "grup",
+            label: `Gruplar · ${groups.length}`,
+            content: (
+              <>
+                {groups.length === 0 ? (
+                  <EmptyNote>Gruplar arkadaş toplulukların içindir: kendi aranızda maç kurup puanlaşırsınız. Kurucudan davet kodunu iste ve &quot;Gruba katıl&quot; ile gir.</EmptyNote>
+                ) : (
+                  <div className="space-y-2">{groups.map((m) => <MembershipRow key={m.playerId} m={m} unread={unread.get(m.group.id) ?? 0} next={nextByGroup.get(m.group.id)} />)}</div>
+                )}
+                <JoinLinks kind="grup" />
+              </>
+            ),
+          },
+        ]}
+      />
+
       <FeaturedSections
         city={profile?.city ?? null}
         district={profile?.district ?? null}
@@ -571,12 +509,14 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
 
 function JoinLinks({ kind }: { kind: "takim" | "grup" }) {
   return (
-    <div className="-mt-1 mb-2 flex justify-end">
-      <LinkButton href={`/katil?tur=${kind}`} variant="ghost" className="min-h-8 px-2 text-primary">
-        {kind === "takim" ? "Takıma katıl" : "Gruba katıl"}
+    <div className="mt-3 grid grid-cols-2 gap-2">
+      <LinkButton href={kind === "takim" ? "/takim-kur" : "/grup-kur"} variant="secondary" className="w-full gap-1.5">
+        <Icon name="add" className="text-[18px]" />
+        {kind === "takim" ? "Takım kur" : "Grup kur"}
       </LinkButton>
-      <LinkButton href={kind === "takim" ? "/takim-kur" : "/grup-kur"} variant="ghost" className="min-h-8 px-2 text-primary">
-        + Kur
+      <LinkButton href={`/katil?tur=${kind}`} variant="secondary" className="w-full gap-1.5">
+        <Icon name="group_add" className="text-[18px]" />
+        {kind === "takim" ? "Takıma katıl" : "Gruba katıl"}
       </LinkButton>
     </div>
   );

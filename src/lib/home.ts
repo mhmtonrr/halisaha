@@ -42,3 +42,13 @@ export function rosterCapacity(teamSize: number | null | undefined, kind: string
   if (!teamSize) return null;
   return kind === "external" ? teamSize : teamSize * 2;
 }
+
+/** Maç kartındaki tarih ve saat (Türkiye saati): { date: "21 Kas Cmt", time: "21:00" } */
+export function cardDateTime(iso: string, timeTbd: boolean): { date: string; time: string } {
+  const d = new Date(iso);
+  const part = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("tr-TR", { timeZone: "Europe/Istanbul", ...o }).format(d);
+  return {
+    date: `${part({ day: "numeric", month: "short" })} ${part({ weekday: "short" })}`,
+    time: timeTbd ? "Saat belli değil" : part({ hour: "2-digit", minute: "2-digit" }),
+  };
+}
