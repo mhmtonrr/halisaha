@@ -393,7 +393,7 @@ export async function createTeam(fd: FormData) {
 export async function updateTeam(fd: FormData) {
   const { supabase } = await requireUser();
   const groupId = str(fd, "groupId");
-  const back = `/g/${groupId}/players`;
+  const back = `/g/${groupId}/players?bolum=bilgiler`;
   // Takım ve grup bilgileri aynı formla düzenlenir; grupta il isteğe bağlı
   const { data: g } = await supabase.from("groups").select("kind").eq("id", groupId).maybeSingle();
   const isTeam = g?.kind === "team";
@@ -415,7 +415,7 @@ export async function updateTeam(fd: FormData) {
     if (dErr) fail(back, rpcMessage(dErr, "Keşfet ayarı kaydedilemedi"));
   }
   revalidatePath(`/g/${groupId}`, "layout");
-  redirect(`${back}?saved=1`);
+  redirect(`${back}&saved=1`);
 }
 
 /** Depoya yüklenen logoyu takıma/gruba bağlar (adres sunucuda kurulur; yetki RLS'de) */
@@ -445,7 +445,7 @@ export async function setMemberRole(fd: FormData) {
   const { supabase, user } = await requireUser();
   const groupId = str(fd, "groupId");
   const playerId = str(fd, "playerId");
-  const back = `/g/${groupId}/players`;
+  const back = `/g/${groupId}/players?bolum=oyuncular`;
   const { error } = await supabase.rpc("set_member_role", {
     p_player_id: playerId,
     p_role: str(fd, "role"),
@@ -524,7 +524,7 @@ export async function addGuestToMatch(_prev: GuestState, fd: FormData): Promise<
 export async function claimGuest(fd: FormData) {
   const { supabase } = await requireUser();
   const groupId = str(fd, "groupId");
-  const back = `/g/${groupId}/players`;
+  const back = `/g/${groupId}/players?bolum=oyuncular`;
   const { error } = await supabase.rpc("claim_guest", {
     p_guest_id: str(fd, "guestId"),
     p_member_id: str(fd, "memberId"),
@@ -532,7 +532,7 @@ export async function claimGuest(fd: FormData) {
   if (error) fail(back, error.message);
   // Misafirin geçmişi artık hesap sahibine ait: genel rating'i tüm maçlarla yeniden hesapla
   await recomputePlayers([str(fd, "guestId")]);
-  revalidatePath(back);
+  revalidatePath(`/g/${groupId}/players`);
 }
 
 export async function setPosition(fd: FormData) {
@@ -544,7 +544,7 @@ export async function setPosition(fd: FormData) {
     p_player_id: playerId,
     p_position: position,
   });
-  if (error) fail(`/g/${groupId}/players`, error.message);
+  if (error) fail(`/g/${groupId}/players?bolum=oyuncular`, error.message);
   revalidatePath(`/g/${groupId}`, "layout");
 }
 
@@ -552,10 +552,9 @@ export async function setPosition(fd: FormData) {
 export async function removePlayer(fd: FormData) {
   const { supabase } = await requireUser();
   const groupId = str(fd, "groupId");
-  const back = `/g/${groupId}/players`;
+  const back = `/g/${groupId}/players?bolum=oyuncular`;
   const { error } = await supabase.rpc("remove_member", { p_player_id: str(fd, "playerId") });
   if (error) fail(back, rpcMessage(error, "Oyuncu çıkarılamadı"));
-  revalidatePath(back);
   revalidatePath(`/g/${groupId}`, "layout");
 }
 
@@ -640,7 +639,7 @@ export async function decideWithdrawal(fd: FormData) {
 export async function leaveGroup(fd: FormData) {
   const { supabase, user } = await requireUser();
   const groupId = str(fd, "groupId");
-  const back = `/g/${groupId}/players`;
+  const back = `/g/${groupId}/players?bolum=ayril`;
   const [{ data: profile }, { data: group }] = await Promise.all([
     supabase.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
     supabase.from("groups").select("name").eq("id", groupId).maybeSingle(),
@@ -671,7 +670,7 @@ export async function disbandTeam(fd: FormData) {
   const { supabase } = await requireUser();
   const groupId = str(fd, "groupId");
   const { data, error } = await supabase.rpc("disband_team", { p_group: groupId });
-  if (error) fail(`/g/${groupId}/players`, rpcMessage(error, "Takım dağıtılamadı"));
+  if (error) fail(`/g/${groupId}/players?bolum=dagit`, rpcMessage(error, "Takım dağıtılamadı"));
   if (data === "deleted") removeDeletedGroupLogo(groupId);
   revalidatePath("/", "layout");
   redirect(data === "deleted" ? "/" : `/g/${groupId}`);
@@ -702,7 +701,7 @@ export async function setGroupMuted(fd: FormData) {
 export async function deleteGroup(fd: FormData) {
   const { supabase, user } = await requireUser();
   const groupId = str(fd, "groupId");
-  const back = `/g/${groupId}/players`;
+  const back = `/g/${groupId}/players?bolum=ayril`;
   const { data: group } = await supabase.from("groups").select("name").eq("id", groupId).maybeSingle();
   if (!group) fail(back, "Grup bulunamadı");
   if (str(fd, "confirm").toLocaleLowerCase("tr") !== group.name.toLocaleLowerCase("tr")) {

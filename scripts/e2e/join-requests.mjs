@@ -56,7 +56,7 @@ try {
 
   // 2) Kurucu Grubu yönet'te "Keşfet'te görünsün"ü açar (istek varsayılan açık)
   const KP = await login(K);
-  await KP.goto(`${BASE}/g/${G}/players`);
+  await KP.goto(`${BASE}/g/${G}/players?bolum=bilgiler`);
   check("ayar kutuları görünür", (await KP.locator("text=Keşfet'te görünsün").count()) === 1 && (await KP.locator('input[name="requestsOpen"]').isChecked()));
   await KP.locator('input[name="discoverable"]').check();
   await KP.screenshot({ path: `${SHOTS}/join-01-ayar.png`, fullPage: true });

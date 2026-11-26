@@ -43,7 +43,7 @@ function Option({ on, label, onClick, children }: { on: boolean; label: string; 
 /**
  * Logo seçimi (formun `logo` alanı): otomatik arma, arma yap veya hazır logo; canlı önizleme.
  * Görsel yükleme formdan bağımsız, hemen kaydedilir (LogoUploader).
- * Ad ve takım rengi aynı formun `name` / `color` alanlarından okunur.
+ * Ad ve birinci renk aynı formun `name` / `color` alanlarından okunur.
  */
 export function LogoPicker({ id, logo, name, color }: { id?: string; logo: string | null; name: string; color: string }) {
   const root = useRef<HTMLDivElement>(null);
@@ -125,7 +125,7 @@ export function LogoPicker({ id, logo, name, color }: { id?: string; logo: strin
 
       {mode === "auto" && (
         <p className="text-center text-xs text-muted">
-          {id ? "Takım rengi ve baş harflerle hazırlanan arma." : "Kurulunca takım rengi ve baş harflerle özel bir arma verilir."} İstediğin zaman
+          {id ? "Birinci renk ve baş harflerle hazırlanan arma." : "Kurulunca birinci renk ve baş harflerle özel bir arma verilir."} İstediğin zaman
           değiştirebilirsin.
         </p>
       )}

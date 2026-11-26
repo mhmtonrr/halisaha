@@ -169,7 +169,7 @@ describe("üye ayrıldı metni", () => {
     expect(c.title).toContain("ayrıldı");
     expect(c.body).toContain("Ali Veli");
     expect(c.body).toContain("Cuma Halısaha");
-    expect(c.url).toBe("/g/g1/players");
+    expect(c.url).toBe("/g/g1/players?bolum=oyuncular");
   });
 });
 

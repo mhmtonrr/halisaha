@@ -117,7 +117,7 @@ function GroupSection({
                 { href: `/g/${g.id}/istatistik`, label: "Takım istatistikleri" },
               ]
             : []),
-          { href: `/g/${g.id}/players`, label: "Oyuncular" },
+          { href: `/g/${g.id}/players?bolum=oyuncular`, label: g.kind === "team" ? "Oyuncular" : "Üyeler" },
         ];
         return (
           <div key={g.id} className="rounded-xl">

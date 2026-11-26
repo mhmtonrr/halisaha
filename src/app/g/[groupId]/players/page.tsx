@@ -1,12 +1,12 @@
 import { Icon } from "@/components/Icon";
 import { LiveRefresh } from "@/components/LiveRefresh";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { claimGuest, deleteGroup, disbandTeam, inviteToGroup, leaveGroup, openDm, removePlayer, setMemberRole, setPosition, updateTeam } from "@/lib/actions";
 import { getGroupSummaries, isGuestLike, isSquadMember, type Position } from "@/lib/data";
 import { ROLE_LABEL, type GroupKind, type Role } from "@/lib/teams-data";
-import { Badge, Button, Card, ErrorNote, Header, SectionTitle } from "@/components/ui";
+import { Badge, Button, cx, ErrorNote, Header, LinkButton } from "@/components/ui";
+import { AutoOpenDetails } from "@/components/AutoOpenDetails";
 import { OvrBadge, PositionChip } from "@/components/PlayerCard";
 import { TeamFields } from "@/components/TeamFields";
 
@@ -18,15 +18,67 @@ const POSITION_OPTIONS: { value: Position | ""; label: string }[] = [
   { value: "FWD", label: "Forvet" },
 ];
 
-function PositionSelect({ name, defaultValue }: { name: string; defaultValue?: string | null }) {
+/** Satır içi işlem düğmesi */
+const ACTION = "inline-flex min-h-10 items-center gap-1.5 rounded-full border border-line px-3.5 text-xs font-semibold transition";
+const SELECT = "min-h-11 min-w-0 flex-1 rounded-xl border border-line bg-pitch-950 px-2 text-sm";
+
+/** Sayfanın açılır kapanır ana başlığı; işlemden dönülen bölüm (`?bolum=`) açık gelir */
+function Section({ open, icon, title, count, danger, children }: { open: boolean; icon: string; title: string; count?: number; danger?: boolean; children: React.ReactNode }) {
   return (
-    <select name={name} defaultValue={defaultValue ?? ""} className="min-h-11 rounded-xl border border-line bg-pitch-950 px-2 text-sm">
-      {POSITION_OPTIONS.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
-    </select>
+    <AutoOpenDetails
+      openInitially={open}
+      className="group/section mb-3 overflow-hidden rounded-xl border border-line bg-surface-container shadow-sm"
+      summaryClassName="flex min-h-14 cursor-pointer list-none items-center gap-3 px-4 transition hover:bg-surface-high [&::-webkit-details-marker]:hidden"
+      summary={
+        <>
+          <Icon name={icon} className={cx("text-[22px]", danger ? "text-red-300" : "text-primary")} />
+          <h2 className={cx("min-w-0 flex-1 truncate font-display text-sm font-bold uppercase tracking-wider", danger && "text-red-300")}>{title}</h2>
+          {count !== undefined && <Badge>{count}</Badge>}
+          <Icon name="expand_more" className="text-[22px] text-on-surface-variant transition group-open/section:rotate-180" />
+        </>
+      }
+    >
+      <div className="border-t border-line">{children}</div>
+    </AutoOpenDetails>
+  );
+}
+
+/** Oyuncu satırı: dokununca o kişiyle ilgili işlemler açılır */
+function PlayerRow({ player, meta, children }: { player: { overall: number; display_name: string; position: Position | null }; meta: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <li>
+      <details className="group/row">
+        <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 transition hover:bg-surface-high [&::-webkit-details-marker]:hidden">
+          <OvrBadge overall={player.overall} />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 font-medium">
+              <span className="truncate">{player.display_name}</span>
+              <PositionChip position={player.position} />
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-xs text-muted">{meta}</div>
+          </div>
+          <Icon name="expand_more" className="text-[20px] text-on-surface-variant transition group-open/row:rotate-180" />
+        </summary>
+        <div className="space-y-3 bg-surface-low px-4 py-3">{children}</div>
+      </details>
+    </li>
+  );
+}
+
+function SubTitle({ children }: { children: React.ReactNode }) {
+  return <h3 className="t-label-caps border-b border-line bg-surface-high/50 px-4 py-2 uppercase text-on-surface-variant">{children}</h3>;
+}
+
+function FieldTitle({ children }: { children: React.ReactNode }) {
+  return <p className="t-label-caps mb-1.5 uppercase text-on-surface-variant">{children}</p>;
+}
+
+function ProfileLink({ href }: { href: string }) {
+  return (
+    <LinkButton href={href} variant="secondary" className="min-h-10 gap-1.5 px-3.5 text-xs">
+      <Icon name="person" className="text-[18px]" />
+      Profil
+    </LinkButton>
   );
 }
 
@@ -36,13 +88,20 @@ function RoleButton({ groupId, playerId, role, children, danger }: { groupId: st
       <input type="hidden" name="groupId" value={groupId} />
       <input type="hidden" name="playerId" value={playerId} />
       <input type="hidden" name="role" value={role} />
-      <button
-        className={
-          "rounded-lg px-2 py-1 text-xs " +
-          (danger ? "text-amber-300 hover:bg-amber-400/10" : "text-accent hover:bg-accent/10")
-        }
-      >
-        {children}
+      <button className={cx(ACTION, danger ? "border-amber-400/40 text-amber-300 hover:bg-amber-400/10" : "border-accent/40 text-accent hover:bg-accent/10")}>{children}</button>
+    </form>
+  );
+}
+
+/** Yetkilinin üyeyi/misafiri çıkarma düğmesi */
+function RemoveButton({ groupId, playerId, label }: { groupId: string; playerId: string; label: string }) {
+  return (
+    <form action={removePlayer} className="border-t border-line pt-3">
+      <input type="hidden" name="groupId" value={groupId} />
+      <input type="hidden" name="playerId" value={playerId} />
+      <button className={cx(ACTION, "border-red-900 text-red-300 hover:bg-red-950")}>
+        <Icon name="person_remove" className="text-[18px]" />
+        {label}
       </button>
     </form>
   );
@@ -55,10 +114,10 @@ export default async function ManagePage({
   searchParams,
 }: {
   params: Promise<{ groupId: string }>;
-  searchParams: Promise<{ error?: string; saved?: string; davet?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; davet?: string; bolum?: string }>;
 }) {
   const { groupId } = await params;
-  const { error, saved, davet } = await searchParams;
+  const { error, saved, davet, bolum } = await searchParams;
   const { supabase, user } = await requireUser();
 
   const { data: group } = await supabase
@@ -100,73 +159,65 @@ export default async function ManagePage({
       {saved && <p className="mb-4 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">Kaydedildi ✓</p>}
       {davet && <p className="mb-4 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">Takım daveti gönderildi ✓ Kabul edince asıl kadroya geçer.</p>}
 
-      <Card className="mb-4 text-sm text-muted">
-        <b className="text-white">{labels.captain}</b> rolleri yönetir ve {isTeam ? "kaptanlığı" : "kuruculuğu"} devredebilir.{" "}
-        <b className="text-white">{labels.admin}</b>ler maç kurar, tüm maçları ve üyeleri yönetir (mevki, çıkarma).{" "}
-        <b className="text-white">{labels.organizer}</b>ler maç ve maç çağrısı açar, sadece kendi kurduğu maçı yönetir (kadro, misafir, sonuç); üyelere dokunamaz.{" "}
-        <b className="text-white">{labels.member}</b>ler oynar ve oy verir.
-      </Card>
-
-      <Card className="p-0">
-        <ul className="divide-y divide-line">
-          {sorted.map((p) => {
-            const role = p.role as Role;
-            return (
-              <li key={p.id} className="px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <OvrBadge overall={p.overall} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 truncate font-medium">
-                      <Link href={`/g/${groupId}/p/${p.id}`} className="truncate hover:underline">
-                        {p.display_name}
-                      </Link>{" "}
-                      <PositionChip position={p.position} />
-                    </div>
-                    <div className="flex flex-wrap items-center gap-1 pt-0.5">
+      <div className="mt-1 pb-4">
+        <Section open={bolum === "oyuncular" || !!davet} icon="group" title={isTeam ? "Oyuncular" : "Üyeler"} count={squadCount}>
+          <SubTitle>
+            {isTeam ? "Kadro" : "Üyeler"} · {squadCount}
+          </SubTitle>
+          <ul className="divide-y divide-line">
+            {sorted.map((p) => {
+              const role = p.role as Role;
+              const isMe = p.id === me?.id;
+              const canSetRole = isCaptain && !!p.user_id && !isMe && role !== "captain";
+              return (
+                <PlayerRow
+                  key={p.id}
+                  player={p}
+                  meta={
+                    <>
                       {role !== "member" && <Badge tone={role === "captain" ? "warn" : "accent"}>{labels[role]}</Badge>}
-                      <span className="text-xs text-muted">{p.totals.played} maç</span>
-                    </div>
+                      <span>
+                        {p.totals.played} maç{isMe && " · Sen"}
+                      </span>
+                    </>
+                  }
+                >
+                  <div className="flex flex-wrap gap-2">
+                    <ProfileLink href={`/g/${groupId}/p/${p.id}`} />
+                    {p.user_id && !isMe && (
+                      <form action={openDm}>
+                        <input type="hidden" name="userId" value={p.user_id} />
+                        <button aria-label={`${p.display_name} ile mesajlaş`} className={cx(ACTION, "hover:text-accent")}>
+                          <Icon name="chat" className="text-[18px]" />
+                          Mesaj
+                        </button>
+                      </form>
+                    )}
                   </div>
-                  {p.user_id && p.id !== me?.id && (
-                    <form action={openDm}>
-                      <input type="hidden" name="userId" value={p.user_id} />
-                      <button aria-label={`${p.display_name} ile mesajlaş`} className="rounded-lg bg-pitch-800 px-2.5 py-1.5 text-sm hover:text-accent">
-                        <Icon name="chat" className="text-[18px]" />
-                      </button>
-                    </form>
-                  )}
-                  {canRemove(p) && (
-                    <form action={removePlayer}>
-                      <input type="hidden" name="groupId" value={groupId} />
-                      <input type="hidden" name="playerId" value={p.id} />
-                      <button className="rounded-lg px-2 py-1 text-xs text-muted hover:bg-red-950 hover:text-red-300">Çıkar</button>
-                    </form>
-                  )}
-                </div>
-                {isCaptain && p.user_id && p.id !== me?.id && (
-                  <div className="mt-2 flex flex-wrap justify-end gap-1">
-                    {role !== "organizer" && role !== "captain" && (
-                      <RoleButton groupId={groupId} playerId={p.id} role="organizer">
-                        {labels.organizer} yap
-                      </RoleButton>
-                    )}
-                    {role !== "admin" && role !== "captain" && (
-                      <RoleButton groupId={groupId} playerId={p.id} role="admin">
-                        {labels.admin} yap
-                      </RoleButton>
-                    )}
-                    {(role === "admin" || role === "organizer") && (
-                      <RoleButton groupId={groupId} playerId={p.id} role="member" danger>
-                        Yetkiyi al
-                      </RoleButton>
-                    )}
-                    {role !== "captain" && (
-                      <details className="relative">
-                        <summary className="cursor-pointer list-none rounded-lg px-2 py-1 text-xs text-muted hover:bg-pitch-800">
-                          {isTeam ? "Kaptanlığı devret" : "Kuruculuğu devret"}…
-                        </summary>
-                        <div className="absolute right-0 z-10 mt-1 w-60 rounded-xl border border-line bg-pitch-900 p-3 text-xs shadow-xl">
-                          <p className="mb-2 text-muted">
+                  {canSetRole && (
+                    <div>
+                      <FieldTitle>Yetki</FieldTitle>
+                      <div className="flex flex-wrap gap-2">
+                        {role !== "admin" && (
+                          <RoleButton groupId={groupId} playerId={p.id} role="admin">
+                            {labels.admin} yap
+                          </RoleButton>
+                        )}
+                        {role !== "organizer" && (
+                          <RoleButton groupId={groupId} playerId={p.id} role="organizer">
+                            {labels.organizer} yap
+                          </RoleButton>
+                        )}
+                        {role !== "member" && (
+                          <RoleButton groupId={groupId} playerId={p.id} role="member" danger>
+                            Yetkiyi al
+                          </RoleButton>
+                        )}
+                      </div>
+                      <details className="mt-3">
+                        <summary className="cursor-pointer text-xs text-amber-300">{isTeam ? "Kaptanlığı devret" : "Kuruculuğu devret"}…</summary>
+                        <div className="mt-2 space-y-2 text-xs">
+                          <p className="text-muted">
                             {p.display_name} {labels.captain.toLocaleLowerCase("tr")} olacak, sen {labels.admin.toLocaleLowerCase("tr")} olacaksın. Geri alamazsın.
                           </p>
                           <RoleButton groupId={groupId} playerId={p.id} role="captain" danger>
@@ -174,185 +225,166 @@ export default async function ManagePage({
                           </RoleButton>
                         </div>
                       </details>
-                    )}
-                  </div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      </Card>
-
-      {guests.length > 0 && (
-        <>
-          <SectionTitle>Misafirler · {guests.length}</SectionTitle>
-          <Card className="p-0">
-            <ul className="divide-y divide-line">
-              {guests.map((p) => (
-                <li key={p.id} className="flex items-center gap-3 px-4 py-3">
-                  <OvrBadge overall={p.overall} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 truncate font-medium">
-                      <Link href={`/g/${groupId}/p/${p.id}`} className="truncate hover:underline">
-                        {p.display_name}
-                      </Link>{" "}
-                      <PositionChip position={p.position} />
                     </div>
-                    <div className="flex flex-wrap items-center gap-1 pt-0.5">
-                      <Badge>{p.is_loan ? "Ödünç" : "Misafir"}</Badge>
-                      <span className="text-xs text-muted">
-                        {p.totals.played} maç · {p.totals.goals} gol · {p.totals.assists} asist
-                      </span>
-                    </div>
-                  </div>
-                  {canManage && isTeam && p.is_loan && p.user_id && (
-                    // Ödünç oynamış oyuncuyu takıma davet et (kabul edince asıl kadroya geçer)
-                    <form action={inviteToGroup}>
-                      <input type="hidden" name="groupId" value={groupId} />
-                      <input type="hidden" name="userId" value={p.user_id} />
-                      <input type="hidden" name="back" value={`/g/${groupId}/players`} />
-                      <button className="rounded-lg border border-accent/40 px-2 py-1 text-xs text-accent hover:bg-accent/10">Takıma davet et</button>
-                    </form>
                   )}
-                  {canRemove(p) && (
-                    <form action={removePlayer}>
-                      <input type="hidden" name="groupId" value={groupId} />
-                      <input type="hidden" name="playerId" value={p.id} />
-                      <button className="rounded-lg px-2 py-1 text-xs text-muted hover:bg-red-950 hover:text-red-300">Çıkar</button>
-                    </form>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </Card>
-          <p className="mt-2 text-center text-xs text-muted">
-            Misafirler asıl kadroya, takım puanına ve sıralamalara girmez; maça gelince kadroya eklenirler.
-          </p>
-        </>
-      )}
+                  {canRemove(p) && <RemoveButton groupId={groupId} playerId={p.id} label={isTeam ? "Takımdan çıkar" : "Gruptan çıkar"} />}
+                </PlayerRow>
+              );
+            })}
+          </ul>
 
-      {canManage && (
-        <>
-          <SectionTitle>{isTeam ? "Takım bilgileri" : "Grup bilgileri"}</SectionTitle>
-          <form action={updateTeam} className="space-y-3">
-            <input type="hidden" name="groupId" value={groupId} />
-            <Card className="space-y-4">
-              <TeamFields values={group} kind={kind} />
-            </Card>
-            {/* Keşfet ve katılma isteği (0044); takımlar Keşfet'te zaten görünür */}
-            <Card className="space-y-3">
-              <input type="hidden" name="discovery" value="1" />
-              {!isTeam && (
-                <label className="flex items-start gap-3 text-sm">
-                  <input type="checkbox" name="discoverable" defaultChecked={group.discoverable} className="mt-1 accent-accent" />
-                  <span>
-                    <span className="font-semibold">Keşfet&apos;te görünsün</span>
-                    <span className="block text-xs text-on-surface-variant">Bölgendeki oyuncular grubu Keşfet&apos;te görür (üyeler ve sohbet görünmez).</span>
-                  </span>
-                </label>
-              )}
-              <label className="flex items-start gap-3 text-sm">
-                <input type="checkbox" name="requestsOpen" defaultChecked={group.join_requests_open ?? !isTeam} className="mt-1 accent-accent" />
-                <span>
-                  <span className="font-semibold">Katılma isteği alınsın</span>
-                  <span className="block text-xs text-on-surface-variant">
-                    {isTeam ? "Oyuncular Keşfet'ten ve takım sayfasından istek gönderir" : "Keşfet'te görünüyorsa oyuncular istek gönderir"}; kabul ya da ret senin elinde. Davet bağlantısı yine çalışır.
-                  </span>
-                </span>
-              </label>
-            </Card>
-            <Button variant="secondary" className="w-full">
-              Kaydet
-            </Button>
-          </form>
-        </>
-      )}
-
-      {canManage && (
-        <>
           {guests.length > 0 && (
             <>
-              <SectionTitle>Misafirlerin mevkisi</SectionTitle>
-              <Card className="space-y-2">
-                {guests.map((g) => (
-                  <form key={g.id} action={setPosition} className="flex items-center gap-2">
-                    <input type="hidden" name="groupId" value={groupId} />
-                    <input type="hidden" name="playerId" value={g.id} />
-                    <span className="min-w-0 flex-1 truncate text-sm">{g.display_name}</span>
-                    <PositionSelect name="position" defaultValue={g.position} />
-                    <Button variant="secondary">Kaydet</Button>
-                  </form>
+              <SubTitle>Misafirler · {guests.length}</SubTitle>
+              <ul className="divide-y divide-line">
+                {guests.map((p) => (
+                  <PlayerRow
+                    key={p.id}
+                    player={p}
+                    meta={
+                      <>
+                        <Badge>{p.is_loan ? "Ödünç" : "Misafir"}</Badge>
+                        <span>
+                          {p.totals.played} maç · {p.totals.goals} gol · {p.totals.assists} asist
+                        </span>
+                      </>
+                    }
+                  >
+                    <div className="flex flex-wrap gap-2">
+                      <ProfileLink href={`/g/${groupId}/p/${p.id}`} />
+                      {canManage && isTeam && p.is_loan && p.user_id && (
+                        // Ödünç oynamış oyuncuyu takıma davet et (kabul edince asıl kadroya geçer)
+                        <form action={inviteToGroup}>
+                          <input type="hidden" name="groupId" value={groupId} />
+                          <input type="hidden" name="userId" value={p.user_id} />
+                          <input type="hidden" name="back" value={`/g/${groupId}/players?bolum=oyuncular`} />
+                          <button className={cx(ACTION, "border-accent/40 text-accent hover:bg-accent/10")}>Takıma davet et</button>
+                        </form>
+                      )}
+                    </div>
+                    {canManage && (
+                      <form action={setPosition}>
+                        <input type="hidden" name="groupId" value={groupId} />
+                        <input type="hidden" name="playerId" value={p.id} />
+                        <FieldTitle>Mevki</FieldTitle>
+                        <div className="flex gap-2">
+                          <select name="position" aria-label="Mevki" defaultValue={p.position ?? ""} className={SELECT}>
+                            {POSITION_OPTIONS.map((o) => (
+                              <option key={o.value} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </select>
+                          <Button variant="secondary">Kaydet</Button>
+                        </div>
+                      </form>
+                    )}
+                    {canManage && !p.user_id && claimable.length > 0 && (
+                      <form action={claimGuest}>
+                        <input type="hidden" name="groupId" value={groupId} />
+                        <input type="hidden" name="guestId" value={p.id} />
+                        <FieldTitle>Misafir geçmişini aktar</FieldTitle>
+                        <div className="flex gap-2">
+                          <select name="memberId" aria-label="Aktarılacak hesap" className={SELECT}>
+                            {claimable.map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.display_name}
+                              </option>
+                            ))}
+                          </select>
+                          <Button variant="secondary">Aktar</Button>
+                        </div>
+                        <p className="mt-1.5 text-xs text-muted">
+                          Misafir sonradan katıldıysa maçları ve puanları seçtiğin hesaba geçer. Sadece henüz maçı olmayan üyeler listelenir.
+                        </p>
+                      </form>
+                    )}
+                    {canRemove(p) && <RemoveButton groupId={groupId} playerId={p.id} label="Misafiri çıkar" />}
+                  </PlayerRow>
                 ))}
-              </Card>
+              </ul>
+              <p className="border-t border-line px-4 py-3 text-xs text-muted">
+                Misafirler asıl kadroya, takım puanına ve sıralamalara girmez; maça gelince kadroya eklenirler.
+              </p>
             </>
           )}
 
-          {guests.length > 0 && claimable.length > 0 && (
-            <>
-              <SectionTitle>Misafir geçmişini aktar</SectionTitle>
-              <Card>
-                <p className="mb-3 text-sm text-muted">
-                  Misafir sonradan katıldıysa, misafir kaydındaki maçlarını ve puanlarını onun hesabına aktar.
-                </p>
-                <form action={claimGuest} className="space-y-2">
-                  <input type="hidden" name="groupId" value={groupId} />
-                  <select name="guestId" className="min-h-11 w-full rounded-xl border border-line bg-pitch-950 px-2 text-sm">
-                    {guests.map((g) => (
-                      <option key={g.id} value={g.id}>
-                        Misafir: {g.display_name}
-                      </option>
-                    ))}
-                  </select>
-                  <select name="memberId" className="min-h-11 w-full rounded-xl border border-line bg-pitch-950 px-2 text-sm">
-                    {claimable.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        Hesap: {m.display_name}
-                      </option>
-                    ))}
-                  </select>
-                  <Button variant="secondary" className="w-full">
-                    Aktar
-                  </Button>
-                </form>
-              </Card>
-            </>
-          )}
-        </>
-      )}
+          <details className="border-t border-line">
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-xs font-semibold text-primary [&::-webkit-details-marker]:hidden">
+              <Icon name="help" className="text-[18px]" />
+              Roller ne yapabilir?
+            </summary>
+            <ul className="space-y-1.5 px-4 pb-4 text-xs text-muted">
+              <li>
+                <b className="text-white">{labels.captain}:</b> rolleri yönetir ve {isTeam ? "kaptanlığı" : "kuruculuğu"} devredebilir.
+              </li>
+              <li>
+                <b className="text-white">{labels.admin}:</b> maç kurar, tüm maçları ve üyeleri yönetir (mevki, çıkarma).
+              </li>
+              <li>
+                <b className="text-white">{labels.organizer}:</b> maç ve maç çağrısı açar, sadece kendi kurduğu maçı yönetir (kadro, misafir, sonuç); üyelere dokunamaz.
+              </li>
+              <li>
+                <b className="text-white">{labels.member}:</b> oynar ve oy verir.
+              </li>
+            </ul>
+          </details>
+        </Section>
 
-      {isTeam && isCaptain && !group.archived_at && (
-        <>
-          <SectionTitle>Takımı dağıt</SectionTitle>
-          <Card>
-            <details>
-              <summary className="cursor-pointer text-sm text-red-300">Takımı dağıt…</summary>
-              <form action={disbandTeam} className="mt-3 space-y-3">
+        {canManage && (
+          <Section open={bolum === "bilgiler" || !!saved} icon="edit" title={isTeam ? "Takım bilgileri" : "Grup bilgileri"}>
+            <form action={updateTeam} className="space-y-4 p-4">
+              <input type="hidden" name="groupId" value={groupId} />
+              <TeamFields values={group} kind={kind} />
+              {/* Keşfet ve katılma isteği (0044); takımlar Keşfet'te zaten görünür */}
+              <div className="space-y-3 border-t border-line pt-4">
+                <input type="hidden" name="discovery" value="1" />
+                {!isTeam && (
+                  <label className="flex items-start gap-3 text-sm">
+                    <input type="checkbox" name="discoverable" defaultChecked={group.discoverable} className="mt-1 accent-accent" />
+                    <span>
+                      <span className="font-semibold">Keşfet&apos;te görünsün</span>
+                      <span className="block text-xs text-on-surface-variant">Bölgendeki oyuncular grubu Keşfet&apos;te görür (üyeler ve sohbet görünmez).</span>
+                    </span>
+                  </label>
+                )}
+                <label className="flex items-start gap-3 text-sm">
+                  <input type="checkbox" name="requestsOpen" defaultChecked={group.join_requests_open ?? !isTeam} className="mt-1 accent-accent" />
+                  <span>
+                    <span className="font-semibold">Katılma isteği alınsın</span>
+                    <span className="block text-xs text-on-surface-variant">
+                      {isTeam ? "Oyuncular Keşfet'ten ve takım sayfasından istek gönderir" : "Keşfet'te görünüyorsa oyuncular istek gönderir"}; kabul ya da ret senin elinde. Davet bağlantısı yine çalışır.
+                    </span>
+                  </span>
+                </label>
+              </div>
+              <Button className="w-full">Kaydet</Button>
+            </form>
+          </Section>
+        )}
+
+        {me && (
+          <Section open={bolum === "ayril"} icon="logout" title={isTeam ? "Takımdan ayrıl" : "Gruptan ayrıl"} danger>
+            {!isCaptain ? (
+              <form action={leaveGroup} className="space-y-3 p-4">
                 <input type="hidden" name="groupId" value={groupId} />
                 <ul className="list-disc space-y-1 pl-5 text-xs text-muted">
-                  <li>Oynanmış maçı varsa takım arşivlenir: maç geçmişi ve puanlar kalır, yeni maç/teklif/katılım kapanır. İstersen sonra yeniden açarsın.</li>
-                  <li>Hiç maçı yoksa takım tamamen silinir.</li>
-                  <li>Planlı veya oylaması süren maç varsa önce o bitmeli ya da iptal edilmeli.</li>
+                  <li>Geçmiş maçların, oyların ve rating&apos;in korunur; istatistiklerin yerinde kalır.</li>
+                  <li>Gelecekteki maç kadrolarından ve açık çağrılardan çıkarılırsın.</li>
+                  <li>{isTeam ? "Takım sohbeti ve teklifler" : "Grup sohbeti ve maçlar"} sana kapanır; davet koduyla istediğin zaman geri dönebilirsin.</li>
+                  <li>Oylaması süren bir maçın varsa oylama bitince ayrılabilirsin.</li>
                 </ul>
                 <Button variant="danger" className="w-full">
-                  Takımı dağıt
+                  Evet, {isTeam ? "takımdan" : "gruptan"} ayrıl
                 </Button>
               </form>
-            </details>
-          </Card>
-        </>
-      )}
-
-      {me && (
-        <>
-          <SectionTitle>{isTeam ? "Takımdan ayrıl" : "Gruptan ayrıl"}</SectionTitle>
-          {isCaptain ? (
-            squadCount > 1 ? (
-              <Card className="text-sm text-muted">
-                {isTeam ? "Kaptan" : "Kurucu"} olarak ayrılmadan önce {isTeam ? "kaptanlığı" : "kuruculuğu"} listeden birine devretmelisin (üyenin altındaki
-                “{isTeam ? "Kaptanlığı devret" : "Kuruculuğu devret"}…” düğmesi). Devrettikten sonra bu bölümden ayrılabilirsin.
-              </Card>
+            ) : squadCount > 1 ? (
+              <p className="p-4 text-sm text-muted">
+                {isTeam ? "Kaptan" : "Kurucu"} olarak ayrılmadan önce {isTeam ? "kaptanlığı" : "kuruculuğu"} listeden birine devretmelisin ({isTeam ? "Oyuncular" : "Üyeler"}{" "}
+                başlığında kişiye dokun, “{isTeam ? "Kaptanlığı devret" : "Kuruculuğu devret"}…”). Devrettikten sonra bu bölümden ayrılabilirsin.
+              </p>
             ) : (
-              <Card className="space-y-3">
+              <div className="space-y-3 p-4">
                 <p className="text-sm text-muted">
                   {isTeam ? "Takımda" : "Grupta"} tek üye sensin, devredecek kimse yok. İstersen {isTeam ? "takımı" : "grubu"} tamamen silebilirsin: tüm maçlar, oylar ve sohbet
                   geri dönüşsüz silinir; genel rating&apos;in diğer maçlarından yeniden hesaplanır.
@@ -374,29 +406,27 @@ export default async function ManagePage({
                     </Button>
                   </form>
                 </details>
-              </Card>
-            )
-          ) : (
-            <Card>
-              <details>
-                <summary className="cursor-pointer text-sm text-red-300">{isTeam ? "Takımdan ayrıl" : "Gruptan ayrıl"}…</summary>
-                <form action={leaveGroup} className="mt-3 space-y-3">
-                  <input type="hidden" name="groupId" value={groupId} />
-                  <ul className="list-disc space-y-1 pl-5 text-xs text-muted">
-                    <li>Geçmiş maçların, oyların ve rating&apos;in korunur; istatistiklerin yerinde kalır.</li>
-                    <li>Gelecekteki maç kadrolarından ve açık çağrılardan çıkarılırsın.</li>
-                    <li>{isTeam ? "Takım sohbeti ve teklifler" : "Grup sohbeti ve maçlar"} sana kapanır; davet koduyla istediğin zaman geri dönebilirsin.</li>
-                    <li>Oylaması süren bir maçın varsa oylama bitince ayrılabilirsin.</li>
-                  </ul>
-                  <Button variant="danger" className="w-full">
-                    Evet, {isTeam ? "takımdan" : "gruptan"} ayrıl
-                  </Button>
-                </form>
-              </details>
-            </Card>
-          )}
-        </>
-      )}
+              </div>
+            )}
+          </Section>
+        )}
+
+        {isTeam && isCaptain && !group.archived_at && (
+          <Section open={bolum === "dagit"} icon="delete" title="Takımı dağıt" danger>
+            <form action={disbandTeam} className="space-y-3 p-4">
+              <input type="hidden" name="groupId" value={groupId} />
+              <ul className="list-disc space-y-1 pl-5 text-xs text-muted">
+                <li>Oynanmış maçı varsa takım arşivlenir: maç geçmişi ve puanlar kalır, yeni maç/teklif/katılım kapanır. İstersen sonra yeniden açarsın.</li>
+                <li>Hiç maçı yoksa takım tamamen silinir.</li>
+                <li>Planlı veya oylaması süren maç varsa önce o bitmeli ya da iptal edilmeli.</li>
+              </ul>
+              <Button variant="danger" className="w-full">
+                Takımı dağıt
+              </Button>
+            </form>
+          </Section>
+        )}
+      </div>
     </main>
   );
 }

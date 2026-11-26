@@ -149,6 +149,11 @@ export default async function GroupPage({
               <Icon name="settings" className="text-[18px]" />
               Yönet
             </LinkButton>
+          ) : me ? (
+            <LinkButton href={`/g/${groupId}/players?bolum=oyuncular`} variant="ghost" className="min-h-10 gap-1 px-3">
+              <Icon name="group" className="text-[18px]" />
+              {isTeam ? "Oyuncular" : "Üyeler"}
+            </LinkButton>
           ) : undefined
         }
       />
@@ -185,7 +190,7 @@ export default async function GroupPage({
         </div>
         {group.description && <p className="mt-3 text-sm text-on-surface-variant">{group.description}</p>}
         {!isTeam && (
-          <Link href={`/g/${groupId}/players`} className="mt-3 flex items-center gap-3">
+          <Link href={`/g/${groupId}/players?bolum=oyuncular`} className="mt-3 flex items-center gap-3">
             <div className="flex -space-x-2">
               {accounts.slice(0, 8).map((p) => (
                 <Avatar key={p.id} name={p.display_name} photoUrl={p.photo_url} title={p.display_name} className="h-9 w-9 border-2 border-surface-container bg-surface-highest text-[11px]" />
@@ -273,14 +278,13 @@ export default async function GroupPage({
         </LinkButton>
       )}
 
-      {/* Kısayollar: sohbet, teklifler, kadro, oyuncular */}
-      <div className="mb-2 grid grid-cols-2 gap-2">
+      {/* Kısayollar: sohbet, teklifler, kadro (üye işlemleri başlıktaki düğmeden) */}
+      <div className="mb-2 grid grid-cols-2 gap-2 [&>*:last-child:nth-child(odd)]:col-span-2">
         {me && (
           <Tile href={`/g/${groupId}/sohbet`} icon="forum" label={isTeam ? "Takım sohbeti" : "Grup sohbeti"} badge={unreadHere > 0 ? `${unreadHere > 99 ? "99+" : unreadHere} yeni` : undefined} />
         )}
         {isTeam && me && <Tile href={`/g/${groupId}/teklifler`} icon="handshake" label="Maç teklifleri" badge={pendingOffers > 0 ? `${pendingOffers} yeni` : undefined} warn />}
         <Tile href={`/g/${groupId}/kadro`} icon="style" label={isTeam ? "Kadro" : "Üye kartları"} />
-        <Tile href={`/g/${groupId}/players`} icon="group" label={isTeam ? "Oyuncular" : "Üyeler"} />
       </div>
 
       {me && <MuteToggle groupId={groupId} muted={!!myRow?.muted} />}

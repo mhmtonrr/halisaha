@@ -230,7 +230,8 @@ try {
   await new Promise((r) => setTimeout(r, 3000));
   check("link tekrar açılınca ikinci 'yeni üye' bildirimi yok", (await notifs(cap, "match")).filter((n) => n.title.includes("Gruba yeni üye")).length === 1);
   const aplA = await gp(A, apl);
-  await capP.goto(`${BASE}/g/${A}/players`);
+  await capP.goto(`${BASE}/g/${A}/players?bolum=oyuncular`);
+  await capP.locator(`li:has(input[name="playerId"][value="${aplA}"]) summary`).first().click();
   await capP.locator(`form:has(input[name="playerId"][value="${aplA}"]):has(input[name="role"][value="organizer"]) button`).click();
   check("rol verilince kişiye '🎖️ Rolün değişti' (Organizatör)", !!(await until(async () => (await notifs(apl, "match")).some((n) => n.title.includes("Rolün değişti") && n.body.includes("Organizatör")))));
 } catch (e) {

@@ -33,7 +33,8 @@ try {
   await admin.from("friendships").insert({ user_a: a, user_b: b, status: "accepted", requested_by: users[0].id });
 
   // Üye listesinden mesaj
-  await P.goto(`${BASE}/g/${gid}/players`);
+  await P.goto(`${BASE}/g/${gid}/players?bolum=oyuncular`);
+  await P.locator('li:has-text("Zeki Arkadas") summary').first().click();
   await P.click('button[aria-label="Zeki Arkadas ile mesajlaş"]');
   await P.waitForURL(/\/sohbet\/[0-9a-f-]{36}/);
   await P.waitForSelector("text=canlı", { timeout: 15000 });

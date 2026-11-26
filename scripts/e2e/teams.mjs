@@ -54,7 +54,8 @@ try {
   check("davet koduyla 2 oyuncu katıldı (toplam 3)", count === 3);
 
   // 2) Kaptan Burak'ı yetkili yapar
-  await A.goto(`${BASE}/g/${teamId}/players`);
+  await A.goto(`${BASE}/g/${teamId}/players?bolum=oyuncular`);
+  await A.locator('li:has-text("Burak Demir") summary').first().click();
   await A.locator('li:has-text("Burak Demir") button:has-text("Yetkili yap")').click(); await A.waitForLoadState("networkidle");
   const role = (await admin.from("group_players").select("role").eq("group_id", teamId).eq("user_id", users[1].id).single()).data.role;
   check("Burak yetkili oldu", role === "admin");

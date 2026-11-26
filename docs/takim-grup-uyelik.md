@@ -29,7 +29,7 @@ yeniden açar; listede geçiciler önce. Kaptan "Kalıcı yap" (`make_team_perma
 sayfası): planlı/oylamada maç varsa önce o bitmeli; oynanmış maç varsa arşiv (geçmiş ve puanlar kalır; açık çağrılar, bekleyen teklif ve davetler kapanır), yoksa
 silme. **Arşivli takım** yeni maç, çağrı, teklif, davet ve katılım almaz (`guard_archived_group` tetikleyicileri; `can_create_match` da false); sayfasında
 "Bu takım dağıtıldı" şeridi, kaptan "Yeniden aç" (`reopen_team`). `groups` sütun yetkisine `is_temporary`, `archived_at` eklendi.
-**Takıma davet**: mevcut `invite_to_group` (kaptan/yetkili); takımın oyuncular sayfasında ödünç oyuncunun yanında "Takıma davet et" (kabul edince asıl kadroya geçer).
+**Takıma davet**: mevcut `invite_to_group` (kaptan/yetkili); yönet sayfasının "Oyuncular" başlığında ödünç oyuncuya dokununca "Takıma davet et" (kabul edince asıl kadroya geçer).
 **Üye maç önerisi (0037)**: üye grup/takım sayfasında "💡 Maç öner" (`propose_match`: gün, isteğe bağlı saat/saha/not; grupta kişi başı 1 bekleyen; maç açabilen
 öneremez, doğrudan çağrı açar). Öneriyi sadece öneren ve maç açabilenler görür (RLS), topluluğa/sohbete düşmez; maç açabilenlere bildirim. `decide_proposal`:
 onayda öneren adına toplama çağrısı açılır (`match_polls.proposal_id`) ve öneren **rolü olmasa da** o çağrıyı yönetir (`can_manage_poll`), kurduğu maçı da
@@ -57,11 +57,13 @@ Tuzak: canlı yenilenen sunucu bileşeninde `<details open={koşul}>` her yenile
 **Misafir**: `group_players.user_id IS NULL`. Oylanır, oy veremez, sohbete yazamaz. `claim_guest` ile hesaba aktarılır.
 **İki yerden eklenir**: maç ekranından (`addGuestToMatch`: misafiri gruba + o maçın kadrosuna yazar; planlanmış maçta, kaptan/yetkili)
 ve açık toplama çağrısından (0038, `add_poll_guest`: organizatör; kesinleştirmede kadroya girer, ayrıntı `mac-puanlama.md`).
-"Oyuncular" sayfasında ekleme formu yoktur; orada misafirin mevkisi ve geçmiş aktarımı kalır. Sonraki maçlarda
+Yönet sayfasında ekleme formu yoktur; misafirin mevkisi ve geçmiş aktarımı oradaki "Oyuncular" başlığında misafire dokununca açılır. Sonraki maçlarda
 misafir kadro listesinde (yedek seçiminde) tekrar seçilebilir.
 **Asıl kadro = hesabı olan üyeler** (davet linki/kodla katılanlar). Misafirler takım/grup sayfasında, kadro sayfasında ve Oyuncular
 sayfasında ayrı bölümde/sekmede durur (`RosterTabs`, `?sekme=misafir`; istatistikleri orada görünür); oyuncu sayısına, takım
 puanına (`teamRating`), Keşfet sıralamasına, puan tablosuna ve istatistik sayfasına girmez. Maç kadrosunda ve oylamada normal oyuncudur.
+
+**Yönet sayfası** (`/g/[id]/players`, 2026-11-26): açılır kapanır başlıklar — Oyuncular/Üyeler (kadro + misafirler; kişiye dokununca profil, mesaj, yetki, devir, çıkarma, misafirde mevki + geçmiş aktarımı), bilgiler, ayrıl, dağıt. `?bolum=oyuncular|bilgiler|ayril|dagit` o başlığı açık getirir (işlem hataları ve bağlantılar kullanır). Takım/grup sayfasında ayrı Oyuncular kutusu yok: yetkiliye başlıkta "Yönet", üyeye "Oyuncular"/"Üyeler".
 
 **Davet kodu gizli**: `groups.invite_code` sütununa SELECT yetkisi yok (takımlar herkese açık olduğu için).
 Kod `group_invite_code()` RPC ile alınır (takımda captain/admin, grupta her üye). **`groups`'tan seçerken
@@ -78,7 +80,7 @@ ayrılmışları saymaz; **geçmiş gösteren** yerler (maç ekranı, oyuncu say
 **kaptan/kurucu önce devreder** (yoksa hata), **oylaması süren (`voting`/`played`) maçı olan oylama bitince ayrılır**; ayrılırken `deactivate_member` gelecekteki planlanmış maç kadrolarından ve açık çağrı yanıtlarından çıkarır,
 kaptan/yetkililere "üye ayrıldı" bildirimi gider (`text.memberLeft`, tür `match`). Aynı davet koduyla `join_group` satırı yeniden açar (rol `member`). **Yetkili çıkarma** artık `remove_member` RPC'si: hesaplı üye aynı şekilde
 ayrılmış sayılır, misafir silinir; `group_players` DELETE politikası sadece misafir kayıtları içindir. Tek başına kalan kaptan `delete_group` ile grubu/takımı siler (adını yazarak onaylar; maçlar da gider, kişinin
-rating'i `recomputePlayers` ile yeniden hesaplanır); doğrudan `groups` silme politikası kaldırıldı. UI: `/g/[id]/players` sayfasının altında "Gruptan/Takımdan ayrıl". Test: `db-checks/leave-group.mjs`, `e2e/leave.mjs`.
+rating'i `recomputePlayers` ile yeniden hesaplanır); doğrudan `groups` silme politikası kaldırıldı. UI: yönet sayfasında "Gruptan/Takımdan ayrıl" başlığı. Test: `db-checks/leave-group.mjs`, `e2e/leave.mjs`.
 
 **Katılma isteği ve Keşfet'te grup (0044, kullanıcı kararları 2026-11-25)**: `groups.discoverable` (topluluk Keşfet'te listelenir, varsayılan kapalı; takımlar zaten herkese açık), `groups.join_requests_open` (boş = varsayılan: toplulukta açık, takımda kapalı; toplulukta ayrıca discoverable gerekir; ayar `set_group_discovery`, kaptan/yetkili). `request_join` (tek bekleyen, red sonrası 7 gün, günde 10), `cancel_join_request`, `decide_join_request` (kaptan/yetkili; kabul `join_group` ile aynı satır). Kodla/bağlantıyla doğrudan giriş aynen. Liste `discover_groups(il, ilçe, tür)` (güvenli alanlar, üye sayısı, isteğimin durumu). Yetkililer için `pending_requests(grup)` (katılma, bu gruba gelen ilan onayları, maç önerileri, grubun maçlarına başvurular; her bölüm karar verebilene) ve ana sayfa için `my_pending_counts()`. Test: `db-checks/join-requests.mjs`.
 **Arayüz (6a)**: `/g/[id]/istekler` sekmeli sayfa (Katılma · İlan onayı · Öneri · Başvuru; boş sekme gizli, başvurular maç ekranına gider), grup sayfasında yetkiliye "Bekleyen istekler · N", ana sayfa yapılacaklarda grup başına tek satır. Karar `join-actions.ts` (`decideJoinRequest`; isteyene `invite` türü bildirim, diğer yetkililere "yeni üye"). Ayar: Grubu yönet → Grup bilgileri formunda "Keşfet'te görünsün" (sadece topluluk) ve "Katılma isteği alınsın" (`updateTeam` içinde `set_group_discovery`). Gönderme (6b): Keşfet "Gruplar" sekmesi ve üye olmayanın takım sayfası (istek açıksa; kapalıysa "davet linki iste" yazısı), `JoinRequest` bileşeni (isteğe bağlı not, bekliyorsa "Geri al"); istek → kaptan/yetkililere `invite` bildirimi (`/istekler?sekme=katilma`). Topluluk sayfası üye olmayana kapalı, o yüzden Keşfet kartı bağlantısız. Test: `e2e/join-requests.mjs`.

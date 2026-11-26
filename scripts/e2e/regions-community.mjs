@@ -73,7 +73,7 @@ try {
   log("topluluk sayfası:", (await P.locator("text=👥 Topluluk").count()) ? "✓ Topluluk etiketi" : "HATA", "|", (await P.locator("text=2 üye").count()) ? "✓ üye şeridi" : "HATA");
 
   // Grubu yönet: kurucu adı/açıklamayı değiştirir; profil kısayolu kaldırıldı; üye formu görmez
-  await P.goto(`${BASE}/g/${gid}/players`);
+  await P.goto(`${BASE}/g/${gid}/players?bolum=bilgiler`);
   log("profil kısayolu yok:", (await P.locator("text=profilinden düzenle").count()) === 0 ? "✓" : "HATA");
   await P.fill('input[name="name"]', "Moda Futbolseverler");
   await P.fill('textarea[name="description"]', "Salı akşamları Moda'da.");

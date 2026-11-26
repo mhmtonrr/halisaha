@@ -50,15 +50,14 @@ try {
 
   // 1) Kaptan: önce devretmeli
   const aP = await open(a);
-  await aP.goto(`${BASE}/g/${G}/players`);
+  await aP.goto(`${BASE}/g/${G}/players?bolum=ayril`);
   let t = await aP.locator("body").innerText();
   check("kaptan 'önce devret' uyarısını görür, ayrıl düğmesi yok", has(t, "kuruculuğu listeden birine devretmelisin") && !has(t, "Evet, gruptan ayrıl"));
   await aP.screenshot({ path: `${SHOTS}/103-ayrilma-kaptan.png`, fullPage: true });
 
   // 2) Üye (Mert) ayrılır
   const bP = await open(b);
-  await bP.goto(`${BASE}/g/${G}/players`);
-  await bP.locator("summary:has-text('Gruptan ayrıl')").click();
+  await bP.goto(`${BASE}/g/${G}/players?bolum=ayril`);
   await bP.screenshot({ path: `${SHOTS}/104-ayrilma-onay.png`, fullPage: true });
   await bP.click('button:has-text("Evet, gruptan ayrıl")');
   await bP.waitForURL(/left=1/, { timeout: 15000 });
@@ -86,17 +85,16 @@ try {
     notif = (await admin.from("notifications").select("title, body, url").eq("user_id", a.id).like("title", "%ayrıldı%").maybeSingle()).data;
     if (!notif) await sleep(1000);
   }
-  check("kaptana 'üye ayrıldı' bildirimi gitti", !!notif && notif.body.includes("Mert Üye") && notif.url === `/g/${G}/players`);
+  check("kaptana 'üye ayrıldı' bildirimi gitti", !!notif && notif.body.includes("Mert Üye") && notif.url === `/g/${G}/players?bolum=oyuncular`);
 
   // Kaptanın üye listesinde Mert yok
-  await aP.goto(`${BASE}/g/${G}/players`);
+  await aP.goto(`${BASE}/g/${G}/players?bolum=oyuncular`);
   t = await aP.locator("body").innerText();
   check("kaptanın üye listesinde ayrılan yok", !has(t, "Mert Üye"));
 
   // 3) Oylaması süren maçı olan (Ceyda) ayrılamaz
   const cP = await open(c);
-  await cP.goto(`${BASE}/g/${G}/players`);
-  await cP.locator("summary:has-text('Gruptan ayrıl')").click();
+  await cP.goto(`${BASE}/g/${G}/players?bolum=ayril`);
   await cP.click('button:has-text("Evet, gruptan ayrıl")');
   await cP.waitForURL(/error=/, { timeout: 15000 });
   await cP.locator("p.text-error").waitFor({ timeout: 10000 });
@@ -114,7 +112,7 @@ try {
   // 5) Tek başına kalan kaptan grubu siler
   const G2 = (await admin.from("groups").insert({ name: "E2E Tek Üyeli Grup", created_by: a.id }).select("id").single()).data.id;
   groupIds.push(G2);
-  await aP.goto(`${BASE}/g/${G2}/players`);
+  await aP.goto(`${BASE}/g/${G2}/players?bolum=ayril`);
   check("tek üyeli kaptan 'grubu sil' seçeneğini görür", await aP.locator("summary:has-text('Grubu sil')").isVisible());
   await aP.locator("summary:has-text('Grubu sil')").click();
   await aP.fill('input[name="confirm"]', "yanlış ad");
@@ -122,7 +120,7 @@ try {
   await aP.waitForURL(/error=/, { timeout: 15000 });
   await aP.locator("p.text-error").waitFor({ timeout: 10000 });
   check("yanlış adla silinmez", has(await aP.locator("body").innerText(), "adını aynen yazmalısın") && (await admin.from("groups").select("id").eq("id", G2)).data.length === 1);
-  await aP.goto(`${BASE}/g/${G2}/players`);
+  await aP.goto(`${BASE}/g/${G2}/players?bolum=ayril`);
   await aP.locator("summary:has-text('Grubu sil')").click();
   await aP.fill('input[name="confirm"]', "e2e tek üyeli grup");
   await aP.screenshot({ path: `${SHOTS}/106-grup-sil.png`, fullPage: true });

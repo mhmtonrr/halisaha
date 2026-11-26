@@ -99,13 +99,13 @@ export const text = {
   memberLeft: (groupName: string, who: string, groupId: string): Content => ({
     title: "👋 Bir üye ayrıldı",
     body: truncate(join(groupName, `${who} gruptan ayrıldı`), 300),
-    url: `/g/${groupId}/players`,
+    url: `/g/${groupId}/players?bolum=oyuncular`,
     tag: `member-left:${groupId}`,
   }),
   memberJoined: (groupName: string, who: string, groupId: string, kind: "team" | "community"): Content => ({
     title: kind === "team" ? "👋 Takıma yeni oyuncu" : "👋 Gruba yeni üye",
     body: truncate(`${who}, “${oneLine(groupName)}” ${kind === "team" ? "takımına" : "grubuna"} katıldı`, 300),
-    url: `/g/${groupId}/players`,
+    url: `/g/${groupId}/players?bolum=oyuncular`,
     tag: `member-joined:${groupId}`,
   }),
   /** Kaptan/yetkililere: biri katılmak istiyor */
