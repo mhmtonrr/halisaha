@@ -656,12 +656,23 @@ export async function leaveGroup(fd: FormData) {
   redirect("/?left=1");
 }
 
+/**
+ * Silinen grubun yüklenmiş logosunu depodan kaldırır. Yetkiyi silme RPC'si doğruladıktan SONRA çağrılır:
+ * grup gidince kimse yetkili sayılmadığından yönetici istemcisi gerekir.
+ */
+function removeDeletedGroupLogo(groupId: string) {
+  later(async () => {
+    await createAdminClient().storage.from("logos").remove([logoPath(groupId)]);
+  });
+}
+
 /** Takımı dağıt (kaptan): oynanmış maç varsa arşivlenir (geçmiş ve puanlar kalır), yoksa silinir */
 export async function disbandTeam(fd: FormData) {
   const { supabase } = await requireUser();
   const groupId = str(fd, "groupId");
   const { data, error } = await supabase.rpc("disband_team", { p_group: groupId });
   if (error) fail(`/g/${groupId}/players`, rpcMessage(error, "Takım dağıtılamadı"));
+  if (data === "deleted") removeDeletedGroupLogo(groupId);
   revalidatePath("/", "layout");
   redirect(data === "deleted" ? "/" : `/g/${groupId}`);
 }
@@ -699,6 +710,7 @@ export async function deleteGroup(fd: FormData) {
   }
   const { error } = await supabase.rpc("delete_group", { p_group: groupId });
   if (error) fail(back, rpcMessage(error, "Grup silinemedi"));
+  removeDeletedGroupLogo(groupId);
   // Silinen grubun maçları kişinin istatistiğinden de gitti: kalan satırlardan genel rating'i yeniden hesapla
   later(async () => {
     const admin = createAdminClient();
