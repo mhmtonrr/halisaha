@@ -20,4 +20,3 @@ Kullanıcıyı API ile kuran senaryo karşılamayı atlamak için `profiles.onbo
 Ekran görüntülerine bak (390px genişlik, telefon) — görsel sorunlar çoğu zaman sadece orada yakalanıyor.
 Port doluysa: `fuser -k 3000/tcp`. Arayüzden kayıt (signUp) test etme: onay maili gönderir, limit saatte 2.
 
-**Güncel değil (0053 maç ekranı, 2026-11-26)**: `notifications`, `realtime`, `match-setup`, `match-manage`, `withdrawal`, `guest-match` senaryoları kaldırılan arayüzü (Üye ekle/kadrodan çıkar, mevki ve ücret düzenleme, Rakip bölümü, "rakip belli değil") arıyor; test istenince önce güncellenmeli.

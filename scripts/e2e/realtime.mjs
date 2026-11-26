@@ -80,15 +80,21 @@ try {
   const { data: ms } = await admin.from("matches").select("id, group_id").in("group_id", [teamA, teamB]);
   const mA = ms.find((m) => m.group_id === teamA).id, mB = ms.find((m) => m.group_id === teamB).id;
 
-  // 3) A maç ekranını açık tutar; B kadro ekleyince A'nın ekranında rakip kadro belirir
-  await A1.goto(`${BASE}/g/${teamA}/m/${mA}`); await mark(A1);
-  check("A'nın maç ekranında rakip kadro henüz boş", (await A1.locator("text=Buse O.").count()) === 0);
-  await B1.goto(`${BASE}/g/${teamB}/m/${mB}`);
-  const boxes = B1.locator('input[name="playerId"]');
-  if (!(await boxes.first().isVisible())) await B1.locator("summary:has-text('Üye ekle / kadrodan çıkar')").click();
-  for (let i = 0; i < (await boxes.count()); i++) await boxes.nth(i).check();
-  await B1.click('button:has-text("Seçilenleri ekle")');
-  check("A'nın açık maç ekranında rakip oyuncu yenilenmeden göründü", await appears(A1, "Buse O."));
+  // 3) A maç ekranını (rakip sekmesinde) açık tutar; B kadro ekleyince A'nın ekranında rakip kartı belirir
+  await A1.goto(`${BASE}/g/${teamA}/m/${mA}`, { waitUntil: "networkidle" });
+  await A1.locator('#dizilis [role="tab"]:has-text("Canlı Aslanlar")').click(); await mark(A1);
+  const rivalCard = A1.locator('#dizilis [aria-label="Buse Oyuncu kartı"]');
+  check("A'nın maç ekranında rakip kadro henüz boş", (await rivalCard.count()) === 0);
+  await B1.goto(`${BASE}/g/${teamB}/m/${mB}`, { waitUntil: "networkidle" });
+  const add = B1.locator('button:text-is("Kadroya ekle")');
+  for (let left = await add.count(); left > 0; left--) {
+    await add.first().click();
+    // Satır iyimser güncellemeyle hemen kaybolur; sunucu kaydı bitene kadar bekle
+    await B1.waitForFunction((n) => [...document.querySelectorAll("button")].filter((b) => b.textContent === "Kadroya ekle").length < n, left, { timeout: 20000 });
+    await B1.locator('section[aria-busy="true"]').waitFor({ state: "detached", timeout: 20000 });
+    await B1.waitForLoadState("networkidle");
+  }
+  check("A'nın açık maç ekranında rakip oyuncu yenilenmeden göründü", await rivalCard.waitFor({ timeout: WAIT }).then(() => true, () => false));
   check("maç ekranı tam yenilenmedi", await marked(A1));
   await A1.screenshot({ path: `${SHOTS}/61-canli-mac.png`, fullPage: true });
 

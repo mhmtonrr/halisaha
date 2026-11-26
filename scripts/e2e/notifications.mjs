@@ -107,7 +107,7 @@ try {
   await capP.goto(`${BASE}/g/${A}/m/${mid}`);
   await capP.fill('input[name="scoreA"]', "3"); await capP.fill('input[name="scoreB"]', "2");
   await capP.click('button:has-text("oylamayı başlat")');
-  await capP.locator("text=kişi oy verdi").waitFor({ timeout: 15000 });
+  await capP.locator('section[aria-label="Oylama"]').waitFor({ timeout: 15000 });
   check("sonuç girilince oyuncuya 'oylama açıldı' bildirimi", !!(await until(async () => (await notifs(mem, "vote")).length === 1)));
   check("sonucu girene (kaptan) oylama bildirimi gitmedi", (await notifs(cap, "vote")).length === 0);
   check("oylama bildirimi maç adresine gider", (await notifs(mem, "vote"))[0].url === `/g/${A}/m/${mid}`);
@@ -153,6 +153,7 @@ try {
   const mid2 = (await admin.from("matches").insert({ group_id: A, played_at: new Date(Date.now() + 4 * 864e5).toISOString(), created_by: cap.id, kind: "external", opponent_name: "Rakip 2", team_size: 7, capacity: 7 }).select("id").single()).data.id;
   await admin.from("match_players").insert({ match_id: mid2, player_id: await gp(A, cap), team: "A" });
   await capP.goto(`${BASE}/g/${A}/m/${mid2}`, { waitUntil: "networkidle" });
+  await capP.click('summary:has-text("Oyuncu mu eksik?")');
   await capP.click('summary:has-text("Paylaşılacak yerleri seç")'); await capP.check(`input[name="targets"][value="${G || "kesfet"}"]`);
   await capP.click('form:has(input[name="targets"]) button:text-is("Adam ara")');
   await capP.waitForURL(/ok=ilan/, { timeout: 20000 });
@@ -176,14 +177,13 @@ try {
   // 9) Elle kadrodan çıkarma / ekleme → oyuncuya bildirim
   const memA = await gp(A, mem);
   const kadrodasin = async () => (await notifs(mem, "match")).filter((n) => n.title.includes("Kadrodasın")).length;
-  await capP.goto(`${BASE}/g/${A}/m/${mid2}`);
-  await capP.locator("summary:has-text('Üye ekle / kadrodan çıkar')").click();
-  await capP.locator(`form:has(input[name="playerId"][value="${memA}"]) button:has-text("Çıkar")`).click();
+  await capP.goto(`${BASE}/g/${A}/m/${mid2}`, { waitUntil: "networkidle" });
+  // Diziliş sahnesi: karta dokun → "Kadro dışı bırak"; alttaki "Kadro dışı" listesinden "Kadroya ekle"
+  await capP.locator(`#dizilis [aria-label="${mem.name} kartı"]`).click();
+  await capP.click('#dizilis button:text-is("Kadro dışı bırak")');
   check("elle çıkarılana 'kadrosundan çıkarıldın'", !!(await until(async () => (await notifs(mem, "match")).some((n) => n.title.includes("kadrosundan çıkarıldın")))));
-  await capP.goto(`${BASE}/g/${A}/m/${mid2}`);
-  await capP.locator("summary:has-text('Üye ekle / kadrodan çıkar')").click();
-  await capP.locator(`label:has(input[value="${memA}"])`).click();
-  await capP.click('button:has-text("Seçilenleri ekle")');
+  await capP.goto(`${BASE}/g/${A}/m/${mid2}`, { waitUntil: "networkidle" });
+  await capP.locator(`li:has-text("${mem.name}") button:text-is("Kadroya ekle")`).click();
   check("elle eklenene '⚽ Kadrodasın'", !!(await until(async () => (await kadrodasin()) === 1)));
 
   // 10) Maç iptali → kadroya bildirim (iptal edene gitmez)

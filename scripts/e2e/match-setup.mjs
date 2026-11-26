@@ -62,13 +62,14 @@ try {
   await PO.goBack();
   await PO.waitForSelector('h2:text-is("Maç bilgileri")');
   check("telefonun geri tuşu önceki adıma döner, seçim korunur", (await PO.locator('button:text-is("Belli değil")').getAttribute("aria-pressed")) === "true");
-  await fillSetup(PO, { size: 5, venue: "Petroller", fee: 150, pick: [C.name], guest: { name: "Çağatayın Arkadaşı", position: "FWD" }, submit: false, shot: (n) => PO.screenshot({ path: `${SHOTS}/setup-${n}.png` }) });
-  check("özet: 3/5, rakip belli değil, kişi başı ücret", (await PO.locator("text=Gelenler 3/5").count()) === 1 && (await PO.locator("text=Kişi başı 150 TL").count()) === 1);
+  await fillSetup(PO, { size: 5, venue: "Petroller", fee: 150, opponent: "Yıldızspor", pick: [C.name], guest: { name: "Çağatayın Arkadaşı", position: "FWD" }, submit: false, shot: (n) => PO.screenshot({ path: `${SHOTS}/setup-${n}.png` }) });
+  check("özet: 3/5, rakip adı, kişi başı ücret", (await PO.locator("text=Gelenler 3/5").count()) === 1 && (await PO.locator("text=Yıldızspor").count()) === 1 && (await PO.locator("text=Kişi başı 150 TL").count()) === 1);
   await submitSetup(PO);
   const matchId = PO.url().split("/m/")[1].split("?")[0];
   const m = must(await admin.from("matches").select("status, capacity, roster_count, time_tbd, open_to_members, venue, fee_per_person").eq("id", matchId).single());
   check("maç toplanıyor açıldı (3/5, saat belli değil, duyurulu)", m.status === "gathering" && m.capacity === 5 && m.roster_count === 3 && m.time_tbd && m.open_to_members && m.venue === "Petroller" && m.fee_per_person === 150);
   check("maç ekranında 'Toplanıyor' ve 3/5", (await PO.locator("text=Toplanıyor").count()) >= 1 && (await PO.locator("text=3/5").count()) >= 1);
+  await PO.locator('summary:has-text("Oyuncu mu eksik?")').click();
   check("maç ekranında 'Oyuncu ekle' arkadaş sekmesi", (await PO.locator('button:text-is("Arkadaşlar")').count()) === 1);
   await PO.screenshot({ path: `${SHOTS}/setup-gathering.png`, fullPage: true });
   await new Promise((r) => setTimeout(r, 2500));
@@ -128,7 +129,6 @@ try {
   await PB.goto(offerUrl, { waitUntil: "networkidle" });
   const has = async (p, t) => (await p.locator(`text=${t}`).count()) >= 1;
   check("üye maç ekranında bekleyen rakibi ve ücreti görür", (await has(PB, `vs ${rivalName}`)) && (await has(PB, "Rakip onay bekliyor")) && (await has(PB, "Kişi başı 200 TL")));
-  check("üye ücret düzenleme bölümünü görmez", (await PB.locator('input[aria-label="Kişi başı saha ücreti"]').count()) === 0);
   await PB.screenshot({ path: `${SHOTS}/fee-member.png`, fullPage: true });
   await PB.goto(`${BASE}/`, { waitUntil: "networkidle" });
   check("ana sayfada 'onay bekliyor' ve ücret görünür", (await has(PB, "onay bekliyor")) && (await has(PB, "Kişi başı 200 TL")));
@@ -136,28 +136,19 @@ try {
   await PB.goto(`${BASE}/g/${team}`, { waitUntil: "networkidle" });
   check("grup sayfası listesinde bekleyen rakip ve ücret", (await has(PB, `vs ${rivalName} (onay bekliyor)`)) && (await has(PB, "200 TL")));
 
-  // --- Davet bağlantısı + ücreti sonradan değiştirme
+  // --- Davet bağlantısı
   await PO.goto(offerUrl, { waitUntil: "networkidle" });
-  await PO.click('summary:has-text("Saha ücreti")');
-  await PO.fill('input[aria-label="Kişi başı saha ücreti"]', "250");
-  await PO.screenshot({ path: `${SHOTS}/fee-edit.png`, fullPage: true });
-  await PO.click('form:has(input[aria-label="Kişi başı saha ücreti"]) button');
-  await PO.waitForURL(/ok=ucret/, { timeout: 30000 });
-  await PO.waitForSelector("text=Kişi başı 250 TL", { timeout: 15000 }).catch(() => {});
-  const ch2 = must(await admin.from("match_challenges").select("fee_note").eq("from_match_id", offerMatch).single());
-  check("yönetici ücreti değiştirir, teklif notu güncellenir", (await has(PO, "Kişi başı 250 TL")) && ch2.fee_note === "Kişi başı 250 TL");
   const code = must(await admin.from("match_codes").select("code").eq("match_id", offerMatch).maybeSingle())?.code;
   check("maçın davet bağlantısı var", !!code);
   const PF = await login(F);
   await PF.goto(`${BASE}/davet/m/${code}`, { waitUntil: "networkidle" });
-  check("davet bağlantısında ücret ve bekleyen rakip", (await has(PF, "Kişi başı 250 TL")) && (await has(PF, "(onay bekliyor)")));
+  check("davet bağlantısında ücret ve bekleyen rakip", (await has(PF, "Kişi başı 200 TL")) && (await has(PF, "(onay bekliyor)")));
   await PF.screenshot({ path: `${SHOTS}/fee-invite.png`, fullPage: true });
 
   // --- Rakip araması i/ı/İ/I ayırmaz
   await PO.goto(`${BASE}/mac-ayarla?grup=${team}`, { waitUntil: "networkidle" });
   await PO.click('button:text-is("Belli değil")');
   await PO.click('button:text-is("İleri")');
-  await PO.click('button:has-text("Rakip belli")');
   await PO.fill('input[aria-label="Takım ara"]', "RAKIP IDMAN IŞIK");
   const found = await PO.waitForSelector(`li button:has-text("${rivalName}")`, { timeout: 15000 }).then(() => true, () => false);
   check("'RAKIP IDMAN IŞIK' araması 'Rakip İdman Işık' takımını bulur", found);

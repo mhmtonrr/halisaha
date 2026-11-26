@@ -240,7 +240,7 @@ try {
   const summary = A2.locator('section[aria-label="Maç özeti"]');
   const sum = (await summary.innerText()).toLocaleLowerCase("tr");
   check("maç özetinde iki takımın golleri", ["ali kaptan", "3 gol", "ayşe oyuncu", "1 gol", "berk kaptan", "2 gol", "e2e kartallar", "e2e aslanlar"].every((x) => sum.includes(x)));
-  check("bağlı maçta karşılaşma kartında iki takım", (await A2.locator("text=VS").count()) > 0 && (await A2.locator("text=Buse O.").count()) > 0);
+  check("oylamada karşılaşma kartı yok (isimler maç özetinde)", (await A2.getByText("Buse O.", { exact: true }).count()) === 0 && (await A2.getByText("VS", { exact: true }).count()) === 0);
   await A2.waitForLoadState("networkidle");
   const send = A2.locator('button:has-text("Oylarımı gönder")');
   check("iki sekme, eksikken gönder kapalı", (await A2.locator('[aria-label="Oylama"] [role="tab"]').count()) === 2 && (await send.isDisabled()));

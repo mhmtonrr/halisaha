@@ -52,12 +52,17 @@ try {
   const url = (m) => `${BASE}/g/${G}/m/${m}`;
   const body = (p) => p.locator("body").innerText();
 
+  /** "Gelemeyeceğim" bölümünü açar ve zorunlu mazereti yazar */
+  const openWd = async (p, reason = "İşim çıktı") => {
+    await p.locator("summary:has-text('Maça gelemeyeceğim')").click();
+    await p.fill('textarea[name="reason"]', reason);
+  };
+
   // 1) Mert çekilme isteği gönderir
   await bP.goto(url(m1));
   check("kadrodaki oyuncu 'Maça gelemeyeceğim' bölümünü görür", has(await body(bP), "Maça gelemeyeceğim"));
   await cP.goto(url(m1));
-  await bP.locator("summary:has-text('Maça gelemeyeceğim')").click();
-  await bP.fill('textarea[name="reason"]', "Dizim ağrıyor");
+  await openWd(bP, "Dizim ağrıyor");
   await bP.screenshot({ path: `${SHOTS}/107-cekilme-formu.png`, fullPage: true });
   await bP.click('button:has-text("Çekilme isteği gönder")');
   await bP.waitForURL(/cekilme=pending/, { timeout: 15000 });
@@ -88,7 +93,7 @@ try {
   check("reddedilen oyuncu notu görür, tekrar istek gönderebilir", has(await body(bP), "reddedildi, kadroda kalıyorsun") && (await bP.locator("summary:has-text('Maça gelemeyeceğim')").count()) === 1);
 
   // 4) Tekrar istek → geri çek
-  await bP.locator("summary:has-text('Maça gelemeyeceğim')").click();
+  await openWd(bP);
   await bP.click('button:has-text("Çekilme isteği gönder")');
   await bP.waitForURL(/cekilme=pending/, { timeout: 15000 });
   await bP.locator("button:has-text('İsteği geri çek')").click();
@@ -98,7 +103,7 @@ try {
 
   // 5) Yeniden istek → kaptan onaylar → kadrodan çıkar, gelmedi sayılmaz
   await bP.goto(url(m1));
-  await bP.locator("summary:has-text('Maça gelemeyeceğim')").click();
+  await openWd(bP);
   await bP.click('button:has-text("Çekilme isteği gönder")');
   await bP.waitForURL(/cekilme=pending/, { timeout: 15000 });
   await aP.goto(url(m1));
@@ -116,7 +121,8 @@ try {
 
   // 6) Son dakika (2 saat kala)
   await bP.goto(url(m2));
-  check("2 saat kala formda 'son dakika' uyarısı", (await bP.locator("summary:has-text('Maça gelemeyeceğim')").click(), has(await body(bP), "3 saatten az kaldı")));
+  await openWd(bP);
+  check("2 saat kala formda 'son dakika' uyarısı", has(await body(bP), "3 saatten az kaldı"));
   await bP.click('button:has-text("Çekilme isteği gönder")');
   await bP.waitForURL(/cekilme=pending/, { timeout: 15000 });
   await aP.goto(url(m2));
@@ -124,7 +130,7 @@ try {
   await aP.screenshot({ path: `${SHOTS}/109-cekilme-son-dakika.png`, fullPage: true });
 
   // 7) Kaptan kendi adına doğrudan çıkar
-  await aP.locator("summary:has-text('Maça gelemeyeceğim')").click();
+  await openWd(aP);
   await aP.click('button:text-is("Kadrodan çık")');
   await aP.waitForURL(/cekilme=approved(?!-)/, { timeout: 15000 });
   check("kaptan kendini doğrudan kadrodan çıkarır (onay beklemez)", !(await inRoster(m2, aG)));

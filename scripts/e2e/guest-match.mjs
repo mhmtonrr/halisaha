@@ -46,7 +46,12 @@ try {
 
   // Maç ekranında kaptan misafir ekler
   await cap.goto(`${BASE}/g/${gid}/m/${m.id}`);
-  await cap.click('button:text-is("Misafir")');
+  // Misafir formu "Oyuncu mu eksik?" bölümünün "Misafir" sekmesinde
+  const openGuest = async () => {
+    await cap.locator("summary:has-text('Oyuncu mu eksik?')").click();
+    await cap.click('button:text-is("Misafir")');
+  };
+  await openGuest();
   check("maç ekranında misafir ekleme formu var", (await cap.locator('input[name="name"]').count()) === 1);
   await cap.fill('input[name="name"]', "Zeki Misafir");
   await cap.selectOption('select[name="position"]', "GK");
@@ -67,7 +72,7 @@ try {
   check("misafir grupta hesapsız oyuncu olarak var", !!guest && guest.user_id === null && guest.position === "GK");
   const { data: mp } = await admin.from("match_players").select("team, position, is_goalkeeper").eq("match_id", m.id).eq("player_id", guest.id).maybeSingle();
   check("misafir bu maçın kadrosunda, kaleci", !!mp && mp.team === "A" && mp.position === "GK" && mp.is_goalkeeper);
-  check("maç ekranında misafir kadroda görünüyor (yerinde güncellendi)", (await cap.locator("text=Zeki M.").count()) > 0);
+  check("maç ekranında misafir kadroda görünüyor (yerinde güncellendi)", (await cap.locator('#dizilis [aria-label="Zeki Misafir kartı"]').count()) === 1);
   await cap.screenshot({ path: `${SHOTS}/50-misafir-maca-eklendi.png`, fullPage: true });
 
   // Misafir "Oyuncular" sayfasında kayıtlı kalır (geçmiş aktarımı için) ama oradan eklenmez
@@ -93,12 +98,12 @@ try {
 
   // Kısa isim ve normal oyuncu
   await cap.goto(`${BASE}/g/${gid}/m/${m.id}`);
-  await cap.click('button:text-is("Misafir")');
+  await openGuest();
   await cap.fill('input[name="name"]', "A");
   await cap.click('button:has-text("Misafiri ekle")');
   check("1 harfli isim reddedilir (tarayıcı doğrulaması: form gönderilmedi)", (await admin.from("group_players").select("id", { count: "exact", head: true }).eq("group_id", gid).is("user_id", null)).count === 1);
   await member.goto(`${BASE}/g/${gid}/m/${m.id}`);
-  check("normal oyuncu misafir formunu görmez", (await member.locator('button:text-is("Misafir")').count()) === 0);
+  check("normal oyuncu misafir formunu görmez", (await member.locator("text=Oyuncu mu eksik?").count()) === 0 && (await member.locator('button:text-is("Misafir")').count()) === 0);
 
   // Doğrudan istek: yetkisiz oyuncu RLS'e takılır, misafir yetim kalmaz
   const before = (await admin.from("group_players").select("id", { count: "exact", head: true }).eq("group_id", gid)).count;

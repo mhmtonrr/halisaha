@@ -52,10 +52,17 @@ try {
   const go = async (p, to) => p.goto(to, { waitUntil: "networkidle" });
   const entry = async (u, mid = MID) => (await admin.from("match_entries").select("status").eq("match_id", mid).eq("user_id", u.id).maybeSingle()).data?.status;
   const PO = await login(O);
+  /** "Oyuncu mu eksik?" (Adam ara + Oyuncu ekle) bölümünü açar; açıksa dokunmaz */
+  const openManage = async (p) => {
+    const sum = p.locator('summary:has-text("Oyuncu mu eksik?")');
+    if (!(await sum.evaluate((el) => el.parentElement.open))) await sum.click();
+  };
+  const until = async (fn) => { for (let i = 0; i < 40 && !(await fn()); i++) await new Promise((r) => setTimeout(r, 500)); };
 
   // --- Keşfet ilanı
   await go(PO, url);
-  check("yöneten maç ekranında 'Adam ara', 'Rakip', 'Maçı kesinleştir', 'Maçı iptal et' görür", (await PO.locator("text=Adam ara").count()) >= 1 && (await PO.locator("text=Maçı kesinleştir").count()) >= 1 && (await PO.locator("text=Maçı iptal et").count()) >= 1);
+  check("yöneten maç ekranında 'Adam ara', 'Rakip seç', 'Maçı kesinleştir', 'Maçı iptal et' görür", (await PO.locator("text=Adam ara").count()) >= 1 && (await PO.locator("text=Rakip seç").count()) >= 1 && (await PO.locator("text=Maçı kesinleştir").count()) >= 1 && (await PO.locator("text=Maçı iptal et").count()) >= 1);
+  await openManage(PO);
   await PO.click('summary:has-text("Paylaşılacak yerleri seç")'); await PO.check(`input[name="targets"][value="kesfet"]`);
   await PO.click('label:has-text("Forvet")');
   await PO.click('form:has(input[name="targets"]) button:text-is("Adam ara")'); await PO.waitForURL(/ok=ilan/); await PO.waitForLoadState("networkidle"); await PO.locator("main").waitFor();
@@ -63,7 +70,8 @@ try {
   await PO.screenshot({ path: `${SHOTS}/manage-owner.png`, fullPage: true });
 
   // --- Başka gruba ilan (Onur orada sıradan üye → Lale'nin onayına)
-  await PO.click('summary:has-text("Paylaşılacak yerleri seç")'); await PO.check(`input[name="targets"][value="${C || "kesfet"}"]`);
+  await openManage(PO);
+  await PO.click('summary:has-text("Paylaşılacak yerleri seç")'); await PO.check(`input[name="targets"][value="${C}"]`);
   await PO.click('form:has(input[name="targets"]) button:text-is("Adam ara")'); await PO.waitForSelector("text=onay bekliyor", { timeout: 20000 }).catch(() => null);
   check("gruba ilan onay bekliyor", (await PO.locator("text=onay bekliyor").count()) >= 1);
   const PL = await login(L);
@@ -108,8 +116,16 @@ try {
   await PB.click('button:has-text("Geliyorum")'); await PB.waitForURL(/yanit=reserve/); await PB.waitForLoadState("networkidle"); await PB.locator("main").waitFor();
   check("dolu kadroda üye yedeğe düşer", (await entry(B)) === "reserve");
   await go(PO, url);
-  await PO.click(`button[aria-label="${D.name} kadrodan çıkar"]`); await PO.waitForURL(/ok=cikarildi/); await PO.waitForLoadState("networkidle"); await PO.locator("main").waitFor();
-  await PO.click('li:has-text("Berk Uye") button:has-text("Kadroya al")'); await PO.waitForURL(/ok=eklendi/); await PO.waitForLoadState("networkidle"); await PO.locator("main").waitFor();
+  // Kadro panosu: adına dokun → hedef bölüm
+  const boardMove = async (name, target, done) => {
+    await PO.locator(`li:has-text("${name}") button[aria-expanded]`).click();
+    await PO.locator(`li:has-text("${name}") button:text-is("${target}")`).click();
+    await until(done);
+    await PO.locator('section[aria-busy="true"]').waitFor({ state: "detached", timeout: 20000 });
+    await PO.waitForLoadState("networkidle");
+  };
+  await boardMove(D.name, "Kadro dışına", async () => (await entry(D)) !== "in");
+  await boardMove(B.name, "Kadroya", async () => (await entry(B)) === "in");
   check("yer açılınca yedek kadroya alındı", (await entry(B)) === "in" && (await entry(D)) === "left");
 
   // --- Rakip adı, kesinleştir, ertele
@@ -144,7 +160,7 @@ try {
   await PO.fill('input[aria-label="Takım ara"]', "Rakip Aslanlar");
   await PO.locator('button:has-text("Rakip Aslanlar")').first().click();
   await PO.click('button:has-text("Teklif gönder")'); await PO.waitForURL(/ok=teklif/); await PO.waitForLoadState("networkidle"); await PO.locator("main").waitFor();
-  check("teklif gönderildi, sıra rakipte", (await PO.locator("text=Sıra rakipte").count()) === 1);
+  check("teklif gönderildi, maç ekranında rakip onayı bekleniyor", (await PO.locator("text=Rakip onay bekliyor").count()) === 1 && (await PO.locator("text=Teklif gönderildi").count()) === 1);
   const PR = await login(R);
   await go(PR, `${BASE}/g/${RT}/teklifler`);
   await PR.click("summary:has-text('Karşı teklif yap')");
@@ -153,8 +169,10 @@ try {
   for (let i = 0; i < 40 && (await admin.from("match_challenges").select("awaiting_group_id").eq("from_match_id", M3).single()).data.awaiting_group_id !== T; i++) await new Promise((r) => setTimeout(r, 500));
   check("rakip karşı teklif yaptı, sıra gönderende", (await admin.from("match_challenges").select("awaiting_group_id").eq("from_match_id", M3).single()).data.awaiting_group_id === T);
   await go(PO, `${BASE}/g/${T}/m/${M3}`);
-  check("gönderen maç ekranında karşı teklifi görür", (await PO.locator("text=Rakip karşı teklif yaptı").count()) === 1);
-  await PO.click('form:has(input[name="challengeId"]) button:has-text("Kabul et")'); await PO.waitForURL(/ok=teklif-kabul/); await PO.waitForLoadState("networkidle"); await PO.locator("main").waitFor();
+  check("gönderen maç ekranında karşı teklif uyarısını görür", (await PO.locator("text=karşı teklif yaptı; yanıtın bekleniyor").count()) === 1);
+  await PO.click('a:has-text("karşı teklif yaptı")'); await PO.waitForURL(/teklifler/); await PO.waitForLoadState("networkidle");
+  await PO.click('button:has-text("Kabul et")');
+  await until(async () => (await admin.from("match_challenges").select("status").eq("from_match_id", M3).single()).data.status === "accepted");
   const lm = (await admin.from("matches").select("opponent_group_id, time_tbd, challenge_id").eq("id", M3).single()).data;
   const rm = (await admin.from("matches").select("status").eq("challenge_id", lm.challenge_id).eq("group_id", RT).maybeSingle()).data;
   check("maç rakiple bağlandı, saat karşı tekliften, rakibe toplanan maç açıldı", lm.opponent_group_id === RT && lm.time_tbd === false && rm?.status === "gathering");

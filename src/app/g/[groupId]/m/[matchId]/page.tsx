@@ -572,8 +572,8 @@ export default async function MatchPage({
 
       {planned && stage}
 
-      {/* Planlanmış maçta iki takım sahnede */}
-      {linked && opp && !planned && <VersusCard mine={{ id: groupId, name: myTeamName, color: myTeamColor, roster }} opp={opp} />}
+      {/* Planlanmış maçta iki takım sahnede; oylama ve sonuçta isimler maç özetinde */}
+      {linked && opp && !planned && !summarized && <VersusCard mine={{ id: groupId, name: myTeamName, color: myTeamColor, roster }} opp={opp} />}
 
       {summarized && (
         <MatchSummary sides={summarySides} rival={external && !opp ? { title: labels.B, score: match.score_b } : undefined} />
