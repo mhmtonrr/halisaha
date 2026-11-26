@@ -2,7 +2,7 @@
 // Veriyi çeken kısım players-data.ts'dedir.
 
 import type { Foot, Position } from "@/lib/data";
-import { isSkillKey, type SkillKey } from "@/lib/skills";
+import { ALL_SKILLS, isSkillKey, type SkillKey } from "@/lib/skills";
 import { reliability } from "@/lib/reliability";
 
 export interface PublicTeamRef {
@@ -52,8 +52,18 @@ export interface PlayerFilter {
   teamless?: boolean;
 }
 
-export type PlayerSort = "rating" | "mac" | "isim";
-export const SORTS: PlayerSort[] = ["rating", "mac", "isim"];
+/** Yetenek anahtarı da sıralama ölçütüdür (?sirala=HIZ) */
+export type PlayerSort = "rating" | "rating-artan" | "yukselen" | "mac" | "guvenilir" | "isim" | SkillKey;
+
+export const SORT_OPTIONS: { value: PlayerSort; label: string }[] = [
+  { value: "rating", label: "Rating (yüksekten)" },
+  { value: "rating-artan", label: "Rating (düşükten)" },
+  { value: "yukselen", label: "Yükselenler (30 gün)" },
+  { value: "mac", label: "En çok maç" },
+  { value: "guvenilir", label: "En güvenilir" },
+  { value: "isim", label: "İsim (A-Z)" },
+];
+export const SORTS: PlayerSort[] = [...SORT_OPTIONS.map((o) => o.value), ...ALL_SKILLS.map((s) => s.key)];
 
 /** Türkçe büyük/küçük harfe duyarsız karşılaştırma ("İ"/"ı" dahil) */
 export const fold = (s: string) => s.toLocaleLowerCase("tr-TR").trim();
@@ -82,24 +92,41 @@ export function matchesFilter(c: PlayerCandidate, f: PlayerFilter): boolean {
   return true;
 }
 
-export function sortPlayers(list: PlayerCandidate[], sort: PlayerSort, skill?: SkillKey): PlayerCandidate[] {
+export function sortPlayers(
+  list: PlayerCandidate[],
+  sort: PlayerSort,
+  skill?: SkillKey,
+  /** "yukselen" için: kullanıcı → rating artışı */
+  rising?: Map<string, number>,
+): PlayerCandidate[] {
   const byName = (a: PlayerCandidate, b: PlayerCandidate) => a.name.localeCompare(b.name, "tr");
   const out = [...list];
   if (sort === "isim") return out.sort(byName);
   if (sort === "mac") return out.sort((a, b) => b.matches - a.matches || b.overall - a.overall || byName(a, b));
   // Rating: puanlı maçı olanlar önce; yetenek seçiliyse eşitlikte o yetenek
-  return out.sort(
-    (a, b) =>
-      Number(b.matches > 0) - Number(a.matches > 0) ||
-      b.overall - a.overall ||
-      (skill ? (b.skills[skill] ?? 0) - (a.skills[skill] ?? 0) : 0) ||
-      b.matches - a.matches ||
-      byName(a, b),
-  );
+  const byRating = (a: PlayerCandidate, b: PlayerCandidate) =>
+    Number(b.matches > 0) - Number(a.matches > 0) ||
+    b.overall - a.overall ||
+    (skill ? (b.skills[skill] ?? 0) - (a.skills[skill] ?? 0) : 0) ||
+    b.matches - a.matches ||
+    byName(a, b);
+  if (sort === "rating") return out.sort(byRating);
+  if (sort === "rating-artan") return out.sort((a, b) => Number(b.matches > 0) - Number(a.matches > 0) || a.overall - b.overall || byName(a, b));
+  if (sort === "yukselen") return out.sort((a, b) => (rising?.get(b.userId) ?? 0) - (rising?.get(a.userId) ?? 0) || byRating(a, b));
+  if (sort === "guvenilir") {
+    // Az örnekli yüzde yanıltır: yeterli kaydı olanlar önce, sonra yüzde, sonra maç sayısı
+    const key = (c: PlayerCandidate) => {
+      const r = reliability(c.matches, c.noShows);
+      return { sample: r.pct === null ? 0 : r.tone === "new" ? 1 : 2, pct: r.pct ?? 0 };
+    };
+    return out.sort((a, b) => key(b).sample - key(a).sample || key(b).pct - key(a).pct || b.matches - a.matches || byRating(a, b));
+  }
+  // Yetenek: değeri olanlar yüksekten, olmayanlar sonda
+  return out.sort((a, b) => (b.skills[sort] ?? 0) - (a.skills[sort] ?? 0) || byRating(a, b));
 }
 
-export function searchCandidates(list: PlayerCandidate[], f: PlayerFilter, sort: PlayerSort = "rating") {
-  return sortPlayers(list.filter((c) => matchesFilter(c, f)), sort, f.skill);
+export function searchCandidates(list: PlayerCandidate[], f: PlayerFilter, sort: PlayerSort = "rating", rising?: Map<string, number>) {
+  return sortPlayers(list.filter((c) => matchesFilter(c, f)), sort, f.skill, rising);
 }
 
 // --- Adres çubuğu parametreleri ---

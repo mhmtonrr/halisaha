@@ -79,7 +79,7 @@ try {
   const il = await search(p, "il=Edirne&ilce=Merkez");
   check("ilçe filtresi çalışır", found(il).length === 3);
   await p.goto(`${BASE}/kesfet?sekme=oyuncu&il=Edirne&q=Zeki&min=70`);
-  check("filtre açıkken panel açık gelir", await p.locator("details[open]").count() === 1);
+  check("filtre açıkken panel açık gelir", await p.locator("[data-filtre-paneli]").isVisible());
   await p.locator("a", { hasText: "Zeki Forvet" }).first().click();
   await p.waitForURL(/\/oyuncu\//);
   check("sonuç satırı oyuncu profiline gider", (await body(p)).includes("zeki forvet"));

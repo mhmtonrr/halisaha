@@ -66,7 +66,7 @@ try {
 
   // 3) Keşfet "Gruplar" sekmesinden istek: gönder → geri al → mesajla tekrar gönder
   const IP = await login(I);
-  const kesfet = `${BASE}/kesfet?sekme=grup&il=%C4%B0stanbul&ilce=Kad%C4%B1k%C3%B6y&tur=topluluk`;
+  const kesfet = `${BASE}/kesfet?sekme=grup&il=%C4%B0stanbul&ilce=Kad%C4%B1k%C3%B6y`;
   await IP.goto(kesfet);
   const card = IP.locator("div.rounded-xl", { hasText: "E2E İstek Topluluğu" }).last();
   check("Keşfet Gruplar sekmesinde topluluk listede", (await card.count()) >= 1);

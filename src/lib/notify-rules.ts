@@ -123,7 +123,7 @@ export const text = {
         : `“${oneLine(groupName)}” isteğini kabul etmedi`,
       300,
     ),
-    url: accepted ? `/g/${groupId}` : "/kesfet?sekme=grup",
+    url: accepted ? `/g/${groupId}` : kind === "team" ? "/kesfet" : "/kesfet?sekme=grup",
     tag: `join-decided:${groupId}`,
   }),
   roleChanged: (groupName: string, groupId: string, roleLabel: string): Content => ({

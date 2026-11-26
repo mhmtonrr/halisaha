@@ -14,7 +14,7 @@ describe("teamForms", () => {
     const now = Date.parse("2026-11-26T12:00:00Z");
     const row = (playedAt: string, won: boolean) => ({ teamId: "a", playedAt, won });
     const f = teamForms([row("2026-09-01T18:00:00Z", true), row("2026-11-20T18:00:00Z", true), row("2026-11-10T18:00:00Z", false), row("2026-11-24T18:00:00Z", true)], now);
-    expect(f.get("a")).toEqual({ streak: 2, recent: 3 });
+    expect(f.get("a")).toMatchObject({ streak: 2, recent: 3, played: 4, wins: 3, losses: 1 });
   });
 });
 

@@ -24,22 +24,36 @@ export interface TeamFormRow {
   teamId: string;
   playedAt: string;
   won: boolean;
+  draw?: boolean;
+  /** Atılan − yenen gol */
+  diff?: number;
 }
 export interface TeamForm {
   /** Süren üst üste galibiyet */
   streak: number;
   /** Son ACTIVE_DAYS günde oynanan maç */
   recent: number;
+  /** Tüm zamanlar: oynanan, galibiyet, beraberlik, mağlubiyet, gol averajı */
+  played: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  diff: number;
 }
 
 export const ACTIVE_DAYS = 30;
 
-/** Takım başına süren galibiyet serisi ve son günlerdeki maç sayısı (satırlar sırasız olabilir) */
+/** Takım başına süren galibiyet serisi, son günlerdeki maç sayısı ve G/B/M toplamları (satırlar sırasız olabilir) */
 export function teamForms(rows: TeamFormRow[], now = Date.now()): Map<string, TeamForm> {
   const out = new Map<string, TeamForm>();
   const broken = new Set<string>();
   for (const r of [...rows].sort((a, b) => Date.parse(b.playedAt) - Date.parse(a.playedAt))) {
-    const f = out.get(r.teamId) ?? { streak: 0, recent: 0 };
+    const f = out.get(r.teamId) ?? { streak: 0, recent: 0, played: 0, wins: 0, draws: 0, losses: 0, diff: 0 };
+    f.played += 1;
+    if (r.won) f.wins += 1;
+    else if (r.draw) f.draws += 1;
+    else f.losses += 1;
+    f.diff += r.diff ?? 0;
     if (!r.won) broken.add(r.teamId);
     else if (!broken.has(r.teamId)) f.streak += 1;
     if (Date.parse(r.playedAt) >= now - ACTIVE_DAYS * 864e5) f.recent += 1;

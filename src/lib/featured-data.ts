@@ -158,7 +158,8 @@ async function linkedResults(): Promise<TeamFormRow[]> {
     if (error) throw error;
     for (const m of data ?? []) {
       if (m.score_a === null || m.score_b === null) continue;
-      rows.push({ teamId: m.group_id as string, playedAt: m.played_at as string, won: (m.score_a as number) > (m.score_b as number) });
+      const diff = (m.score_a as number) - (m.score_b as number);
+      rows.push({ teamId: m.group_id as string, playedAt: m.played_at as string, won: diff > 0, draw: diff === 0, diff });
     }
     if ((data?.length ?? 0) < 1000) break;
   }
@@ -172,7 +173,17 @@ const cachedMvps = unstable_cache(weeklyMvps, ["featured-mvps-v2"], opts);
 const cachedRisers = unstable_cache(risingStars, ["featured-risers-v2"], opts);
 const cachedPlayers = unstable_cache(playersPool, ["featured-players-v3"], opts);
 const cachedTeams = unstable_cache(teamsPool, ["featured-teams-v3"], opts);
-const cachedResults = unstable_cache(linkedResults, ["featured-results-v1"], opts);
+const cachedResults = unstable_cache(linkedResults, ["featured-results-v2"], opts);
+
+/** Keşfet sıralamaları için: takım başına form ve G/B/M (öne çıkanlarla aynı kaynak ve önbellek) */
+export async function loadTeamForms() {
+  return teamForms(await cachedResults());
+}
+
+/** Keşfet "Yükselenler" sıralaması: kullanıcı → son 30 günde rating artışı (ülke genelinde ilk 100) */
+export async function loadRisingDeltas() {
+  return new Map((await cachedRisers()).map((r) => [r.player.userId, r.delta]));
+}
 
 const same = (a: string | null, b: string | null) => (a ?? "").toLocaleLowerCase("tr") === (b ?? "").toLocaleLowerCase("tr");
 

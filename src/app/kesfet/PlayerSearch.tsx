@@ -1,14 +1,15 @@
 import { Icon } from "@/components/Icon";
 import Link from "next/link";
 import { openDm } from "@/lib/actions";
-import { RegionSelect } from "@/components/RegionSelect";
-import { Button, Card, Input, Label, cx } from "@/components/ui";
+import { DiscoverForm } from "./DiscoverForm";
+import { FilterSort, SortSelect } from "./DiscoverControls";
+import { Button, Card, Label, cx } from "@/components/ui";
 import { OvrBadge, PositionChip } from "@/components/PlayerCard";
 import { FOOT_NAME, POSITIONS, POSITION_NAME } from "@/lib/data";
 import { formatRegion } from "@/lib/regions";
 import { reliability } from "@/lib/reliability";
 import { ALL_SKILLS } from "@/lib/skills";
-import { activeFilterCount, type PlayerCandidate, type PlayerFilter, type PlayerSort } from "@/lib/player-search";
+import { SORT_OPTIONS, activeFilterCount, type PlayerCandidate, type PlayerFilter, type PlayerSort } from "@/lib/player-search";
 
 const select =
   "min-h-11 w-full rounded-xl border border-line bg-pitch-950 px-3 text-sm outline-none focus:border-accent";
@@ -17,6 +18,11 @@ const chip =
 
 const RATING_STEPS = [50, 55, 60, 65, 70, 75, 80, 85, 90];
 const SKILL_STEPS = [60, 65, 70, 75, 80, 85, 90];
+const SORT_GROUPS = [
+  { label: "Genel", options: SORT_OPTIONS },
+  { label: "Saha yeteneği", options: ALL_SKILLS.slice(0, 6).map((s) => ({ value: s.key, label: s.label })) },
+  { label: "Kaleci yeteneği", options: ALL_SKILLS.slice(6).map((s) => ({ value: s.key, label: s.label })) },
+];
 
 export const PAGE_SIZE = 20;
 
@@ -52,29 +58,9 @@ export function PlayerFilters({
 }) {
   const count = activeFilterCount(filter) - (filter.q ? 1 : 0); // ad kutusu zaten dışarıda
   return (
-    <form className="space-y-2" action="/kesfet">
-      <input type="hidden" name="sekme" value="oyuncu" />
-      <RegionSelect
-        key={`${city}-${district ?? ""}`}
-        cityName="il"
-        districtName="ilce"
-        defaultCity={city}
-        defaultDistrict={district}
-        requireCity={false}
-        showLabels={false}
-        anyLabel={{ city: "Tüm Türkiye", district: "Tüm ilçeler" }}
-      />
-      <div className="flex gap-2">
-        <Input name="q" defaultValue={filter.q ?? ""} placeholder="Oyuncu adı ara" />
-        <Button>Ara</Button>
-      </div>
-
-      <details open={count > 0} className="rounded-2xl border border-line bg-pitch-900/80 [&_summary::-webkit-details-marker]:hidden">
-        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between px-4 text-sm font-semibold">
-          <span>Filtreler{count > 0 && <span className="ml-2 rounded-full bg-accent/15 px-2 py-0.5 text-xs text-accent">{count}</span>}</span>
-          <span className="text-muted">▾</span>
-        </summary>
-        <div className="space-y-4 border-t border-line p-4">
+    // key: bağlantıyla (Temizle, sekme) gelen yeni süzgeçler form alanlarına yansısın
+    <DiscoverForm key={JSON.stringify([filter, sort])} tab="oyuncu" city={city} district={district} q={filter.q} placeholder="Oyuncu adı ara">
+      <FilterSort count={count} sort={<SortSelect value={sort} groups={SORT_GROUPS} />}>
           <div>
             <Label>Mevki</Label>
             <div className="flex flex-wrap gap-2">
@@ -142,29 +128,19 @@ export function PlayerFilters({
             <Check name="takimsiz" defaultChecked={!!filter.teamless}>Takımsız (takım arayanlar)</Check>
           </div>
 
-          <label className="block">
-            <Label>Sırala</Label>
-            <select name="sirala" defaultValue={sort} className={select}>
-              <option value="rating">Rating (yüksekten)</option>
-              <option value="mac">En çok maç</option>
-              <option value="isim">İsim (A-Z)</option>
-            </select>
-          </label>
-
           <div className="grid grid-cols-2 gap-2">
             <Button className="w-full">Uygula</Button>
-            <Link href="/kesfet?sekme=oyuncu&il=" className="flex min-h-11 items-center justify-center rounded-xl border border-line bg-pitch-800 text-sm hover:bg-pitch-700">
+            <Link href={`/kesfet?sekme=oyuncu&il=&sirala=${sort}`} className="flex min-h-11 items-center justify-center rounded-xl border border-line bg-pitch-800 text-sm hover:bg-pitch-700">
               Temizle
             </Link>
           </div>
-        </div>
-      </details>
-    </form>
+      </FilterSort>
+    </DiscoverForm>
   );
 }
 
 /** Arama sonucu satırı */
-export function PlayerRow({ c, me, skill }: { c: PlayerCandidate; me: boolean; skill?: string }) {
+export function PlayerRow({ c, me, skill, delta }: { c: PlayerCandidate; me: boolean; skill?: string; delta?: number }) {
   const rel = reliability(c.matches, c.noShows);
   const topSkills = Object.entries(c.skills)
     .filter((e): e is [string, number] => typeof e[1] === "number")
@@ -197,6 +173,7 @@ export function PlayerRow({ c, me, skill }: { c: PlayerCandidate; me: boolean; s
           ) : (
             <span className="text-emerald-300/90">Takımsız</span>
           )}
+          {delta !== undefined && <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 font-semibold text-accent">+{delta}</span>}
           {shown.map(([k, v]) => (
             <span key={k} className="shrink-0 rounded bg-pitch-700 px-1.5 py-0.5 font-semibold">{k} {v}</span>
           ))}
@@ -221,12 +198,15 @@ export function PlayerResults({
   total,
   userId,
   skill,
+  rising,
   moreHref,
 }: {
   items: PlayerCandidate[];
   total: number;
   userId: string;
   skill?: string;
+  /** Yükselenler sıralamasında satıra yazılan rating artışı */
+  rising?: Map<string, number>;
   moreHref: string | null;
 }) {
   if (total === 0) {
@@ -238,7 +218,7 @@ export function PlayerResults({
         <ul className="divide-y divide-line">
           {items.map((c) => (
             <li key={c.userId}>
-              <PlayerRow c={c} me={c.userId === userId} skill={skill} />
+              <PlayerRow c={c} me={c.userId === userId} skill={skill} delta={rising?.get(c.userId)} />
             </li>
           ))}
         </ul>

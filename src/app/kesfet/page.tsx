@@ -1,13 +1,18 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/supabase/server";
 import { canonicalDistrict, isProvince } from "@/lib/regions";
-import { RegionSelect } from "@/components/RegionSelect";
+import { DiscoverForm, type DiscoverTab } from "./DiscoverForm";
+import { SortSelect } from "./DiscoverControls";
+import { loadRisingDeltas, loadTeamForms } from "@/lib/featured-data";
+import { NO_FORM, TEAM_SORTS, parseTeamSort, sortTeams, winRate, type TeamSort } from "@/lib/team-sort";
+import type { TeamForm } from "@/lib/featured-rules";
+import { isSkillKey } from "@/lib/skills";
 import { findTeams } from "@/lib/teams-data";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadCandidates } from "@/lib/players-data";
-import { parseFilter, searchCandidates } from "@/lib/player-search";
+import { fold, parseFilter, searchCandidates } from "@/lib/player-search";
 import { PAGE_SIZE, PlayerFilters, PlayerResults } from "./PlayerSearch";
-import { Badge, Button, Card, ErrorNote, Header, Input, LinkButton, SectionTitle, cx } from "@/components/ui";
+import { Badge, Card, ErrorNote, Header, LinkButton, SectionTitle, cx } from "@/components/ui";
 import { OvrBadge } from "@/components/PlayerCard";
 import { TeamBadge } from "@/components/TeamBadge";
 import { Icon } from "@/components/Icon";
@@ -30,16 +35,19 @@ export default async function DiscoverPage({
   const city = sp.il === undefined ? (profile?.city ?? "") : isProvince(sp.il) ? sp.il : "";
   const district = canonicalDistrict(city, sp.ilce) ?? undefined;
   if (players) return <PlayersTab sp={sp} userId={user.id} city={city} district={district} />;
-  if (sp.sekme === "mac") return <FillCallsTab city={city} district={district} />;
+  if (sp.sekme === "mac") return <FillCallsTab q={sp.q} city={city} district={district} />;
   if (sp.sekme === "grup") return <GroupsTab sp={sp} city={city} district={district} />;
 
-  const [allTeams, { data: teamBlocks }] = await Promise.all([
-    findTeams(supabase, { city: city || undefined, district, q: sp.q, limit: 100 }),
+  const sort = parseTeamSort(sp.sirala);
+  const [allTeams, { data: teamBlocks }, forms] = await Promise.all([
+    findTeams(supabase, { city: city || undefined, district, q: sp.q, limit: 500 }),
     supabase.from("user_blocks").select("blocked_group_id").not("blocked_group_id", "is", null),
+    loadTeamForms(),
   ]);
   // Engellediğim takımlar listede görünmez
   const blockedTeams = new Set((teamBlocks ?? []).map((b) => b.blocked_group_id as string));
-  const teams = allTeams.filter((t) => !blockedTeams.has(t.id));
+  // Önce sırala, sonra ilk 100
+  const teams = sortTeams(allTeams.filter((t) => !blockedTeams.has(t.id)), sort, forms).slice(0, 100);
 
   return (
     <main>
@@ -47,26 +55,12 @@ export default async function DiscoverPage({
       <ErrorNote message={sp.error} />
       <Tabs active="takim" city={city} district={district} />
 
-      <form className="space-y-2" action="/kesfet">
-        <RegionSelect
-          key={`${city}-${district ?? ""}`}
-          cityName="il"
-          districtName="ilce"
-          defaultCity={city}
-          defaultDistrict={district}
-          requireCity={false}
-          showLabels={false}
-          anyLabel={{ city: "Tüm Türkiye", district: "Tüm ilçeler" }}
-          onChangeSubmit
-        />
-        <div className="flex gap-2">
-          <Input name="q" defaultValue={sp.q ?? ""} placeholder="Takım adı ara" />
-          <Button variant="secondary">Ara</Button>
-        </div>
-      </form>
+      <DiscoverForm key={sort} tab="takim" city={city} district={district} q={sp.q} placeholder="Takım adı ara">
+        <SortSelect value={sort} groups={[{ options: [...TEAM_SORTS] }]} />
+      </DiscoverForm>
 
       <SectionTitle>
-        {city ? `${city}${district ? ` · ${district}` : ""}` : "Türkiye"} takımları · {teams.length}
+        {where(city, district)} takımları · {teams.length}
       </SectionTitle>
       {teams.length === 0 ? (
         <Card className="text-center text-sm text-muted">
@@ -88,6 +82,7 @@ export default async function DiscoverPage({
                     <div className="truncate text-xs text-muted">
                       {[t.district, t.city].filter(Boolean).join(", ")} · {t.members} oyuncu
                     </div>
+                    <TeamRecord form={forms.get(t.id) ?? NO_FORM} sort={sort} />
                   </div>
                   <OvrBadge overall={t.rating} className={t.rated ? "" : "opacity-50"} />
                 </Link>
@@ -96,27 +91,50 @@ export default async function DiscoverPage({
           </ol>
         </Card>
       )}
-      <p className="mt-2 text-center text-xs text-muted">Takım puanı: kadronun en iyi 7 oyuncusunun ortalaması. Soluk puanlı takımlar henüz puanlı maç oynamadı.</p>
-
-      <SectionTitle>Davet kodun mu var?</SectionTitle>
-      <div className="grid grid-cols-2 gap-2">
-        <LinkButton href="/katil?tur=takim" variant="secondary" className="w-full">
-          Takıma katıl
-        </LinkButton>
-        <LinkButton href="/katil?tur=grup" variant="secondary" className="w-full">
-          Gruba katıl
-        </LinkButton>
-      </div>
+      <p className="mt-2 text-center text-xs text-muted">
+        Takım puanı: kadronun en iyi 7 oyuncusunun ortalaması; soluk puanlı takımlar henüz puanlı maç oynamadı. Maç ve galibiyet sayıları sadece uygulamadaki takımlarla oynanan, skoru onaylı maçlardandır.
+      </p>
+      <InviteCode href="/katil?tur=takim" label="Takıma katıl" />
     </main>
   );
 }
 
-type Tab = "takim" | "oyuncu" | "mac" | "grup";
+/** Bölge başlığı: "İl · İlçe" ya da Türkiye */
+const where = (city: string, district?: string) => (city ? `${city}${district ? ` · ${district}` : ""}` : "Türkiye");
 
-function Tabs({ active, city, district }: { active: Tab; city: string; district?: string }) {
+function InviteCode({ href, label }: { href: string; label: string }) {
+  return (
+    <>
+      <SectionTitle>Davet kodun mu var?</SectionTitle>
+      <LinkButton href={href} variant="secondary" className="w-full">
+        {label}
+      </LinkButton>
+    </>
+  );
+}
+
+/** Takım satırındaki maç özeti; seri/aktiflik/averaj sıralamasında ilgili değer de yazar */
+function TeamRecord({ form, sort }: { form: TeamForm; sort: TeamSort }) {
+  if (!form.played) {
+    return sort === "rating" || sort === "isim" || sort === "kadro" ? null : <div className="text-xs text-muted/70">Henüz maç yok</div>;
+  }
+  const extra =
+    sort === "seri" ? `${form.streak} maçlık seri`
+    : sort === "aktif" ? `30 günde ${form.recent} maç`
+    : sort === "averaj" ? `averaj ${form.diff > 0 ? "+" : ""}${form.diff}`
+    : null;
+  return (
+    <div className="truncate text-xs text-on-surface-variant">
+      {form.played} maç · {form.wins}G {form.draws}B {form.losses}M · %{winRate(form)}
+      {extra && <b className="text-accent"> · {extra}</b>}
+    </div>
+  );
+}
+
+function Tabs({ active, city, district }: { active: DiscoverTab; city: string; district?: string }) {
   // Sekme değişince seçili bölge korunur
   const region = new URLSearchParams({ il: city, ...(district ? { ilce: district } : {}) }).toString();
-  const tab = (key: Tab, label: string) => (
+  const tab = (key: DiscoverTab, label: string) => (
     <Link
       href={`/kesfet?${key === "takim" ? "" : `sekme=${key}&`}${region}`}
       className={cx(
@@ -145,36 +163,21 @@ interface DiscoverGroup {
   my_request: string | null;
 }
 
-/** Katılınabilecek takım ve gruplar (0044 discover_groups): Keşfet'te görünen topluluklar + takımlar; katılma isteği */
+/** Keşfet'te görünen topluluk grupları (0044 discover_groups) ve katılma isteği; takımlar "Takımlar" sekmesinde */
 async function GroupsTab({ sp, city, district }: { sp: Record<string, string | undefined>; city: string; district?: string }) {
   const { supabase } = await requireUser();
-  const kind = sp.tur === "takim" ? "team" : sp.tur === "topluluk" ? "community" : null;
   const [{ data }, { data: blocks }] = await Promise.all([
-    supabase.rpc("discover_groups", { p_city: city || null, p_district: district ?? null, p_kind: kind }),
+    supabase.rpc("discover_groups", { p_city: city || null, p_district: district ?? null, p_kind: "community" }),
     supabase.from("user_blocks").select("blocked_group_id").not("blocked_group_id", "is", null),
   ]);
   const blocked = new Set((blocks ?? []).map((b) => b.blocked_group_id as string));
-  const q = (sp.q ?? "").trim().toLocaleLowerCase("tr");
+  const q = fold(sp.q ?? "");
   const groups = ((data ?? []) as DiscoverGroup[])
     .filter((g) => !blocked.has(g.group_id))
-    .filter((g) => !q || g.name.toLocaleLowerCase("tr").includes(q))
+    .filter((g) => !q || fold(g.name).includes(q))
     // Katılabileceklerim önce
     .sort((a, b) => Number(b.accepts_requests && !b.is_member) - Number(a.accepts_requests && !a.is_member));
-  const params = (extra: Record<string, string>) =>
-    new URLSearchParams({ sekme: "grup", il: city, ...(district ? { ilce: district } : {}), ...(sp.tur ? { tur: sp.tur } : {}), ...extra }).toString();
-  const back = `/kesfet?${params({})}`;
-  const chip = (key: string, label: string) => {
-    const on = (sp.tur ?? "") === key;
-    return (
-      <Link
-        key={key}
-        href={`/kesfet?${new URLSearchParams({ sekme: "grup", il: city, ...(district ? { ilce: district } : {}), ...(key ? { tur: key } : {}) }).toString()}`}
-        className={cx("rounded-full border px-3 py-1.5 text-xs font-semibold", on ? "border-accent bg-accent/15 text-accent" : "border-line text-muted")}
-      >
-        {label}
-      </Link>
-    );
-  };
+  const back = `/kesfet?${new URLSearchParams({ sekme: "grup", il: city, ...(district ? { ilce: district } : {}), ...(sp.q ? { q: sp.q } : {}) }).toString()}`;
   return (
     <main>
       <Header title="Keşfet" />
@@ -183,52 +186,31 @@ async function GroupsTab({ sp, city, district }: { sp: Record<string, string | u
         <p className="mb-3 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">İsteğin gönderildi. Kaptan ya da yetkili karar verince haber gelir.</p>
       )}
       <Tabs active="grup" city={city} district={district} />
-      <form className="space-y-2" action="/kesfet">
-        <input type="hidden" name="sekme" value="grup" />
-        {sp.tur && <input type="hidden" name="tur" value={sp.tur} />}
-        <RegionSelect
-          key={`${city}-${district ?? ""}`}
-          cityName="il"
-          districtName="ilce"
-          defaultCity={city}
-          defaultDistrict={district}
-          requireCity={false}
-          showLabels={false}
-          anyLabel={{ city: "Tüm Türkiye", district: "Tüm ilçeler" }}
-          onChangeSubmit
-        />
-        <div className="flex gap-2">
-          <Input name="q" defaultValue={sp.q ?? ""} placeholder="Ad ara" />
-          <Button variant="secondary">Ara</Button>
-        </div>
-      </form>
-      <div className="mt-3 flex gap-2">{[chip("", "Hepsi"), chip("takim", "Takımlar"), chip("topluluk", "Gruplar")]}</div>
+      <DiscoverForm tab="grup" city={city} district={district} q={sp.q} placeholder="Grup adı ara" />
 
       <SectionTitle>
-        {city ? `${city}${district ? ` · ${district}` : ""}` : "Türkiye"} · katılabileceğin yerler · {groups.length}
+        {where(city, district)} grupları · {groups.length}
       </SectionTitle>
       {groups.length === 0 ? (
-        <Card className="text-center text-sm text-muted">Bu bölgede listelenen takım ya da grup yok. Gruplar, kurucusu &quot;Keşfet&apos;te görünsün&quot; derse burada çıkar.</Card>
+        <Card className="text-center text-sm text-muted">Bu bölgede listelenen grup yok. Gruplar, kurucusu &quot;Keşfet&apos;te görünsün&quot; derse burada çıkar.</Card>
       ) : (
         <div className="space-y-2">
           {groups.map((g) => {
-            const isTeam = g.kind === "team";
             const head = (
               <div className="flex items-center gap-3">
                 <TeamBadge id={g.group_id} name={g.name} color={g.color} logo={g.logo} size="sm" />
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-semibold">{g.name}</div>
                   <div className="truncate text-xs text-muted">
-                    {isTeam ? "Takım" : "Grup"} · {[g.district, g.city].filter(Boolean).join(", ") || "Bölge yok"} · {g.member_count} {isTeam ? "oyuncu" : "üye"}
+                    {[g.district, g.city].filter(Boolean).join(", ") || "Bölge yok"} · {g.member_count} üye
                   </div>
                 </div>
                 {g.is_member && <Badge tone="accent">Üyesin</Badge>}
-                {isTeam && !g.is_member && <Icon name="chevron_right" className="text-[18px] text-on-surface-variant" />}
               </div>
             );
             return (
               <Card key={g.group_id} className="space-y-2 p-3">
-                {isTeam || g.is_member ? (
+                {g.is_member ? (
                   <Link href={`/g/${g.group_id}`} className="block">
                     {head}
                   </Link>
@@ -238,45 +220,36 @@ async function GroupsTab({ sp, city, district }: { sp: Record<string, string | u
                 {g.description && <p className="line-clamp-2 text-xs text-on-surface-variant">{g.description}</p>}
                 {!g.is_member &&
                   (g.my_request === "pending" || g.accepts_requests ? (
-                    <JoinRequest groupId={g.group_id} back={back} pending={g.my_request === "pending"} isTeam={isTeam} />
+                    <JoinRequest groupId={g.group_id} back={back} pending={g.my_request === "pending"} isTeam={false} />
                   ) : (
-                    <p className="text-[11px] text-muted">{isTeam ? "Takım şu an katılma isteği almıyor; kaptandan davet bağlantısı iste." : "Grup şu an katılma isteği almıyor."}</p>
+                    <p className="text-[11px] text-muted">Grup şu an katılma isteği almıyor.</p>
                   ))}
               </Card>
             );
           })}
         </div>
       )}
+      <InviteCode href="/katil?tur=grup" label="Gruba katıl" />
     </main>
   );
 }
 
 /** Herkese açık adam aramalar (0041): bölgedeki eksiği olan maçlar; "Başvur" çağrı sayfasına götürür */
-async function FillCallsTab({ city, district }: { city: string; district?: string }) {
+async function FillCallsTab({ q, city, district }: { q?: string; city: string; district?: string }) {
   const { supabase } = await requireUser();
-  const calls = await openListings(supabase, city || undefined, district);
+  const needle = fold(q ?? "");
+  const calls = (await openListings(supabase, city || undefined, district)).filter(
+    (c) => !needle || [c.group_name, c.venue, c.opponent_name].some((v) => v && fold(v).includes(needle)),
+  );
   const extras = await matchExtras(supabase, calls.map((c) => c.match_id));
   return (
     <main>
       <Header title="Keşfet" />
       <Tabs active="mac" city={city} district={district} />
-      <form action="/kesfet">
-        <input type="hidden" name="sekme" value="mac" />
-        <RegionSelect
-          key={`${city}-${district ?? ""}`}
-          cityName="il"
-          districtName="ilce"
-          defaultCity={city}
-          defaultDistrict={district}
-          requireCity={false}
-          showLabels={false}
-          anyLabel={{ city: "Tüm Türkiye", district: "Tüm ilçeler" }}
-          onChangeSubmit
-        />
-      </form>
+      <DiscoverForm tab="mac" city={city} district={district} q={q} placeholder="Takım, grup veya saha ara" />
 
       <SectionTitle>
-        {city ? `${city}${district ? ` · ${district}` : ""}` : "Türkiye"} · adam arayan maçlar · {calls.length}
+        {where(city, district)} · adam arayan maçlar · {calls.length}
       </SectionTitle>
       {calls.length === 0 ? (
         <Card className="text-center text-sm text-muted">
@@ -364,7 +337,8 @@ async function PlayersTab({
     foot: filter.foot,
   });
   const candidates = allCandidates.filter((c) => !blocked.has(c.userId));
-  const found = searchCandidates(candidates, filter, sort);
+  const rising = sort === "yukselen" ? await loadRisingDeltas() : undefined;
+  const found = searchCandidates(candidates, filter, sort, rising);
   const items = found.slice(0, page * PAGE_SIZE);
   const more = new URLSearchParams(Object.entries(sp).filter((e): e is [string, string] => e[1] !== undefined && e[0] !== "sayfa" && e[0] !== "error"));
   more.set("sayfa", String(page + 1));
@@ -376,13 +350,14 @@ async function PlayersTab({
       <Tabs active="oyuncu" city={city} district={district} />
       <PlayerFilters city={city} district={district} filter={filter} sort={sort} />
       <SectionTitle>
-        {city ? `${city}${district ? ` · ${district}` : ""}` : "Türkiye"} oyuncuları · {found.length}
+        {where(city, district)} oyuncuları · {found.length}
       </SectionTitle>
       <PlayerResults
         items={items}
         total={found.length}
         userId={userId}
-        skill={filter.skill}
+        skill={isSkillKey(sort) ? sort : filter.skill}
+        rising={rising}
         moreHref={items.length < found.length ? `/kesfet?${more.toString()}` : null}
       />
       <p className="mt-2 text-center text-xs text-muted">
