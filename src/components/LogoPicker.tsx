@@ -5,6 +5,7 @@ import {
   autoCrest, CREST_EMBLEMS, CREST_PATTERNS, CREST_SHAPES, encodeCrest, parseCrest, PRESET_LOGOS,
   type CrestEmblem, type CrestPattern, type CrestShape, type CrestSpec,
 } from "@/lib/crest";
+import { ColorField } from "./ColorField";
 import { Crest } from "./Crest";
 import { LogoUploader } from "./LogoUploader";
 import { TeamBadge } from "./TeamBadge";
@@ -33,43 +34,6 @@ function Option({ on, label, onClick, children }: { on: boolean; label: string; 
     >
       {children}
     </button>
-  );
-}
-
-/** Renk satırı: renk seçici + elle yazılabilen hex kodu */
-function ColorRow({ label, name, value, onChange }: { label: string; name?: string; value: string; onChange: (color: string) => void }) {
-  // Yazım sürerken yarım kod kutuda kalır; renk yalnızca 6 haneli kod tamamlanınca değişir
-  const [draft, setDraft] = useState<string | null>(null);
-  return (
-    <div className="flex items-center gap-3">
-      <span className="min-w-0 flex-1 text-sm font-semibold">{label}</span>
-      <input
-        type="color"
-        value={value}
-        onChange={(e) => {
-          setDraft(null);
-          onChange(e.target.value.toLowerCase());
-        }}
-        aria-label={`${label} seç`}
-        className="h-11 w-14 shrink-0 cursor-pointer rounded-xl border border-line bg-pitch-950 p-1"
-      />
-      <input
-        type="text"
-        value={draft ?? value.toUpperCase()}
-        onChange={(e) => {
-          setDraft(e.target.value);
-          const hex = e.target.value.trim().replace(/^#/, "");
-          if (/^[0-9a-f]{6}$/i.test(hex)) onChange(`#${hex.toLowerCase()}`);
-        }}
-        onBlur={() => setDraft(null)}
-        maxLength={7}
-        spellCheck={false}
-        autoComplete="off"
-        aria-label={`${label} hex kodu`}
-        className="h-11 w-28 shrink-0 rounded-xl border border-line bg-pitch-950 px-3 font-mono text-sm uppercase outline-none focus:border-accent"
-      />
-      {name && <input type="hidden" name={name} value={value} />}
-    </div>
   );
 }
 
@@ -187,8 +151,8 @@ export function LogoPicker({ id, logo, name, color }: { id?: string; logo: strin
       )}
 
       <div className="mt-4 space-y-2">
-        <ColorRow label="Birinci renk" name="color" value={primary} onChange={setPrimary} />
-        {mode === "crest" && <ColorRow label="İkinci renk" value={spec.second} onChange={(second) => setSpec({ ...spec, second })} />}
+        <ColorField label="Birinci renk" name="color" value={primary} onChange={setPrimary} />
+        {mode === "crest" && <ColorField label="İkinci renk" value={spec.second} onChange={(second) => setSpec({ ...spec, second })} />}
       </div>
     </div>
   );
