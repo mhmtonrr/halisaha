@@ -7,6 +7,7 @@ export interface MatchOverview {
   group_name: string;
   group_kind: "team" | "community";
   group_color: string | null;
+  group_logo: string | null;
   city: string | null;
   district: string | null;
   status: string;

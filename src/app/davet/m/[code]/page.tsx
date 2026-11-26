@@ -15,6 +15,7 @@ interface ByCode {
   group_name: string;
   group_kind: "team" | "community";
   group_color: string | null;
+  group_logo: string | null;
   city: string | null;
   district: string | null;
   status: string;
@@ -78,7 +79,7 @@ export default async function MatchInvitePage({
       <ErrorNote message={error} />
       <Card className="mb-4 space-y-3">
         <div className="flex items-center gap-3">
-          <TeamBadge name={m.group_name} color={m.group_color} size="sm" />
+          <TeamBadge id={m.group_id} name={m.group_name} color={m.group_color} logo={m.group_logo} size="sm" />
           <div className="min-w-0">
             <div className="truncate font-bold">{m.group_name}</div>
             <div className="text-xs text-muted">

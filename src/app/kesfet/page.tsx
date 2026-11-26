@@ -82,7 +82,7 @@ export default async function DiscoverPage({
               <li key={t.id}>
                 <Link href={`/g/${t.id}`} className="flex items-center gap-3 px-4 py-3 transition hover:bg-pitch-800">
                   <span className={cx("w-6 text-center text-sm font-black", i < 3 ? "text-gold-1" : "text-muted")}>{i + 1}</span>
-                  <TeamBadge name={t.name} color={t.color} size="sm" />
+                  <TeamBadge id={t.id} name={t.name} color={t.color} logo={t.logo} size="sm" />
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-medium">{t.name}</div>
                     <div className="truncate text-xs text-muted">
@@ -138,6 +138,7 @@ interface DiscoverGroup {
   district: string | null;
   description: string | null;
   color: string | null;
+  logo: string | null;
   member_count: number;
   accepts_requests: boolean;
   is_member: boolean;
@@ -214,7 +215,7 @@ async function GroupsTab({ sp, city, district }: { sp: Record<string, string | u
             const isTeam = g.kind === "team";
             const head = (
               <div className="flex items-center gap-3">
-                <TeamBadge name={g.name} color={g.color} size="sm" />
+                <TeamBadge id={g.group_id} name={g.name} color={g.color} logo={g.logo} size="sm" />
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-semibold">{g.name}</div>
                   <div className="truncate text-xs text-muted">

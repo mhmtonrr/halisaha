@@ -14,6 +14,7 @@ export interface TeamRef {
   id: string;
   name: string;
   color: string | null;
+  logo: string | null;
   city: string | null;
   district: string | null;
 }
@@ -38,7 +39,7 @@ export interface Challenge {
   proposedTbd: boolean;
 }
 
-const TEAM_COLS = "id, name, color, city, district";
+const TEAM_COLS = "id, name, color, logo, city, district";
 
 type Row = {
   id: string;

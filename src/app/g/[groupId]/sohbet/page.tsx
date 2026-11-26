@@ -9,7 +9,7 @@ export default async function ChatPage({ params }: { params: Promise<{ groupId: 
   const { supabase, user } = await requireUser();
 
   const [{ data: group }, { data: members }, { data: messages }] = await Promise.all([
-    supabase.from("groups").select("id, name, color, kind").eq("id", groupId).maybeSingle(),
+    supabase.from("groups").select("id, name, color, logo, kind").eq("id", groupId).maybeSingle(),
     supabase.from("group_players").select("id, display_name, photo_url, role, user_id, is_loan").eq("group_id", groupId),
     supabase
       .from("group_messages")
@@ -31,6 +31,7 @@ export default async function ChatPage({ params }: { params: Promise<{ groupId: 
       groupId={groupId}
       groupName={group.name}
       groupColor={group.color}
+      groupLogo={group.logo}
       kind={group.kind as "team" | "community"}
       meId={me.id}
       canModerate={me.role === "captain" || me.role === "admin"}

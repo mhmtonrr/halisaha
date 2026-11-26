@@ -52,6 +52,7 @@ src/lib/featured-data.ts  Ana sayfa "öne çıkanlar" (havuzlar 5 dk `unstable_c
 src/lib/challenges-data.ts  Maç teklifleri sorguları (gelen/giden, bekleyen sayısı)
 src/lib/badges.ts        Profil rozetleri: maç kayıtlarından hesaplanır, saklanmaz (saf, testli)
 src/lib/card-name.ts     Karttaki ad: kısaltma ve "kartta görünen ad" doğrulaması + küfür kontrolü (saf, testli)
+src/lib/crest.ts         Takım logosu saf yardımcıları: arma parçaları, otomatik arma, logo değeri çözümleme
 src/lib/card-photo.ts    Kart fotoğrafı saf yardımcıları: depo yolu, kırpma/boyut hesapları (testli)
 src/lib/data.ts          Ortak sorgular, mevki/ayak sabitleri, tarih yardımcıları (TR saati)
 src/lib/regions.ts       81 il + src/data/districts.json (973 ilçe, iki kaynakla doğrulandı)
@@ -75,7 +76,7 @@ src/components/home/  Ana sayfa parçaları: ActionItem (Yapılacaklar satırı,
 src/lib/home.ts  Ana sayfa yardımcıları: seviye ilerlemesi, maça kalan gün, kadro kapasitesi (saf, testli)
 src/components/AutoOpenDetails.tsx  İlk yüklemede bir kez açılan açılır bölüm
 src/components/ProfileFields.tsx  Profil ve karşılama formlarının ortak alanları; RegionSelect.tsx bağlı il/ilçe seçimi
-src/components/TeamFields.tsx  Takım kurma ve takım/grup bilgileri düzenleme form alanları; TeamSizeSelect.tsx kaç kişilik (5v5…11v11); TeamBadge.tsx renkli baş harf rozeti
+src/components/TeamFields.tsx  Takım kurma ve takım/grup bilgileri düzenleme form alanları; TeamSizeSelect.tsx kaç kişilik (5v5…11v11); TeamBadge.tsx takım/grup logosu (görsel veya arma); Crest.tsx birleştirmeli arma SVG çizimi
 src/components/RosterTabs.tsx  Kadro / Misafirler sekmesi
 src/components/ShareLink.tsx  Sayfa linkini paylaş (paylaşım menüsü ya da panoya kopyala); profile/ShareButton.tsx profil için
 src/components/SkillBars.tsx  Kartın 6 yeteneği çubuk olarak; SkillQueueBanner.tsx değerlendirme bekleyen varsa /yetenek kartı
@@ -87,7 +88,7 @@ src/lib/authErrors.ts    Supabase Auth hatalarının Türkçesi
 src/lib/supabase/        server.ts (requireUser + karşılama yönlendirmesi), client.ts, admin.ts
 src/middleware.ts        Oturum yenileme, girişsiz yönlendirme, x-pathname başlığı
 src/app/                 Sayfalar (aşağıda)
-supabase/migrations/     0001..0052 SQL (sırayla; hepsi canlıya uygulandı)
+supabase/migrations/     0001..0054 SQL (sırayla; hepsi canlıya uygulandı)
 scripts/db-checks/       PGlite ile RLS/yetki kontrolleri (npm run db:check)
 scripts/setup-cron.mjs   Supabase pg_cron+pg_net ile /api/cron/tick'i 15 dakikada bir çağıran işi kurar/kaldırır (Vault'ta CRON_SECRET)
 scripts/e2e/             Canlı veritabanına karşı Playwright akış testleri

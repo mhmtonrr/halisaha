@@ -67,6 +67,8 @@ export default async function InboxPage() {
       unread: gUnread.get(m.group.id) ?? 0,
       kind: "group",
       color: m.group.color,
+      groupId: m.group.id,
+      logo: m.group.logo,
       hint: m.group.kind === "team" ? "Takım" : "Grup",
     };
   });

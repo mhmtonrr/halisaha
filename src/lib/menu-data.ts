@@ -8,6 +8,7 @@ export interface MenuGroup {
   name: string;
   kind: "community" | "team";
   color: string | null;
+  logo: string | null;
   role: Role;
 }
 
@@ -44,7 +45,7 @@ export async function loadMenuData(): Promise<MenuData | null> {
       groups: memberships
         // Geçici ve dağıtılmış takımlar menüde yok (ana sayfada "Geçici takımlarım" altında)
         .filter((m) => !m.group.temporary && !m.group.archived)
-        .map((m) => ({ id: m.group.id, name: m.group.name, kind: m.group.kind, color: m.group.color, role: m.role }))
+        .map((m) => ({ id: m.group.id, name: m.group.name, kind: m.group.kind, color: m.group.color, logo: m.group.logo, role: m.role }))
         .sort((a, b) => Number(b.kind === "team") - Number(a.kind === "team") || a.name.localeCompare(b.name, "tr")),
       skillCount: queue.length,
       friendRequests: friendRequests ?? 0,

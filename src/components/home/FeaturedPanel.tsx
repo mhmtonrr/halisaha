@@ -67,7 +67,7 @@ function TeamsList({ rows, unit, empty, v }: { rows: RankedTeam[]; unit: string;
         <div key={t.id} className="flex items-center gap-2.5 p-3">
           <span className={rankClass(i)}>#{i + 1}</span>
           <Link href={`/g/${t.id}`} className="flex min-w-0 flex-1 items-center gap-2.5">
-            <TeamBadge name={t.name} color={t.color} size="sm" />
+            <TeamBadge id={t.id} name={t.name} color={t.color} logo={t.logo} size="sm" />
             <span className="flex min-w-0 flex-col">
               <span className="truncate font-semibold">{t.name}</span>
               <span className="truncate text-xs text-on-surface-variant">

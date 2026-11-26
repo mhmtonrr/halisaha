@@ -23,7 +23,7 @@ export default async function ChallengePage({
   const { supabase, user } = await requireUser();
 
   const [{ data: target }, memberships] = await Promise.all([
-    supabase.from("groups").select("id, name, kind, city, district, color").eq("id", groupId).maybeSingle(),
+    supabase.from("groups").select("id, name, kind, city, district, color, logo").eq("id", groupId).maybeSingle(),
     getMemberships(supabase, user.id),
   ]);
   if (!target || target.kind !== "team") notFound();
@@ -38,7 +38,7 @@ export default async function ChallengePage({
     <main>
       <Header title="Maç teklif et" back={`/g/${groupId}`} />
       <Card className="mb-4 flex items-center gap-3">
-        <TeamBadge name={target.name} color={target.color} />
+        <TeamBadge id={target.id} name={target.name} color={target.color} logo={target.logo} />
         <div className="min-w-0 flex-1">
           <div className="text-xs uppercase tracking-wide text-muted">Rakip takım</div>
           <div className="truncate font-bold">{target.name}</div>
@@ -64,7 +64,7 @@ export default async function ChallengePage({
                 <input type="hidden" name="fromGroupId" value={mine[0].group.id} />
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-muted">Gönderen:</span>
-                  <TeamBadge name={mine[0].group.name} color={mine[0].group.color} size="sm" />
+                  <TeamBadge id={mine[0].group.id} name={mine[0].group.name} color={mine[0].group.color} logo={mine[0].group.logo} size="sm" />
                   <b>{mine[0].group.name}</b>
                 </div>
               </>

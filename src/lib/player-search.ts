@@ -9,6 +9,7 @@ export interface PublicTeamRef {
   id: string;
   name: string;
   color: string | null;
+  logo: string | null;
 }
 
 export interface PlayerCandidate {

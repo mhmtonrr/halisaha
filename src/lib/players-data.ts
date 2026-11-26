@@ -15,7 +15,7 @@ import type { PlayerCandidate, PublicTeamRef } from "@/lib/player-search";
 /** Tek sorguda taranan en fazla profil (bölge/mevki süzgeçlerinden sonra) */
 const CANDIDATE_LIMIT = 1000;
 
-type G = { id: string; name: string; kind: "community" | "team"; color: string | null };
+type G = { id: string; name: string; kind: "community" | "team"; color: string | null; logo: string | null };
 type GP = {
   user_id: string;
   is_loan: boolean | null;
@@ -45,7 +45,7 @@ async function buildCandidates(admin: SupabaseClient, profiles: ProfileRow[]): P
     fetchIn<GP>(ids, (part, from, to) =>
       admin
         .from("group_players")
-        .select("user_id, is_loan, left_at, groups(id, name, kind, color)")
+        .select("user_id, is_loan, left_at, groups(id, name, kind, color, logo)")
         .in("user_id", part)
         .range(from, to),
     ),
@@ -66,7 +66,7 @@ async function buildCandidates(admin: SupabaseClient, profiles: ProfileRow[]): P
     const teams: PublicTeamRef[] = [];
     for (const r of mine) {
       const g = one(r.groups);
-      if (g?.kind === "team" && !r.is_loan && !r.left_at) teams.push({ id: g.id, name: g.name, color: g.color });
+      if (g?.kind === "team" && !r.is_loan && !r.left_at) teams.push({ id: g.id, name: g.name, color: g.color, logo: g.logo });
     }
     return {
       userId: p.id,

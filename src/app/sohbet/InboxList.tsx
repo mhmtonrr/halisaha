@@ -18,6 +18,9 @@ export interface InboxRow {
   hint?: string;
   kind: "group" | "dm";
   color?: string | null;
+  /** Grup satırında logo ve grup kimliği */
+  groupId?: string;
+  logo?: string | null;
   photoUrl?: string | null;
   /** Tanımadığından gelen mesaj isteği */
   request?: boolean;
@@ -40,7 +43,7 @@ function Row({ r }: { r: InboxRow }) {
       <Card className={cx("flex items-center gap-3 transition hover:border-accent/50", r.request && "border-amber-400/40 bg-amber-400/5")}>
         <div className="shrink-0">
           {r.kind === "group" ? (
-            <TeamBadge name={r.title} color={r.color ?? null} size="sm" />
+            <TeamBadge id={r.groupId ?? r.key} name={r.title} color={r.color ?? null} logo={r.logo ?? null} size="sm" />
           ) : (
             <Avatar name={r.title} photoUrl={r.photoUrl} className="h-10 w-10 bg-pitch-700 text-sm" />
           )}

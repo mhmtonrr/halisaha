@@ -36,7 +36,7 @@ export default async function TeamStatsPage({ params }: { params: Promise<{ grou
 
   const { data: group } = await supabase
     .from("groups")
-    .select("id, name, kind, city, district, color")
+    .select("id, name, kind, city, district, color, logo")
     .eq("id", groupId)
     .maybeSingle();
   if (!group || group.kind !== "team") notFound();
@@ -99,7 +99,7 @@ export default async function TeamStatsPage({ params }: { params: Promise<{ grou
       />
       <Header title="Takım istatistikleri" back={`/g/${groupId}`} />
       <div className="mb-5 flex items-center gap-3">
-        <TeamBadge name={group.name} color={group.color} />
+        <TeamBadge id={group.id} name={group.name} color={group.color} logo={group.logo} />
         <div className="min-w-0 flex-1">
           <div className="truncate text-lg font-black">{group.name}</div>
           <div className="text-xs text-muted">{formatRegion(group.city ?? "", group.district)}</div>

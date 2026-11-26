@@ -133,7 +133,7 @@ function ChallengeCard({
     <Card className="space-y-3">
       <div className="flex items-center gap-3">
         <Link href={`/g/${other.id}`}>
-          <TeamBadge name={other.name} color={other.color} />
+          <TeamBadge id={other.id} name={other.name} color={other.color} logo={other.logo} />
         </Link>
         <div className="min-w-0 flex-1">
           <div className="text-xs text-muted">{direction === "in" ? "Teklif eden" : "Teklif edilen"}</div>

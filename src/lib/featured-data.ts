@@ -15,7 +15,7 @@ import { rankFeaturedPlayers, teamForms, type TeamFormRow } from "@/lib/featured
 
 export interface MvpEntry {
   player: PlayerCandidate;
-  team: { id: string; name: string; color: string | null };
+  team: { id: string; name: string; color: string | null; logo: string | null };
   opponent: string | null;
   playedAt: string;
   score: string;
@@ -53,11 +53,11 @@ async function weeklyMvps(): Promise<MvpEntry[]> {
     opponent_name: string | null;
     score_a: number | null;
     score_b: number | null;
-    groups: { id: string; name: string; kind: string; color: string | null } | { id: string; name: string; kind: string; color: string | null }[] | null;
+    groups: { id: string; name: string; kind: string; color: string | null; logo: string | null } | { id: string; name: string; kind: string; color: string | null; logo: string | null }[] | null;
   };
   const { data, error } = await admin
     .from("match_results")
-    .select("player_id, matches!inner(played_at, status, kind, opponent_name, score_a, score_b, groups!matches_group_id_fkey(id, name, kind, color))")
+    .select("player_id, matches!inner(played_at, status, kind, opponent_name, score_a, score_b, groups!matches_group_id_fkey(id, name, kind, color, logo))")
     .eq("is_mvp", true)
     .gte("matches.played_at", new Date(Date.now() - 7 * DAY).toISOString())
     .limit(300);
@@ -83,7 +83,7 @@ async function weeklyMvps(): Promise<MvpEntry[]> {
     seen.add(uid);
     out.push({
       player,
-      team: { id: g.id, name: g.name, color: g.color },
+      team: { id: g.id, name: g.name, color: g.color, logo: g.logo },
       opponent: r.m.kind === "external" ? r.m.opponent_name : null,
       playedAt: r.m.played_at,
       score: r.m.score_a !== null && r.m.score_b !== null ? `${r.m.score_a}-${r.m.score_b}` : "",

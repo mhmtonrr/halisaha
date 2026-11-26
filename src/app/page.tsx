@@ -532,7 +532,7 @@ function MembershipRow({ m, unread, next }: { m: Membership; unread: number; nex
   return (
     <Link href={`/g/${g.id}`} className="flex items-center gap-3 rounded-xl border border-line bg-surface-container p-3 transition hover:border-primary/50">
       <span className="relative">
-        <TeamBadge name={g.name} color={g.color} />
+        <TeamBadge id={g.id} name={g.name} color={g.color} logo={g.logo} />
         {unread > 0 && (
           <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-surface-container bg-primary px-1 text-[10px] font-bold text-on-primary" title={`${unread} okunmamış mesaj`}>
             {unread > 99 ? "99+" : unread}

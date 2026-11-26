@@ -72,6 +72,7 @@ export function ChatRoom({
   groupId,
   groupName,
   groupColor,
+  groupLogo,
   kind,
   meId,
   canModerate,
@@ -82,6 +83,7 @@ export function ChatRoom({
   groupId: string;
   groupName: string;
   groupColor: string | null;
+  groupLogo: string | null;
   kind: "team" | "community";
   meId: string;
   canModerate: boolean;
@@ -274,7 +276,7 @@ export function ChatRoom({
         <BackLink fallback={`/g/${groupId}`} className="-ml-2 rounded-lg p-2 text-muted hover:bg-pitch-800">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6" /></svg>
         </BackLink>
-        <TeamBadge name={groupName} color={groupColor} size="sm" />
+        <TeamBadge id={groupId} name={groupName} color={groupColor} logo={groupLogo} size="sm" />
         <div className="min-w-0 flex-1">
           <div className="truncate font-bold">{groupName}</div>
           <div className="flex items-center gap-1.5 text-xs text-muted">

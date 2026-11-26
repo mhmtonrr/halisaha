@@ -14,6 +14,7 @@ export interface RivalTeam {
   city?: string | null;
   district?: string | null;
   color?: string | null;
+  logo?: string | null;
 }
 export interface RivalSearch {
   q: string;
@@ -61,7 +62,7 @@ export function RivalPicker({
     const timer = setTimeout(async () => {
       let query = createClient()
         .from("groups")
-        .select("id, name, city, district, color")
+        .select("id, name, city, district, color, logo")
         .eq("kind", "team")
         .eq("is_temporary", false)
         .is("archived_at", null)
@@ -103,7 +104,7 @@ export function RivalPicker({
         </div>
       ) : team ? (
         <Card className="flex items-center gap-3 border-primary bg-primary/10">
-          <TeamBadge name={team.name} color={team.color ?? null} />
+          <TeamBadge id={team.id} name={team.name} color={team.color ?? null} logo={team.logo ?? null} />
           <div className="min-w-0 flex-1">
             <div className="truncate font-display font-bold">{team.name}</div>
             <div className="truncate text-xs text-muted">{place(team) || teamHint}</div>
@@ -136,7 +137,7 @@ export function RivalPicker({
               {results.map((t) => (
                 <li key={t.id}>
                   <button type="button" onClick={() => onTeam(t)} className="flex w-full items-center gap-3 rounded-xl border border-line bg-surface-container p-3 text-left">
-                    <TeamBadge name={t.name} color={t.color ?? null} size="sm" />
+                    <TeamBadge id={t.id} name={t.name} color={t.color ?? null} logo={t.logo ?? null} size="sm" />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-medium">{t.name}</span>
                       <span className="block truncate text-xs text-muted">{place(t)}</span>

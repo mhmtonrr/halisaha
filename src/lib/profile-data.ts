@@ -44,6 +44,7 @@ export interface PersonGroup {
   name: string;
   kind: "community" | "team";
   color: string | null;
+  logo: string | null;
   role: "captain" | "admin" | "organizer" | "member";
   isLoan: boolean;
   /** Ayrılmış: maç geçmişi için kayıt durur ama üye değil */
@@ -61,7 +62,7 @@ export interface Person {
   skills: Record<string, number | null>;
 }
 
-type G = { name: string; kind: "community" | "team"; color: string | null };
+type G = { name: string; kind: "community" | "team"; color: string | null; logo: string | null };
 
 export async function loadPerson(admin: SupabaseClient, userId: string): Promise<Person | null> {
   const [{ data: p }, { data: rows, error }] = await Promise.all([
@@ -70,7 +71,7 @@ export async function loadPerson(admin: SupabaseClient, userId: string): Promise
       .select("id, display_name, card_name, photo_url, city, district, preferred_position, secondary_positions, preferred_foot, shirt_number, bio, stats_visibility, discoverable, height_cm, weight_kg, available_days, frozen_at")
       .eq("id", userId)
       .maybeSingle(),
-    admin.from("group_players").select("id, group_id, role, is_loan, left_at, groups(name, kind, color)").eq("user_id", userId),
+    admin.from("group_players").select("id, group_id, role, is_loan, left_at, groups(name, kind, color, logo)").eq("user_id", userId),
   ]);
   if (error) throw error;
   if (!p) return null;
@@ -108,6 +109,7 @@ export async function loadPerson(admin: SupabaseClient, userId: string): Promise
         name: g?.name ?? "Grup",
         kind: g?.kind ?? "community",
         color: g?.color ?? null,
+        logo: g?.logo ?? null,
         role: r.role as PersonGroup["role"],
         isLoan: !!r.is_loan,
         left: !!r.left_at,

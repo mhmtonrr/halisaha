@@ -54,7 +54,7 @@ export default async function DmPage({ params }: { params: Promise<{ threadId: s
   const live: Record<string, LiveMatch> = {};
   for (const o of over.values()) {
     refStatus[`match:${o.match_id}`] = o.status;
-    live[o.match_id] = { status: o.status, roster: o.roster_count, capacity: o.capacity, myStatus: o.my_status, playedAt: o.played_at, timeTbd: o.time_tbd, opponent: o.opponent_name, ...extras.get(o.match_id) };
+    live[o.match_id] = { status: o.status, roster: o.roster_count, capacity: o.capacity, myStatus: o.my_status, playedAt: o.played_at, timeTbd: o.time_tbd, opponent: o.opponent_name, color: o.group_color, logo: o.group_logo, ...extras.get(o.match_id) };
   }
 
   await supabase.rpc("mark_dm_read", { p_thread_id: threadId });

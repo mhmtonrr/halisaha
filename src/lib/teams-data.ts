@@ -37,6 +37,7 @@ export interface TeamSummary {
   city: string | null;
   district: string | null;
   color: string | null;
+  logo: string | null;
   description: string | null;
   members: number;
   /** Hızlı kurulmuş geçici takım (0037) */
@@ -57,6 +58,7 @@ function summarize(g: {
   city: string | null;
   district: string | null;
   color: string | null;
+  logo: string | null;
   description: string | null;
   is_temporary?: boolean;
   archived_at?: string | null;
@@ -71,6 +73,7 @@ function summarize(g: {
     city: g.city,
     district: g.district,
     color: g.color,
+    logo: g.logo,
     description: g.description,
     members: members.length,
     temporary: !!g.is_temporary,
@@ -81,7 +84,7 @@ function summarize(g: {
 }
 
 const TEAM_SELECT =
-  "id, name, city, district, color, description, is_temporary, archived_at, group_players(user_id, is_loan, left_at)";
+  "id, name, city, district, color, logo, description, is_temporary, archived_at, group_players(user_id, is_loan, left_at)";
 
 /** Keşfet ve öne çıkanlarda listelenmek için en az bu kadar hesaplı asıl üye (kullanıcı kararı) */
 export const MIN_LISTED_MEMBERS = 5;

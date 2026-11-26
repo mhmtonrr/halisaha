@@ -127,7 +127,7 @@ function GroupSection({
               aria-expanded={isOpen}
               className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left hover:bg-pitch-800"
             >
-              <TeamBadge name={g.name} color={g.color} size="sm" />
+              <TeamBadge id={g.id} name={g.name} color={g.color} logo={g.logo} size="sm" />
               <span className="min-w-0 flex-1 truncate">{g.name}</span>
               <span className={cx("text-muted transition", isOpen && "rotate-90")}>›</span>
             </button>

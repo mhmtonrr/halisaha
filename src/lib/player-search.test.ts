@@ -6,7 +6,7 @@ const P = (o: Partial<PlayerCandidate>): PlayerCandidate => ({
   overall: 65, matches: 0, skills: {}, noShows: 0, teams: [], ...o,
 });
 const list = [
-  P({ name: "Ali", overall: 80, matches: 10, position: "FWD", secondary: ["MID"], skills: { HIZ: 82 }, teams: [{ id: "t", name: "T", color: null }] }),
+  P({ name: "Ali", overall: 80, matches: 10, position: "FWD", secondary: ["MID"], skills: { HIZ: 82 }, teams: [{ id: "t", name: "T", color: null, logo: null }] }),
   P({ name: "Işıl", overall: 70, matches: 4, position: "DEF", noShows: 2 }),
   P({ name: "Can", overall: 65, matches: 0, position: "GK", foot: "L" }),
   P({ name: "İlker", overall: 75, matches: 6, position: "MID", skills: { HIZ: 61 } }),

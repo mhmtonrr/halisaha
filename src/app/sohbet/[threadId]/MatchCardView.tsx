@@ -33,6 +33,8 @@ export interface LiveMatch {
   opponent?: string | null;
   pendingRival?: string | null;
   fee?: number | null;
+  color?: string | null;
+  logo?: string | null;
 }
 
 const MY: Record<string, string> = {
@@ -105,7 +107,7 @@ export function MatchCardView({
         </div>
         <div className="space-y-2 px-3 py-3">
           <div className="flex items-center gap-2.5">
-            <TeamBadge name={card.group_name} color={null} size="sm" />
+            <TeamBadge id={card.group_id} name={card.group_name} color={live?.color ?? null} logo={live?.logo ?? null} size="sm" />
             <div className="min-w-0">
               <div className="truncate font-bold">{card.group_name}</div>
               <div className="text-[11px] text-muted">{card.group_kind === "team" ? "Takım" : "Grup"}</div>

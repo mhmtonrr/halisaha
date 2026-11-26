@@ -1,3 +1,4 @@
+import { TeamBadge } from "./TeamBadge";
 import { cx } from "./ui";
 import { plateOf } from "@/lib/regions";
 import { cardDisplayName } from "@/lib/card-name";
@@ -70,8 +71,10 @@ export function PositionChip({ position, className }: { position: Position | nul
 
 
 export interface CardTeam {
+  id: string;
   name: string;
   color: string | null;
+  logo: string | null;
 }
 
 /** Seviye başına kart zemini (public/cards/*.webp, şeffaf kenarlı) ve yazı renkleri; maçsız oyuncu gri */
@@ -125,12 +128,8 @@ export function CardFace({
         <div className="font-extrabold" style={{ fontSize: "1.05em", marginTop: "0.2em" }}>{position ? POSITION_LABEL[position] : "—"}</div>
         <div style={{ width: "88%", height: 1, background: t.text, opacity: 0.35, margin: "0.55em 0 0.6em" }} />
         {team ? (
-          <span
-            className="inline-flex items-center justify-center rounded-full font-black text-white"
-            style={{ width: "2.1em", height: "2.1em", fontSize: "0.9em", background: team.color ?? "#1a5a36", boxShadow: "0 0 0 0.12em rgba(0,0,0,.65)" }}
-            title={team.name}
-          >
-            {initials(team.name)}
+          <span title={team.name} style={{ width: "2.1em", height: "2.1em" }}>
+            <TeamBadge id={team.id} name={team.name} color={team.color} logo={team.logo} className="h-full w-full" />
           </span>
         ) : null}
       </div>

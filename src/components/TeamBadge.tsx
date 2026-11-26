@@ -1,39 +1,41 @@
+import { DEFAULT_TEAM_COLOR, resolveLogo } from "@/lib/crest";
+import { Crest } from "./Crest";
 import { cx } from "./ui";
 
-/** Takım/grup için renkli rozet: baş harfler */
+/** Takım/grup logosu: yüklenen veya hazır görsel, yoksa arma (seçilmemişse kimlikten otomatik) */
 export function TeamBadge({
+  id,
   name,
   color,
+  logo,
   size = "md",
   className,
 }: {
+  /** Grup kimliği: otomatik armanın tohumu */
+  id: string;
   name: string;
   color: string | null;
+  logo: string | null;
   size?: "sm" | "md" | "lg";
   className?: string;
 }) {
-  const letters = name
-    .split(/\s+/)
-    .filter((w) => /^\p{L}/u.test(w))
-    .slice(0, 2)
-    .map((w) => w[0]!.toLocaleUpperCase("tr-TR"))
-    .join("");
-  const bg = color ?? "#1a5a36";
-  // Açık renklerde koyu yazı
-  const light = parseInt(bg.slice(1, 3), 16) * 0.299 + parseInt(bg.slice(3, 5), 16) * 0.587 + parseInt(bg.slice(5, 7), 16) * 0.114 > 160;
+  const resolved = resolveLogo(logo, id);
   return (
     <span
       className={cx(
-        "inline-flex shrink-0 items-center justify-center rounded-xl font-black shadow-inner",
-        size === "sm" && "h-8 w-8 text-xs",
-        size === "md" && "h-11 w-11 text-sm",
-        size === "lg" && "h-16 w-16 rounded-2xl text-xl",
-        light ? "text-pitch-950" : "text-white",
+        "inline-flex shrink-0 items-center justify-center",
+        size === "sm" && "h-8 w-8",
+        size === "md" && "h-11 w-11",
+        size === "lg" && "h-16 w-16",
         className,
       )}
-      style={{ background: `linear-gradient(135deg, ${bg}, ${bg}cc)` }}
     >
-      {letters || "?"}
+      {resolved.type === "image" ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={resolved.src} alt={name} className="h-full w-full object-contain" />
+      ) : (
+        <Crest spec={resolved.spec} color={color ?? DEFAULT_TEAM_COLOR} name={name} className="h-full w-full" />
+      )}
     </span>
   );
 }

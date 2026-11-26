@@ -40,7 +40,7 @@ export default async function GroupPage({
 
   const { data: group } = await supabase
     .from("groups")
-    .select("id, name, kind, city, district, color, description, is_temporary, archived_at")
+    .select("id, name, kind, city, district, color, logo, description, is_temporary, archived_at")
     .eq("id", groupId)
     .maybeSingle();
   if (!group) notFound();
@@ -160,7 +160,7 @@ export default async function GroupPage({
       {/* Üst bilgi kartı (profildeki başlık dili) */}
       <section className="-mt-2 mb-4 overflow-hidden rounded-2xl border border-line bg-gradient-to-br from-primary/10 via-surface-container to-surface-container p-4 shadow-md">
         <div className="flex items-center gap-4">
-          <TeamBadge name={group.name} color={group.color} size="lg" />
+          <TeamBadge id={group.id} name={group.name} color={group.color} logo={group.logo} size="lg" />
           <div className="min-w-0 flex-1">
             <div className="t-label-caps flex items-center gap-1 uppercase text-primary">
               <Icon name={isTeam ? "shield" : "groups"} fill className="text-[14px]" />

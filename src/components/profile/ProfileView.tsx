@@ -214,7 +214,7 @@ function GeneralPanel({
               skills={skills}
               city={p.city}
               district={p.district}
-              team={team ? { name: team.name, color: team.color } : null}
+              team={team ? { id: team.groupId, name: team.name, color: team.color, logo: team.logo } : null}
               unrated={person.matchesPlayed === 0}
             />
           }

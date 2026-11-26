@@ -89,7 +89,7 @@ export default async function SocialPage({ searchParams }: { searchParams: Promi
         {list.map((m) => (
           <Card key={m.group.id} className="flex items-center gap-3">
             <Link href={`/g/${m.group.id}`} className="flex min-w-0 flex-1 items-center gap-3">
-              <TeamBadge name={m.group.name} color={m.group.color} size="sm" />
+              <TeamBadge id={m.group.id} name={m.group.name} color={m.group.color} logo={m.group.logo} size="sm" />
               <div className="min-w-0">
                 <div className="truncate font-medium">{m.group.name}</div>
                 <div className="text-xs text-muted">{ROLE_LABEL[kind][m.role]}</div>

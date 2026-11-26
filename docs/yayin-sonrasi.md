@@ -17,5 +17,7 @@
 - **Maç süresi (60 / 90 dk)**: maç kurarken süre seçilecek (`matches`'e süre alanı, eski maçlar 60 dk varsayılan); İstatistik'teki "dk saha" şimdiki tahminin (maç × 60) yerine bundan hesaplanacak. Parçalar: 1) DB + maç kurma formu, 2) hesap + ekran.
 - **Öne çıkanlar engellemeye göre süzülsün**: ana sayfa öne çıkanları bölge başına ortak önbellekten geliyor, engellediklerim süzülmüyor. Önbelleğe dokunmadan sayfa açılırken kişiye göre süzülebilir (`src/lib/featured-data.ts`, `user_blocks`).
 
+- **Takım logosu denetimi**: yüklenen logolarda otomatik uygunsuzluk kontrolü yok; açılıştan önce bildirme/kaldırma yolu eklenmeli.
+
 ## Karar: yapılmayacaklar
 - **"Pas Ustası" rozeti**: pas isabeti verisi toplanmıyor; rozet kapsam dışı.

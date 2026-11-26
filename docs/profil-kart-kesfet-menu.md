@@ -60,7 +60,7 @@ Formlarda `RegionSelect` (il seçilince ilçeler) kullan.
 - **Arka plan kaldırma tarayıcıda** (`@imgly/background-removal`, ücretsiz, fotoğraf sunucuya ham gitmez; model ~40 MB, sadece yükleme ekranı açılınca `dynamic import`, model dosyaları üçüncü taraf CDN'den iner, repoya konmaz). Yedek: işlem başarısız/cihaz yetersizse düz kırpma. Kullanıcı **şeffaf PNG** yüklerse işlem atlanır.
 - Akış: seç → arka plan kaldır → kart üzerinde **canlı önizleme** → "Kaydet" / "Başka fotoğraf". Sonuç şeffaf **WebP (~100-200 KB, kırpılmış/küçültülmüş)** olarak Supabase Storage'a (yeni migration: avatar deposu, oyuncu sadece kendi dosyasını yazar/siler, herkes okur; sunucuda tür ve boyut doğrulanır). Oyuncu kendi fotoğrafını silebilir.
 - Telif/KVKK: fotoğraf sadece kendi kartında; üçüncü taraf servise gitmez. Seçilen alternatifler: ücretli API (remove.bg) ve sunucuda işleme **reddedildi**.
-- Takım rozeti tasarımı ayrı, sonraki geliştirme (kart şimdilik takım baş harflerini gösterir).
+- Takım logosu: bkz. `takim-grup-uyelik.md` "Takım/grup logosu"; kart takım rozeti yerine logoyu gösterir.
 
 ## Kartta görünen ad (yapıldı: 0025; kullanıcı onaylı kararlar)
 

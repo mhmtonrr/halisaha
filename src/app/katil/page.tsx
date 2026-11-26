@@ -32,6 +32,7 @@ type Info = {
   city: string | null;
   district: string | null;
   color: string | null;
+  logo: string | null;
   description: string | null;
   members: number;
   already_member: boolean;
@@ -102,7 +103,7 @@ export default async function JoinByCodePage({
       {info && (
         <Card className="mt-4 space-y-3">
           <div className="flex items-center gap-3">
-            <TeamBadge name={info.name} color={info.color} size="lg" />
+            <TeamBadge id={info.group_id} name={info.name} color={info.color} logo={info.logo} size="lg" />
             <div className="min-w-0 flex-1">
               <div className="truncate text-lg font-bold">{info.name}</div>
               <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted">

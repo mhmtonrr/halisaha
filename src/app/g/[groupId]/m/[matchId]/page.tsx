@@ -141,6 +141,7 @@ interface TeamInfo {
   id: string;
   name: string;
   color: string | null;
+  logo: string | null;
   city: string | null;
   district: string | null;
 }
@@ -174,7 +175,7 @@ async function loadOpponent(
   const groupId = m?.group_id ?? oppGroupId;
   if (!m || !groupId) return null;
   const [{ data: team }, roster] = await Promise.all([
-    supabase.from("groups").select("id, name, color, city, district").eq("id", groupId).single(),
+    supabase.from("groups").select("id, name, color, logo, city, district").eq("id", groupId).single(),
     fetchRoster(supabase, m.id, groupId),
   ]);
   if (!team) return null;
@@ -228,7 +229,7 @@ export default async function MatchPage({
     fetchRoster(supabase, matchId, groupId),
     getGroupPlayers(supabase, groupId),
     supabase.rpc("can_manage_match", { p_match_id: matchId }),
-    supabase.from("groups").select("name, color, kind, city").eq("id", groupId).single(),
+    supabase.from("groups").select("name, color, logo, kind, city").eq("id", groupId).single(),
     // Misafiri sadece kaptan/yetkili ekler (0042)
     supabase.rpc("is_group_admin", { p_group_id: groupId }),
     // Yeni maç yapısı (0042): benim kaydım (kadro/yedek/davetli/başvuru) ve üyeliğim
@@ -573,7 +574,7 @@ export default async function MatchPage({
       {planned && stage}
 
       {/* Planlanmış maçta iki takım sahnede; oylama ve sonuçta isimler maç özetinde */}
-      {linked && opp && !planned && !summarized && <VersusCard mine={{ id: groupId, name: myTeamName, color: myTeamColor, roster }} opp={opp} />}
+      {linked && opp && !planned && !summarized && <VersusCard mine={{ id: groupId, name: myTeamName, color: myTeamColor, logo: myTeam?.logo ?? null, roster }} opp={opp} />}
 
       {summarized && (
         <MatchSummary sides={summarySides} rival={external && !opp ? { title: labels.B, score: match.score_b } : undefined} />
@@ -1025,12 +1026,12 @@ function VersusCard({
   mine,
   opp,
 }: {
-  mine: { id: string; name: string; color: string | null; roster: RosterEntry[] };
+  mine: { id: string; name: string; color: string | null; logo: string | null; roster: RosterEntry[] };
   opp: Opponent;
 }) {
   const sides = [
-    { id: mine.id, name: mine.name, color: mine.color, roster: mine.roster, self: true },
-    { id: opp.team.id, name: opp.team.name, color: opp.team.color, roster: opp.roster, self: false },
+    { id: mine.id, name: mine.name, color: mine.color, logo: mine.logo, roster: mine.roster, self: true },
+    { id: opp.team.id, name: opp.team.name, color: opp.team.color, logo: opp.team.logo, roster: opp.roster, self: false },
   ];
   return (
     <Card className="mb-4 overflow-hidden p-0">
@@ -1039,7 +1040,7 @@ function VersusCard({
           <div key={t.id} className="contents">
             {i === 1 && <span className="mt-3 text-sm font-bold text-muted">VS</span>}
             <div className="flex min-w-0 flex-col items-center gap-1.5 text-center">
-              <TeamBadge name={t.name} color={t.color} size="md" />
+              <TeamBadge id={t.id} name={t.name} color={t.color} logo={t.logo} size="md" />
               {t.self ? (
                 <span className="max-w-full truncate text-sm font-bold">{t.name}</span>
               ) : (
