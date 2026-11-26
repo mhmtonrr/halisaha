@@ -129,7 +129,7 @@ export function VoteForm({
   const [mvp, setMvp] = useState<string | null>(initialMvp);
 
   const groups = [
-    { key: "mine", label: "Takım arkadaşların", color: colors[myTeam], list: targets.filter((t) => t.team === myTeam) },
+    { key: "mine", label: "Takımın", color: colors[myTeam], list: targets.filter((t) => t.team === myTeam) },
     { key: "rival", label: rivalLabel, color: colors[myTeam === "A" ? "B" : "A"], list: targets.filter((t) => t.team !== myTeam) },
   ].filter((g) => g.list.length > 0);
   const [tab, setTab] = useState(() => (groups.find((g) => g.list.some((t) => !initialScores[t.id])) ?? groups[0])?.key);
@@ -285,7 +285,7 @@ export function VoteForm({
       <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-10 mt-3 rounded-2xl border border-line bg-pitch-900/95 p-2 shadow-lg backdrop-blur">
         <div className="mb-1.5 px-1 text-center text-xs text-muted">
           {left > 0 ? `${left} oyuncu daha puanlamalısın` : mvp ? "Hazırsın" : "MVP seçmeyi unutma"}
-          {unsaved && " · Taslak bu cihazda saklanıyor"}
+          {unsaved && " · Taslak saklandı"}
         </div>
         <SubmitButton className="w-full" disabled={left > 0} pendingLabel="Kaydediliyor…">
           Oylarımı gönder

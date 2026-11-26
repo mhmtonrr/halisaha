@@ -3,7 +3,7 @@ import { Avatar } from "@/components/Avatar";
 import { cx } from "@/components/ui";
 import { perMatch, type TableRank } from "@/lib/team-stats";
 
-const COLS = "grid grid-cols-[2.25rem_minmax(0,1fr)_1.5rem_1.5rem_2.25rem_1.5rem_2rem_2rem] items-center gap-1 px-2";
+const COLS = "grid grid-cols-[2rem_minmax(0,1fr)_1.4rem_1.4rem_2rem_1.4rem_1.4rem_1.75rem_1.75rem] items-center gap-0.5 px-2";
 
 /** Klasik lig tablosu: rating sırası, son takım maçına göre ▲▼ */
 export function LeagueTable({
@@ -25,6 +25,7 @@ export function LeagueTable({
         <abbr title="Gol" className="no-underline">G</abbr>
         <abbr title="Maç başı gol" className="no-underline">G/M</abbr>
         <abbr title="Asist" className="no-underline">A</abbr>
+        <abbr title="Kurtarış" className="no-underline">K</abbr>
         <span>MVP</span>
         <abbr title="Rating" className="no-underline">RTG</abbr>
       </div>
@@ -54,6 +55,7 @@ export function LeagueTable({
               <span className="font-bold">{r.goals}</span>
               <span className="text-white/60">{perMatch(r.goals, r.played)}</span>
               <span>{r.assists}</span>
+              <span className="text-white/60">{r.saves}</span>
               <span className="text-gold-1">{r.mvps}</span>
               <span className="font-display text-sm font-black text-accent">{r.overall}</span>
             </Link>

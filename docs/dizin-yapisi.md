@@ -15,7 +15,8 @@ src/lib/match-manage-actions.ts  Maç ekranı yönetimi (4b): kadro/yedek/başvu
 src/app/g/[groupId]/m/[matchId]/ManageSections.tsx  Maç ekranı yönetim bölümleri (başvurular, adam ara, rakip seç, kesinleştir/ertele/iptal) + CounterForm
 src/app/g/[groupId]/m/[matchId]/LineupStage.tsx  Diziliş sahnesi (sürükle-bırak, kulübe, karşılaşma görünümü); StageField.tsx perspektifli saha zemini
 src/app/g/[groupId]/m/[matchId]/MatchSummary.tsx  Maç özeti (oylamada ve sonrasında): skor + gol/asist/kurtarış
-src/app/g/[groupId]/m/[matchId]/ResultsView.tsx  Maç sonuçları (maçın adamı, senin sonucun, performans sıralaması); LeagueTable.tsx takım puan tablosu, ResultTabs.tsx sekmeler
+src/app/g/[groupId]/m/[matchId]/ResultsView.tsx  Maç sonuçları (maçın adamı, senin sonucun, performans sıralaması); ResultTabs.tsx sekmeler
+src/components/team/TeamTable.tsx  Takım puan tablosu verisi (sonuç ekranı + takım istatistikleri); LeagueTable.tsx tablo görünümü
 src/app/g/[groupId]/m/[matchId]/RosterBoard.tsx  Kadro panosu: toplanırken Kadromuz / Yedekler / Kadro dışı (sürükle-bırak); planlanmış maçta yalnızca Kadro dışı
 src/app/g/[groupId]/m/[matchId]/AddPlayer.tsx  Oyuncu ekle: arkadaşlardan / uygulamada arayarak davet, misafir (GuestForm)
 src/app/g/[groupId]/m/[matchId]/InviteBox.tsx  Davet bağlantısı kutusu; RivalChooser.tsx maç ekranında rakip seçimi (components/RivalPicker.tsx: Maç ayarla ile ortak)
@@ -45,7 +46,7 @@ src/lib/profile-data.ts  Kişi bazlı veri (service role): loadPerson, loadPerso
 src/lib/invite.ts        Davet kodu: linkten/yazıdan kodu çıkarma, XXXXX-XXXXX biçimi, tür eşleşmesi (saf, testli)
 src/lib/fetch-in.ts      Büyük `in (...)` sorgularını parçalayıp sayfalayan yardımcı
 src/components/profile/ProfileView.tsx  Sekmeli profil (Genel/İstatistik/Maçlar/Ayarlar); /profil ve /oyuncu/[id] aynı bileşeni kullanır
-src/lib/team-stats.ts    Takım karnesi, form, seri, rakip bazlı geçmiş, oyuncu liderleri (saf, testli)
+src/lib/team-stats.ts    Takım karnesi, form, seri, rakip bazlı geçmiş, puan tablosu (saf, testli)
 src/lib/player-search.ts  Oyuncu arama süzgeçleri/sıralama/URL ayrıştırma (saf, testli); veri: src/lib/players-data.ts (service role, sadece `discoverable` kişiler)
 src/lib/featured-data.ts  Ana sayfa "öne çıkanlar" (havuzlar 5 dk `unstable_cache`, etiket `featured`; kademe kuralları src/lib/featured-rules.ts, testli); src/components/FeaturedSections.tsx (Suspense ile akar)
 src/lib/challenges-data.ts  Maç teklifleri sorguları (gelen/giden, bekleyen sayısı)

@@ -5,8 +5,7 @@ import { PositionChip } from "@/components/PlayerCard";
 import { cx } from "@/components/ui";
 import { getGroupSummaries, isSquadMember, type Position } from "@/lib/data";
 import { requireUser } from "@/lib/supabase/server";
-import { leagueTable } from "@/lib/team-stats";
-import { LeagueTable } from "./LeagueTable";
+import { TeamTable } from "@/components/team/TeamTable";
 import { ResultTabs } from "./ResultTabs";
 
 export interface ResultPlayer {
@@ -68,6 +67,7 @@ export async function ResultsView({
   const mvp = rows.find((x) => x.r?.is_mvp);
   const myIndex = rows.findIndex((x) => x.p.id === myId);
   const mine = myIndex >= 0 && rows[myIndex].r ? { ...rows[myIndex], r: rows[myIndex].r! } : null;
+  const squad = isTeam ? (await getGroupSummaries(supabase, groupId)).filter(isSquadMember) : [];
 
   const match = (
     <>
@@ -175,37 +175,7 @@ export async function ResultsView({
 
   return (
     <section aria-label="Maç sonuçları" className="-mx-4 mb-4 overflow-hidden bg-[#060d14] text-white sm:mx-0 sm:rounded-3xl sm:border sm:border-white/10">
-      {isTeam ? <ResultTabs match={match} table={<TeamTable groupId={groupId} myId={myId} />} /> : match}
+      {isTeam ? <ResultTabs match={match} table={<TeamTable supabase={supabase} groupId={groupId} squad={squad} myId={myId} />} /> : match}
     </section>
   );
-}
-
-/** Tüm zamanların takım puan tablosu (asıl kadro, kapanmış maçlar) */
-async function TeamTable({ groupId, myId }: { groupId: string; myId?: string }) {
-  const { supabase } = await requireUser();
-  const squad = (await getGroupSummaries(supabase, groupId)).filter(isSquadMember);
-  // Yükseliş/düşüş: takımın son kapanmış maçından önceki sıraya göre
-  const last = squad.flatMap((p) => p.history).sort((a, b) => b.playedAt.localeCompare(a.playedAt) || b.matchId.localeCompare(a.matchId))[0];
-  const { data: lastResults } = last
-    ? await supabase.from("match_results").select("player_id, rating_before, rating_after").eq("match_id", last.matchId)
-    : { data: [] as { player_id: string; rating_before: number; rating_after: number }[] };
-  const delta = new Map((lastResults ?? []).map((r) => [r.player_id as string, r.rating_after - r.rating_before]));
-  const rows = leagueTable(
-    squad.map((p) => {
-      const inLast = p.history.find((h) => h.matchId === last?.matchId);
-      return {
-        playerId: p.id,
-        name: p.display_name,
-        photoUrl: p.photo_url,
-        overall: p.overall,
-        played: p.totals.played,
-        goals: p.totals.goals,
-        assists: p.totals.assists,
-        saves: p.totals.saves,
-        mvps: p.totals.mvps,
-        last: inLast ? { goals: inLast.goals, assists: inLast.assists, ratingDelta: delta.get(p.id) ?? 0 } : null,
-      };
-    }),
-  );
-  return <LeagueTable groupId={groupId} rows={rows} myId={myId} />;
 }

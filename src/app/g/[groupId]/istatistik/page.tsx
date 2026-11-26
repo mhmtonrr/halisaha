@@ -1,4 +1,3 @@
-import { Icon } from "@/components/Icon";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -13,17 +12,14 @@ import {
   extremes,
   form,
   headToHead,
-  leaders,
   outcomeOf,
-  perMatch,
   recordOf,
   streak,
-  type LeaderKey,
   type Outcome,
-  type PlayerStatRow,
   type StatMatch,
 } from "@/lib/team-stats";
 import { TeamBadge } from "@/components/TeamBadge";
+import { TeamTable } from "@/components/team/TeamTable";
 import { OvrBadge } from "@/components/PlayerCard";
 import { Card, Header, LinkButton, SectionTitle, cx } from "@/components/ui";
 
@@ -74,24 +70,8 @@ export default async function TeamStatsPage({ params }: { params: Promise<{ grou
   const rivals = headToHead(matches);
   const recent = competitive(matches).reverse().slice(0, 10);
 
-  // Takım liderleri ve puanı asıl kadrodandır; misafirlerin istatistikleri kendi sekmesinde
+  // Takım puanı ve puan tablosu asıl kadrodandır; misafirlerin istatistikleri kendi sekmesinde
   const squad = players.filter(isSquadMember);
-  const statRows: PlayerStatRow[] = squad.map((p) => ({
-    playerId: p.id,
-    name: p.display_name,
-    played: p.totals.played,
-    goals: p.totals.goals,
-    assists: p.totals.assists,
-    saves: p.totals.saves,
-    mvps: p.totals.mvps,
-    overall: p.overall,
-  }));
-  const boards: { key: LeaderKey; title: string; icon: string; unit: string }[] = [
-    { key: "goals", title: "Gol krallığı", icon: "sports_soccer", unit: "gol" },
-    { key: "assists", title: "Asist krallığı", icon: "target", unit: "asist" },
-    { key: "mvps", title: "En çok MVP", icon: "star", unit: "MVP" },
-    { key: "saves", title: "Kurtarışlar", icon: "front_hand", unit: "kurtarış" },
-  ];
 
   const rated = squad.filter((p) => p.matches_played > 0);
   const avgOverall = squad.length ? Math.round(squad.reduce((s, p) => s + p.overall, 0) / squad.length) : 0;
@@ -204,39 +184,10 @@ export default async function TeamStatsPage({ params }: { params: Promise<{ grou
         </Card>
       </div>
 
-      <SectionTitle>Liderler</SectionTitle>
-      <div className="space-y-3">
-        {boards.map((b) => {
-          const top = leaders(statRows, b.key, 5);
-          if (!top.length) return null;
-          return (
-            <Card key={b.key} className="p-0">
-              <div className="flex items-center gap-1.5 border-b border-line px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted">
-                <Icon name={b.icon} fill className="text-[16px] text-gold-1" /> {b.title}
-              </div>
-              <ol className="divide-y divide-line">
-                {top.map((r, i) => (
-                  <li key={r.playerId}>
-                    <Link href={`/g/${groupId}/p/${r.playerId}`} className="flex items-center gap-3 px-4 py-2 transition hover:bg-pitch-800">
-                      <span className="w-4 text-sm font-bold text-muted">{i + 1}</span>
-                      <span className="min-w-0 flex-1 truncate">{r.name}</span>
-                      {b.key !== "mvps" && b.key !== "saves" && (
-                        <span className="text-xs text-muted">{perMatch(r[b.key], r.played)} / maç</span>
-                      )}
-                      <span className="w-16 text-right font-black tabular-nums">
-                        {r[b.key]} <span className="text-[10px] font-normal text-muted">{b.unit}</span>
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ol>
-            </Card>
-          );
-        })}
-        {boards.every((b) => leaders(statRows, b.key, 1).length === 0) && (
-          <Card className="text-center text-sm text-muted">Maç istatistiği girildikçe liderler burada görünür.</Card>
-        )}
-      </div>
+      <SectionTitle>Puan tablosu</SectionTitle>
+      <section aria-label="Puan tablosu" className="-mx-4 overflow-hidden bg-[#060d14] text-white sm:mx-0 sm:rounded-3xl sm:border sm:border-white/10">
+        <TeamTable supabase={supabase} groupId={groupId} squad={squad} myId={players.find((p) => p.user_id === user.id)?.id} />
+      </section>
 
       {rivals.length > 0 && (
         <>

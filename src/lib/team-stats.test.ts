@@ -4,13 +4,13 @@ import {
   extremes,
   form,
   headToHead,
-  leaders,
+  leagueTable,
   outcomeOf,
   perMatch,
   recordOf,
   streak,
-  type PlayerStatRow,
   type StatMatch,
+  type TableRow,
 } from "@/lib/team-stats";
 
 let n = 0;
@@ -100,23 +100,46 @@ describe("rakip bazlı geçmiş", () => {
   });
 });
 
-describe("oyuncu liderleri", () => {
-  const row = (name: string, o: Partial<PlayerStatRow>): PlayerStatRow => ({
-    playerId: name, name, played: 5, goals: 0, assists: 0, saves: 0, mvps: 0, overall: 70, ...o,
-  });
-  const rows = [row("Ali", { goals: 4 }), row("Veli", { goals: 4, played: 3 }), row("Can", { goals: 1 }), row("Deniz", {})];
-
-  it("0 olanları almaz, eşitlikte az maçta yapanı öne alır", () => {
-    expect(leaders(rows, "goals").map((r) => r.name)).toEqual(["Veli", "Ali", "Can"]);
-  });
-  it("sınırı uygular", () => {
-    expect(leaders(rows, "goals", 1)).toHaveLength(1);
-  });
-  it("hiç kimse yapmadıysa boş", () => {
-    expect(leaders(rows, "mvps")).toEqual([]);
-  });
-  it("maç başı ortalama", () => {
+describe("maç başı ortalama", () => {
+  it("iki basamağa yuvarlar, maçsız 0", () => {
     expect(perMatch(7, 3)).toBe(2.33);
     expect(perMatch(5, 0)).toBe(0);
+  });
+});
+
+describe("puan tablosu", () => {
+  const row = (name: string, o: Partial<TableRow> = {}): TableRow => ({
+    playerId: name, name, played: 3, goals: 0, assists: 0, saves: 0, mvps: 0, overall: 70, last: null, ...o,
+  });
+  const last = (ratingDelta: number, goals = 0, assists = 0) => ({ ratingDelta, goals, assists });
+  const names = (rows: TableRow[]) => leagueTable(rows).map((r) => r.name);
+
+  it("rating'e göre sıralar; eşitlikte maç, gol, asist, sonra Türkçe ad sırası", () => {
+    expect(names([row("Az", { overall: 60 }), row("Çok", { overall: 80 })])).toEqual(["Çok", "Az"]);
+    expect(names([row("A", { played: 2 }), row("B")])).toEqual(["B", "A"]);
+    expect(names([row("A", { goals: 1 }), row("B", { goals: 2 })])).toEqual(["B", "A"]);
+    expect(names([row("A", { assists: 1 }), row("B", { assists: 2 })])).toEqual(["B", "A"]);
+    expect(names([row("Şan"), row("Sel"), row("Ilgın"), row("İpek")])).toEqual(["Ilgın", "İpek", "Sel", "Şan"]);
+  });
+  it("hiç maçı olmayanı tabloya almaz", () => {
+    expect(names([row("A"), row("B", { played: 0, overall: 90 })])).toEqual(["A"]);
+    expect(leagueTable([])).toEqual([]);
+  });
+  it("son maçın rating değişimine göre yükselen ve düşeni gösterir", () => {
+    const t = leagueTable([row("Ali", { overall: 74, last: last(6) }), row("Veli", { overall: 72, last: last(-1) }), row("Can", { overall: 60 })]);
+    expect(t.map((r) => [r.name, r.rank, r.move])).toEqual([["Ali", 1, 1], ["Veli", 2, -1], ["Can", 3, 0]]);
+  });
+  it("ilk maçını son maçta oynayan yeni sayılır, geçtikleri düşer", () => {
+    const t = leagueTable([row("Yeni", { played: 1, overall: 80, last: last(15) }), row("Eski")]);
+    expect(t.map((r) => [r.name, r.move])).toEqual([["Yeni", null], ["Eski", -1]]);
+  });
+  it("önceki sırada eşitliği son maçtaki gol hariç tutularak çözer", () => {
+    const t = leagueTable([row("Ali", { goals: 5, last: last(0, 4) }), row("Veli", { goals: 3 })]);
+    expect(t.map((r) => [r.name, r.move])).toEqual([["Ali", 1], ["Veli", -1]]);
+  });
+  it("girdiyi değiştirmez, ek alanları korur", () => {
+    const rows = [{ ...row("A", { last: last(2, 1) }), photoUrl: "x" }];
+    expect(leagueTable(rows)[0]).toMatchObject({ photoUrl: "x", overall: 70, played: 3, rank: 1 });
+    expect(rows[0]).not.toHaveProperty("rank");
   });
 });

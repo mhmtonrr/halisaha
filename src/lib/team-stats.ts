@@ -1,4 +1,4 @@
-// Takım istatistikleri: rakibe karşı karne, form, seri, rakip bazlı geçmiş, oyuncu liderleri.
+// Takım istatistikleri: rakibe karşı karne, form, seri, rakip bazlı geçmiş, puan tablosu.
 // Saf fonksiyonlar (veritabanı yok) — src/lib/team-stats.test.ts ile test edilir.
 
 export interface StatMatch {
@@ -120,7 +120,7 @@ export function headToHead(matches: StatMatch[]): HeadToHead[] {
 }
 
 // ---------------------------------------------------------------------------
-// Oyuncu liderleri
+// Oyuncu satırları
 // ---------------------------------------------------------------------------
 
 export interface PlayerStatRow {
@@ -132,22 +132,6 @@ export interface PlayerStatRow {
   saves: number;
   mvps: number;
   overall: number;
-}
-
-export type LeaderKey = "goals" | "assists" | "saves" | "mvps";
-
-/** Anahtara göre ilk n oyuncu (0 olanlar listeye girmez); eşitlikte az maçta yapan öne geçer. */
-export function leaders(rows: PlayerStatRow[], key: LeaderKey, n = 5): PlayerStatRow[] {
-  return rows
-    .filter((r) => r[key] > 0)
-    .sort(
-      (a, b) =>
-        b[key] - a[key] ||
-        a.played - b.played ||
-        b.overall - a.overall ||
-        a.name.localeCompare(b.name, "tr"),
-    )
-    .slice(0, n);
 }
 
 /** Oyuncu başına maç başı ortalama (gol/asist verimi) */
