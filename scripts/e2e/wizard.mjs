@@ -24,7 +24,6 @@ export async function fillSetup(page, { day, time, size, venue, fee, opponent, a
   await page.waitForSelector('h2:text-is("Rakip"), h2:text-is("Gelenler")');
   if (await page.locator('h2:text-is("Rakip")').count()) {
     if (opponent || appRival) {
-      await page.click('button:has-text("Rakip belli")');
       if (opponent) {
         await page.click('button:text-is("Uygulamada yok")');
         await page.fill('input[aria-label="Rakip adı"]', opponent);

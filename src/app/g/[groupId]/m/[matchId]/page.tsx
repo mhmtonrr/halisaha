@@ -574,9 +574,6 @@ export default async function MatchPage({
 
       {/* Planlanmış maçta iki takım sahnede */}
       {linked && opp && !planned && <VersusCard mine={{ id: groupId, name: myTeamName, color: myTeamColor, roster }} opp={opp} />}
-      {external && !opp && ["played", "voting", "closed"].includes(match.status) && roster.length > 0 && (
-        <VersusCard mine={{ id: groupId, name: myTeamName, color: myTeamColor, roster }} opp={null} />
-      )}
 
       {summarized && (
         <MatchSummary sides={summarySides} rival={external && !opp ? { title: labels.B, score: match.score_b } : undefined} />
@@ -1029,17 +1026,15 @@ function VersusCard({
   opp,
 }: {
   mine: { id: string; name: string; color: string | null; roster: RosterEntry[] };
-  opp: Opponent | null;
+  opp: Opponent;
 }) {
-  // Rakip sistemde kayıtlı değilse (sadece yazılmış ad) yalnızca kendi kadromuz gösterilir
   const sides = [
     { id: mine.id, name: mine.name, color: mine.color, roster: mine.roster, self: true },
-    ...(opp ? [{ id: opp.team.id, name: opp.team.name, color: opp.team.color, roster: opp.roster, self: false }] : []),
+    { id: opp.team.id, name: opp.team.name, color: opp.team.color, roster: opp.roster, self: false },
   ];
-  const single = sides.length === 1;
   return (
     <Card className="mb-4 overflow-hidden p-0">
-      <div className={cx("grid items-start gap-2 px-3 py-4", single ? "grid-cols-1" : "grid-cols-[1fr_auto_1fr]")}>
+      <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-2 px-3 py-4">
         {sides.map((t, i) => (
           <div key={t.id} className="contents">
             {i === 1 && <span className="mt-3 text-sm font-bold text-muted">VS</span>}
@@ -1060,7 +1055,7 @@ function VersusCard({
           </div>
         ))}
       </div>
-      <div className={cx("grid divide-x divide-line border-t border-line", single ? "grid-cols-1" : "grid-cols-2")}>
+      <div className="grid grid-cols-2 divide-x divide-line border-t border-line">
         {sides.map((t) => (
           <ul key={t.id} className="min-w-0 space-y-1.5 p-3">
             {t.roster.length === 0 && <li className="py-2 text-center text-xs text-muted">Kadro bekleniyor</li>}

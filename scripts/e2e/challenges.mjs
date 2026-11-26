@@ -2,14 +2,16 @@
 // Canlı Supabase'e karşı çalışır; test kullanıcıları ve takımlarını sonunda siler.
 import { createRequire } from "module";
 import fs from "fs";
+import os from "os";
+import path from "path";
 import { removeTestUsers } from "./cleanup.mjs";
 const PROJ = process.cwd();
 const require = createRequire(PROJ + "/package.json");
 const { createClient } = require("@supabase/supabase-js");
 const { chromium } = require("playwright");
-const SHOTS = process.argv[2] ?? "/tmp/halisaha-shots";
+const SHOTS = process.argv[2] ?? path.join(os.tmpdir(), "halisaha-shots");
 fs.mkdirSync(SHOTS, { recursive: true });
-const env = Object.fromEntries(fs.readFileSync(PROJ + "/.env.local", "utf8").trim().split("\n").map((l) => l.split(/=(.*)/s).slice(0, 2)));
+const env = Object.fromEntries(fs.readFileSync(PROJ + "/.env.local", "utf8").trim().split(/\r?\n/).map((l) => l.split(/=(.*)/s).slice(0, 2)));
 const admin = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 const BASE = "http://localhost:3000";
 const log = (...a) => console.log("•", ...a);
@@ -89,7 +91,7 @@ try {
   await B1.goto(`${BASE}/g/${teamB}/teklifler`); await shot(B1, "33-gelen-teklif");
   await B1.click('button:has-text("Kabul et")'); await B1.waitForURL(/\/m\/[0-9a-f-]+\?kabul=1/);
   const mB = B1.url().match(/\/m\/([0-9a-f-]+)/)[1];
-  check("kabulde maç ekranına yönlendi, kadro boş uyarısı", (await B1.locator("text=Kadro boş").count()) > 0);
+  check("kabulde maç ekranına yönlendi, kadro uyarısı", (await B1.locator("text=Şimdi kadronu belirle").count()) > 0);
   const { data: ms } = await admin.from("matches").select("id, group_id, kind, status, opponent_name, opponent_group_id, challenge_id, team_size").eq("challenge_id", ch[0].id);
   check("kişi sayısı (5) iki maça da yazıldı", ms.length === 2 && ms.every((m) => m.team_size === 5));
   check("iki takımda da external maç oluştu", ms.length === 2 && ms.every((m) => m.kind === "external" && m.status === "planned"));
@@ -99,87 +101,96 @@ try {
   check("ana sayfada yaklaşan maç kartı (rakibe karşı, kadro 0/5)", (await B1.locator("body").innerText()).includes("0/5"));
   await shot(B1, "34b-ana-sayfa-yaklasan");
 
-  // 5) Kadrolar (her takım kendininkini seçer)
+  // 5) Kadrolar (her takım kendininkini "Kadro dışı" listesinden alır)
   for (const [page, gid, mid] of [[B1, teamB, mB], [A1, teamA, mA]]) {
-    await page.goto(`${BASE}/g/${gid}/m/${mid}`);
-    const boxes = page.locator('input[name="playerId"]');
-    // Kadro boşken bölüm zaten açık gelir; doluysa özete tıklayıp aç
-    if (!(await boxes.first().isVisible())) await page.locator("summary:has-text('Üye ekle / kadrodan çıkar')").click();
-    const n = await boxes.count();
-    for (let i = 0; i < n; i++) await boxes.nth(i).check({ force: true });
-    await page.click('button:has-text("Seçilenleri ekle")'); await page.waitForLoadState("networkidle");
+    await page.goto(`${BASE}/g/${gid}/m/${mid}`, { waitUntil: "networkidle" });
+    const add = page.locator('button:text-is("Kadroya ekle")');
+    for (let left = await add.count(); left > 0; left--) {
+      await add.first().click();
+      await page.waitForFunction((n) => [...document.querySelectorAll("button")].filter((b) => b.textContent === "Kadroya ekle").length < n, left, { timeout: 20000 });
+      // Satır iyimser güncellemeyle hemen kaybolur; sunucu kaydı bitene kadar bekle
+      await page.locator('section[aria-busy="true"]').waitFor({ state: "detached", timeout: 20000 });
+      await page.waitForLoadState("networkidle");
+    }
   }
   const { data: rosters } = await admin.from("match_players").select("match_id").in("match_id", [mA, mB]);
-  check("her maçta 2 oyuncu (toplu ekleme çalıştı)", rosters.filter((r) => r.match_id === mA).length === 2 && rosters.filter((r) => r.match_id === mB).length === 2);
+  check("her maçta 2 oyuncu", rosters.filter((r) => r.match_id === mA).length === 2 && rosters.filter((r) => r.match_id === mB).length === 2);
 
   const gp = async (uid, gid) => (await admin.from("group_players").select("id").eq("user_id", uid).eq("group_id", gid).single()).data.id;
-  // 5b) Diziliş: A1 fareyle sürükle-bırak, B1 dokunarak (seç + yerleştir)
-  const openEditor = async (page, gid, mid) => {
-    await page.goto(`${BASE}/g/${gid}/m/${mid}`);
-    await page.locator("summary:has-text('Diziliş (sürükle-bırak)')").click();
+  // 5b) Diziliş sahnesi: A1 fareyle sürükle-bırak, B1 dokunarak (seç + yerleştir)
+  const openStage = async (page, gid, mid) => {
+    await page.goto(`${BASE}/g/${gid}/m/${mid}`, { waitUntil: "networkidle" });
+    return page.locator("#dizilis");
   };
-  const lineupJson = async (page) => JSON.parse(await page.locator('input[name="lineup"]').inputValue());
+  const lineupJson = async (page) => JSON.parse(await page.locator('#dizilis input[name="lineup"]').inputValue());
   const box = async (loc) => { const b = await loc.boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; };
   const [idAli, idAyse, idBerk] = [await gp(users[0].id, teamA), await gp(users[1].id, teamA), await gp(users[2].id, teamB)];
+  const radios = '[role="radiogroup"][aria-label="Diziliş seç"] [role="radio"]';
+  const slot = (page, n) => page.locator(`#dizilis [data-drop="slot:${n}"]`);
+  const saveLineup = async (page) => { await page.locator('#dizilis button:text-is("Kaydet")').click(); await page.waitForURL(/dizilis=1/); await page.waitForLoadState("networkidle"); };
 
-  await openEditor(A1, teamA, mA);
-  check("editörde 5 kişilik dizilişler (2-2, 1-2-1…)", (await A1.locator('[role="radio"]').count()) === 4 && (await A1.locator('[role="radio"]:has-text("2-2")').count()) === 1);
-  await A1.locator('[role="radio"]:has-text("1-2-1")').click();
+  let stage = await openStage(A1, teamA, mA);
+  check("sahnede 5 kişilik dizilişler (2-2, 1-2-1…)", (await stage.locator(radios).count()) === 4 && (await stage.locator(`${radios}:has-text("2-2")`).count()) === 1);
+  await stage.locator(`${radios}:has-text("1-2-1")`).click();
   let lu = await lineupJson(A1);
   check("diziliş seçilince otomatik yerleşti (ikisi de sahada)", Object.values(lu).filter((v) => v !== null).length === 2);
-  await shot(A1, "40a-dizilis-editoru");
-  // Saha ekranın tamamen görünür olsun (fare koordinatları görünür alanda kalmalı)
-  const centerPitch = (page) => page.locator('[data-drop="slot:0"]').evaluate((el) => el.closest(".overflow-hidden").scrollIntoView({ block: "center" }));
-  await centerPitch(A1);
-  // Ali'nin kartını boş forvet slotuna (slot:4) sürükle
-  const aliToken = A1.locator('[data-drop^="slot:"] .cursor-grab:has-text("Ali Kaptan")');
-  const target = await box(A1.locator('[data-drop="slot:4"]'));
-  const from = await box(aliToken);
-  await A1.mouse.move(from.x, from.y); await A1.mouse.down();
-  await A1.mouse.move(from.x + 15, from.y - 15, { steps: 4 }); await A1.mouse.move(target.x, target.y, { steps: 10 }); await A1.mouse.up();
+  await shot(A1, "40a-dizilis-sahnesi");
+  // Saha ekranda tam görünsün (fare koordinatları görünür alanda kalmalı); yerleşme animasyonu bitsin
+  const center = async (page) => { await slot(page, 2).first().evaluate((el) => el.scrollIntoView({ block: "center" })); await page.waitForTimeout(900); };
+  await center(A1);
+  // Ali'nin kartını boş forvet yerine (slot 4) sürükle
+  const token = (name) => A1.locator(`#dizilis [aria-label="${name} kartı"]`);
+  const drag = async (name, to) => {
+    const from = await box(token(name)), t = await box(slot(A1, to).first());
+    await A1.mouse.move(from.x, from.y); await A1.mouse.down();
+    await A1.mouse.move(from.x + 15, from.y - 15, { steps: 4 }); await A1.mouse.move(t.x, t.y, { steps: 10 }); await A1.mouse.up();
+    await A1.waitForTimeout(700);
+  };
+  await drag("Ali Kaptan", 4);
   lu = await lineupJson(A1);
-  check("sürükle-bırak: Ali forvet slotuna (4) geçti", lu[idAli] === 4);
+  check("sürükle-bırak: Ali forvet yerine (4) geçti", lu[idAli] === 4);
   // Ayşe'yi Ali'nin üzerine bırak → yer değiştirirler (takas)
-  const ayseToken = A1.locator('[data-drop^="slot:"] .cursor-grab:has-text("Ayşe Oyuncu")');
-  const f2 = await box(ayseToken), t2 = await box(A1.locator('[data-drop="slot:4"]'));
-  await A1.mouse.move(f2.x, f2.y); await A1.mouse.down(); await A1.mouse.move(f2.x + 12, f2.y + 12, { steps: 3 }); await A1.mouse.move(t2.x, t2.y, { steps: 8 }); await A1.mouse.up();
+  await drag("Ayşe Oyuncu", 4);
   lu = await lineupJson(A1);
-  check("dolu slota bırakınca takas: Ayşe 4'e, Ali Ayşe'nin eski yerine", lu[idAyse] === 4 && lu[idAli] !== null && lu[idAli] !== 4);
-  await A1.click('button:has-text("Dizilişi kaydet")'); await A1.waitForURL(/dizilis=1/);
+  check("dolu yere bırakınca takas: Ayşe 4'e, Ali Ayşe'nin eski yerine", lu[idAyse] === 4 && lu[idAli] !== null && lu[idAli] !== 4);
+  await saveLineup(A1);
   const { data: lA } = await admin.from("match_players").select("player_id, slot, position, is_goalkeeper").eq("match_id", mA);
   const { data: mrow } = await admin.from("matches").select("formation_a").eq("id", mA).single();
-  check("kayıt: formasyon 1-2-1, iki oyuncunun slotu yazıldı", mrow.formation_a === "1-2-1" && lA.every((r) => r.slot !== null) && lA.find((r) => r.player_id === idAyse).slot === 4);
-  check("sahaya dizilen oyuncunun mevkisi slot rolü oldu (slot 4 = FWD)", lA.find((r) => r.player_id === idAyse).position === "FWD");
+  check("kayıt: formasyon 1-2-1, iki oyuncunun yeri yazıldı", mrow.formation_a === "1-2-1" && lA.every((r) => r.slot !== null) && lA.find((r) => r.player_id === idAyse).slot === 4);
+  check("sahaya dizilen oyuncunun mevkisi yerin rolü oldu (slot 4 = FWD)", lA.find((r) => r.player_id === idAyse).position === "FWD");
   check("kaleye dizilen oyuncu kaleci işaretlendi", lA.filter((r) => r.slot === 0).every((r) => r.is_goalkeeper && r.position === "GK"));
 
-  await openEditor(B1, teamB, mB);
-  await B1.locator('[role="radio"]:has-text("2-2")').click();
-  // dokunarak: kartı seç, sonra boş slota dokun
-  const berkToken = B1.locator('[data-drop^="slot:"] .cursor-grab:has-text("Berk Kaptan")');
-  await berkToken.click();
-  await B1.locator('[data-drop="slot:3"]').click();
+  stage = await openStage(B1, teamB, mB);
+  await stage.locator(`${radios}:has-text("2-2")`).click();
+  await center(B1);
+  // dokunarak: kartı seç, sonra boş yere dokun
+  await stage.locator('[aria-label="Berk Kaptan kartı"]').click();
+  await slot(B1, 3).first().click();
   lu = await lineupJson(B1);
-  check("dokunarak yerleştirme: Berk 3. slota geçti", lu[idBerk] === 3);
-  await B1.click('button:has-text("Dizilişi kaydet")'); await B1.waitForURL(/dizilis=1/);
+  check("dokunarak yerleştirme: Berk 3. yere geçti", lu[idBerk] === 3);
+  await saveLineup(B1);
   const { data: mB2 } = await admin.from("matches").select("formation_a").eq("id", mB).single();
   check("B takımı diziliş kaydetti (2-2)", mB2.formation_a === "2-2");
 
-  // Normal oyuncu editörü görmez, herkes iki sahayı görür
-  await A2.goto(`${BASE}/g/${teamA}/m/${mA}`);
-  check("oyuncuda diziliş editörü yok", (await A2.locator("summary:has-text('Diziliş (sürükle-bırak)')").count()) === 0);
-  check("oyuncu iki takımın dizilişini görür", (await A2.locator("text=Dizilişler").count()) > 0 && (await A2.locator("text=1-2-1").count()) > 0 && (await A2.locator("text=2-2").count()) > 0);
-  await X.goto(`${BASE}/g/${teamB}/m/${mB}`);
-  check("yabancı da dizilişleri görür (takımlar herkese açık)", (await X.locator("text=Dizilişler").count()) > 0);
+  // Normal oyuncu düzenleyemez, herkes iki sahayı görür
+  const bothSides = async (page, gid, mid, first, firstF, second, secondF) => {
+    const s = await openStage(page, gid, mid);
+    await s.locator(`[role="tab"]:has-text("${first}")`).click();
+    const a = (await s.innerText()).includes(firstF);
+    await s.locator(`[role="tab"]:has-text("${second}")`).click();
+    return a && (await s.innerText()).includes(secondF);
+  };
+  check("oyuncu iki takımın dizilişini görür", await bothSides(A2, teamA, mA, "E2E Kartallar", "1-2-1", "E2E Aslanlar", "2-2"));
+  check("rakip sahada rakip oyuncuların kartları", (await A2.locator('#dizilis [aria-label="Buse Oyuncu kartı"]').count()) === 1);
+  check("oyuncuda diziliş düzenleme yok", (await A2.locator(radios).count()) === 0 && (await A2.locator('#dizilis input[name="lineup"]').count()) === 0);
+  check("yabancı da dizilişleri görür (takımlar herkese açık)", await bothSides(X, teamB, mB, "E2E Aslanlar", "2-2", "E2E Kartallar", "1-2-1"));
   await shot(X, "40b-dizilisler-gorunum");
 
-  // 6) Ortak ekran: rakip kadro görünür
+  // 6) Ortak ekran
   await A1.goto(`${BASE}/g/${teamA}/m/${mA}`);
-  check("Kartal kaptanı rakip kadroyu karşılaşma kartında görür", (await A1.locator("text=Berk K.").count()) > 0 && (await A1.locator("text=Rakip kadro").count()) === 0);
-  check("karşılaşma kartında iki takım", (await A1.locator("text=VS").count()) > 0);
   check("planlanmış maçta sonuç formunda 'gelmedi' kutusu var", (await A1.locator('input[name="noshow"]').count()) > 0);
   await shot(A1, "35-ortak-mac-planli");
   await A2.goto(`${BASE}/g/${teamA}/m/${mA}`);
-  check("oyuncu rakip kadroyu görür", (await A2.locator("text=Buse O.").count()) > 0);
   check("oyuncuda skor formu yok", (await A2.locator('button:has-text("Skoru kaydet")').count()) === 0);
 
   // 6b) Geri oku geldiği sayfaya döner (sabit üst sayfaya değil)
@@ -190,15 +201,16 @@ try {
   check("bir sonraki geri ana sayfaya döndü", true);
 
   // 7) Skor: uyuşmazlık → düzeltme → eşleşme
-  const submitScore = async (page, gid, mid, a, b) => {
+  const submitScore = async (page, gid, mid, a, b, goals) => {
     await page.goto(`${BASE}/g/${gid}/m/${mid}`);
     const form = page.locator('form:has(input[name="scoreA"])').first();
     if (!(await form.locator('input[name="scoreA"]').isVisible())) await page.locator("summary:has-text('Skoru ve istatistikleri')").click();
     await page.fill('input[name="scoreA"]', String(a)); await page.fill('input[name="scoreB"]', String(b));
+    for (const [pid, n] of goals ?? []) await page.fill(`input[name="goals_${pid}"]`, String(n));
     await page.locator('button:has-text("Skoru kaydet")').click(); await page.waitForURL(/skor=/);
     return new URL(page.url()).searchParams.get("skor");
   };
-  check("ilk skor: rakip bekleniyor", (await submitScore(A1, teamA, mA, 4, 2)) === "waiting");
+  check("ilk skor: rakip bekleniyor", (await submitScore(A1, teamA, mA, 4, 2, [[idAli, 3], [idAyse, 1]])) === "waiting");
   check("bekleme bilgisi görünüyor", (await A1.locator("text=Rakibin skor girmesi bekleniyor").count()) > 0);
   check("skor düzeltme ekranında 'gelmedi' kutusu yok (sadece planlanmış maçta)", (await A1.locator('input[name="noshow"]').count()) === 0);
   await shot(A1, "36-skor-bekleniyor");
@@ -207,7 +219,7 @@ try {
   await shot(B1, "37-skor-uyusmuyor");
   const { data: mid1 } = await admin.from("matches").select("status").in("id", [mA, mB]);
   check("uyuşmazken oylama açılmadı", mid1.every((m) => m.status === "played"));
-  check("düzeltilmiş skor: settled", (await submitScore(B1, teamB, mB, 2, 4)) === "settled");
+  check("düzeltilmiş skor: settled", (await submitScore(B1, teamB, mB, 2, 4, [[idBerk, 2]])) === "settled");
   const { data: mid2 } = await admin.from("matches").select("status, voting_deadline").in("id", [mA, mB]);
   check("iki maç da oylamada, süre var", mid2.every((m) => m.status === "voting" && m.voting_deadline));
 
@@ -225,6 +237,13 @@ try {
   check("oy oranı açıklaması görünür (%60 / %40)", (await A1.locator("text=%60").count()) > 0 && (await A1.locator("text=%40").count()) > 0);
   await A2.goto(`${BASE}/g/${teamA}/m/${mA}`);
   check("oy formunda rakip takım oyuncuları da var", (await A2.locator("text=Rakip takım · E2E Aslanlar").count()) > 0 && (await A2.locator("[data-vote-row]").count()) === 3);
+  const summary = A2.locator('section[aria-label="Maç özeti"]');
+  const sum = (await summary.innerText()).toLocaleLowerCase("tr");
+  check("maç özetinde iki takımın golleri", ["ali kaptan", "3 gol", "ayşe oyuncu", "1 gol", "berk kaptan", "2 gol", "e2e kartallar", "e2e aslanlar"].every((x) => sum.includes(x)));
+  check("bağlı maçta karşılaşma kartında iki takım", (await A2.locator("text=VS").count()) > 0 && (await A2.locator("text=Buse O.").count()) > 0);
+  await A2.waitForLoadState("networkidle");
+  const send = A2.locator('button:has-text("Oylarımı gönder")');
+  check("iki sekme, eksikken gönder kapalı", (await A2.locator('[aria-label="Oylama"] [role="tab"]').count()) === 2 && (await send.isDisabled()));
   await shot(A2, "36b-capraz-oy-formu");
   for (const tab of await A2.locator('[aria-label="Oylama"] [role="tab"]').all()) {
     await tab.click();
@@ -244,6 +263,15 @@ try {
   // 9) Sonuç: iki takımın puanları, rakip puanlar kendi kartlarını etkilemez
   await A1.goto(`${BASE}/g/${teamA}/m/${mA}`);
   check("sonuç ekranında rakip takımın oyuncu puanları", (await A1.locator("text=Rakip takım sonuçları · E2E Aslanlar").count()) > 0 && (await A1.locator("text=Berk Kaptan").count()) > 0);
+  const results = A1.locator('section[aria-label="Maç sonuçları"]');
+  check("iki takımın sonuç bölümü, ikisinde de puan tablosu sekmesi", (await results.count()) === 2 && (await results.locator('[role="tab"]:has-text("Puan tablosu")').count()) === 2);
+  check("kendi sonuçlarımda 'Senin sonucun', rakipte yok", (await results.nth(0).innerText()).toLocaleLowerCase("tr").includes("senin sonucun") && !(await results.nth(1).innerText()).toLocaleLowerCase("tr").includes("senin sonucun"));
+  for (const [i, own, other] of [[0, "Ayşe Oyuncu", "Buse Oyuncu"], [1, "Buse Oyuncu", "Ayşe Oyuncu"]]) {
+    await results.nth(i).locator('[role="tab"]:has-text("Puan tablosu")').click();
+    const t = await results.nth(i).locator("ol:visible").innerText();
+    check(`puan tablosu ${i + 1}: sadece kendi kadrosu`, t.includes(own) && !t.includes(other) && (await results.nth(i).locator("ol > li:visible").count()) === 2);
+  }
+  check("sonuç ekranında yatay taşma yok", await A1.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
   await shot(A1, "38-ortak-mac-sonuc");
   const { data: ratedA } = await admin.from("user_ratings").select("user_id").in("user_id", users.slice(0, 4).map((u) => u.id));
   check("4 oyuncunun da rating'i yazıldı", ratedA.length === 4);
