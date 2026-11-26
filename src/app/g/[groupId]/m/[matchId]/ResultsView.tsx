@@ -72,26 +72,28 @@ export async function ResultsView({
   const match = (
     <>
       {mvp && (
-        <div className="relative isolate overflow-hidden px-4 py-6 text-center">
-          <div aria-hidden className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,rgba(251,191,36,0.28),transparent_65%)]" />
-          <div className="t-label-caps flex items-center justify-center gap-1 uppercase text-amber-300">
-            <Icon name="star" fill className="text-[16px]" />
-            Maçın adamı
-          </div>
-          <Link href={`/g/${groupId}/p/${mvp.p.id}`} className="mt-3 block">
-            <span className="inline-block rounded-full shadow-[0_0_0_3px_#fbbf24,0_0_28px_rgba(251,191,36,0.45)]">
-              <Avatar name={mvp.p.name} photoUrl={mvp.p.photoUrl} className="h-24 w-24 bg-white/10 text-2xl text-white" />
+        <Link
+          href={`/g/${groupId}/p/${mvp.p.id}`}
+          className="mx-3 mt-3 flex items-center gap-4 rounded-2xl border border-amber-400/30 bg-[radial-gradient(ellipse_at_left,rgba(251,191,36,0.25),transparent_70%)] p-3"
+        >
+          <span className="shrink-0 rounded-full shadow-[0_0_0_3px_#fbbf24,0_0_20px_rgba(251,191,36,0.4)]">
+            <Avatar name={mvp.p.name} photoUrl={mvp.p.photoUrl} className="h-16 w-16 bg-white/10 text-lg text-white" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="t-label-caps flex items-center gap-1 uppercase text-amber-300">
+              <Icon name="star" fill className="text-[16px]" />
+              Maçın adamı
             </span>
-            <div className="mt-3 truncate font-display text-2xl font-black">{mvp.p.name}</div>
-          </Link>
-          <div className="mt-0.5 text-sm text-white/60">
-            {[mvp.r!.weight > 0 && `Maç puanı ${mvp.r!.match_score.toFixed(1)}`, statLine(mvp.p)].filter(Boolean).join(" · ")}
-          </div>
-        </div>
+            <span className="line-clamp-2 break-words font-display text-xl font-black leading-tight">{mvp.p.name}</span>
+            <span className="mt-0.5 block text-xs text-white/60">
+              {[mvp.r!.weight > 0 && `Maç puanı ${mvp.r!.match_score.toFixed(1)}`, statLine(mvp.p)].filter(Boolean).join(" · ")}
+            </span>
+          </span>
+        </Link>
       )}
 
       {mine && (
-        <section aria-label="Senin sonucun" className="mx-3 mb-3 mt-3 rounded-2xl border border-accent/40 bg-accent/10 p-3">
+        <section aria-label="Senin sonucun" className="mx-3 mt-3 rounded-2xl border border-accent/40 bg-accent/10 p-3">
           <div className="t-label-caps mb-2 uppercase text-accent">Senin sonucun</div>
           <div className="grid grid-cols-3 gap-2 text-center">
             <div>
@@ -120,7 +122,7 @@ export async function ResultsView({
         </section>
       )}
 
-      <div className="t-label-caps px-4 pb-2 pt-1 uppercase text-white/50">Performans sıralaması</div>
+      <div className="t-label-caps px-4 pb-2 pt-3 uppercase text-white/50">Performans sıralaması</div>
       <ol className="space-y-1.5 px-3 pb-3">
         {rows.map(({ p, r }, i) => {
           const rated = !!r && r.weight > 0;
@@ -145,12 +147,16 @@ export async function ResultsView({
                   <Avatar name={p.name} photoUrl={p.photoUrl} className="h-9 w-9 bg-white/10 text-xs text-white" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-1.5">
-                    <span className="truncate text-sm font-semibold">{p.name}</span>
-                    <PositionChip position={p.position} />
-                    {r?.is_mvp && <Icon name="star" fill className="text-[15px] text-gold-1" />}
+                  <span className="line-clamp-2 break-words text-sm font-semibold leading-tight">
+                    {p.name}
+                    {r?.is_mvp && <Icon name="star" fill className="ml-1 align-text-bottom text-[15px] text-gold-1" />}
                   </span>
-                  {statLine(p) && <span className="block truncate text-xs text-white/50">{statLine(p)}</span>}
+                  {(p.position || statLine(p)) && (
+                    <span className="mt-0.5 flex items-center gap-1.5">
+                      <PositionChip position={p.position} />
+                      <span className="truncate text-xs text-white/50">{statLine(p)}</span>
+                    </span>
+                  )}
                 </span>
                 <span className="shrink-0 text-right">
                   <span className="block font-display text-xl font-black tabular-nums leading-tight">
@@ -174,7 +180,7 @@ export async function ResultsView({
   );
 
   return (
-    <section aria-label="Maç sonuçları" className="-mx-4 mb-4 overflow-hidden bg-[#060d14] text-white sm:mx-0 sm:rounded-3xl sm:border sm:border-white/10">
+    <section aria-label="Maç sonuçları" className="mb-4 overflow-hidden rounded-2xl border border-white/10 bg-[#060d14] text-white">
       {isTeam ? <ResultTabs match={match} table={<TeamTable supabase={supabase} groupId={groupId} squad={squad} myId={myId} />} /> : match}
     </section>
   );

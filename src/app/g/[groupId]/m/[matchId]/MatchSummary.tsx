@@ -23,16 +23,16 @@ export function MatchSummary({ sides, rival }: { sides: SummarySide[]; rival?: {
   const any = lists.some((s) => s.contributors.length > 0);
 
   return (
-    <section aria-label="Maç özeti" className="-mx-4 mb-4 bg-[#060d14] text-white sm:mx-0 sm:rounded-3xl sm:border sm:border-white/10">
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-5">
+    <section aria-label="Maç özeti" className="mb-3 overflow-hidden rounded-2xl border border-white/10 bg-[#060d14] text-white">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-3 px-4 py-5">
         {scores.map((s, i) => (
           <div key={i} className="contents">
-            {i === 1 && <span className="text-2xl text-white/35">-</span>}
+            {i === 1 && <span className="text-2xl leading-[3rem] text-white/35">-</span>}
             <div className="min-w-0 text-center">
               <div className="font-display text-5xl font-black tabular-nums leading-none">{s.score}</div>
-              <div className="mt-2 flex items-center justify-center gap-1.5">
-                {"color" in s && <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: (s as SummarySide).color }} />}
-                <span className="truncate text-xs font-bold uppercase text-white/60">{s.title}</span>
+              <div className="mt-2 line-clamp-2 break-words text-xs font-bold uppercase text-white/60">
+                {"color" in s && <span className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full" style={{ background: (s as SummarySide).color }} />}
+                {s.title}
               </div>
             </div>
           </div>
@@ -46,7 +46,7 @@ export function MatchSummary({ sides, rival }: { sides: SummarySide[]; rival?: {
               {s.contributors.length === 0 && <li className="text-center text-xs text-white/40">Kayıt yok</li>}
               {s.contributors.map((p) => (
                 <li key={p.id} className="min-w-0">
-                  <div className="truncate text-sm font-semibold">{p.name}</div>
+                  <div className="line-clamp-2 break-words text-sm font-semibold leading-tight">{p.name}</div>
                   <div className="mt-1 flex flex-wrap gap-1 text-[11px] font-semibold tabular-nums">
                     {p.goals > 0 && <span className="rounded-md bg-accent/15 px-1.5 py-0.5 text-accent">{p.goals} gol</span>}
                     {p.assists > 0 && <span className="rounded-md bg-white/10 px-1.5 py-0.5 text-white/80">{p.assists} asist</span>}

@@ -456,7 +456,9 @@ export default async function MatchPage({
             : []),
         ]}
       />
-      <Header title={open ? "Taktik Odası" : matchTitle} back={isMember || myTeam?.kind === "team" ? `/g/${groupId}` : "/"} />
+      <Header
+        // Rakip adı ve "Kendi aramızda" dar telefonda kesilmesin: iki satıra kadar
+        title={open ? "Taktik Odası" : <span className="line-clamp-2 whitespace-normal break-words text-base leading-tight">{matchTitle}</span>} back={isMember || myTeam?.kind === "team" ? `/g/${groupId}` : "/"} />
       <div className="-mt-3 mb-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-on-surface-variant">
         {statusBadge}
         {/* Açık maçta başlık "Taktik Odası"; kimle oynandığı burada */}
@@ -990,7 +992,7 @@ async function VotingView({
         />
       ) : (
         <>
-          <section aria-label="Oylama" className="-mx-4 mb-3 bg-[#060d14] sm:mx-0 sm:rounded-3xl sm:border sm:border-white/10">
+          <section aria-label="Oylama" className="mb-3 rounded-2xl border border-white/10 bg-[#060d14]">
             <VoteHeader status={status} title="Oylama sürüyor" />
           </section>
           <Card className="text-center text-sm text-muted">Bu maçta oynamadığın için oy veremezsin.</Card>
@@ -1138,12 +1140,13 @@ function OpponentSection({ opp, color }: { opp: Opponent; color: string }) {
     <>
       <SectionTitle
         action={
-          <Link href={`/g/${opp.team.id}`} className="text-xs text-accent">
+          <Link href={`/g/${opp.team.id}`} className="shrink-0 whitespace-nowrap text-xs text-accent">
             Takım sayfası ›
           </Link>
         }
       >
-        Rakip takım sonuçları · {opp.team.name}
+        Rakip sonuçları
+        <span className="block truncate font-sans text-xs font-medium normal-case tracking-normal text-muted">{opp.team.name}</span>
       </SectionTitle>
       <ResultsView groupId={opp.team.id} matchId={opp.match.id} roster={opp.roster.map((r) => ({ ...r, color }))} isTeam />
       <p className="mt-2 text-center text-xs text-muted">

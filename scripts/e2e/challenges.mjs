@@ -262,7 +262,7 @@ try {
 
   // 9) Sonuç: iki takımın puanları, rakip puanlar kendi kartlarını etkilemez
   await A1.goto(`${BASE}/g/${teamA}/m/${mA}`);
-  check("sonuç ekranında rakip takımın oyuncu puanları", (await A1.locator("text=Rakip takım sonuçları · E2E Aslanlar").count()) > 0 && (await A1.locator("text=Berk Kaptan").count()) > 0);
+  check("sonuç ekranında rakip takımın oyuncu puanları", (await A1.locator("text=Rakip sonuçları").count()) > 0 && (await A1.locator("text=Berk Kaptan").count()) > 0);
   const results = A1.locator('section[aria-label="Maç sonuçları"]');
   check("iki takımın sonuç bölümü, ikisinde de puan tablosu sekmesi", (await results.count()) === 2 && (await results.locator('[role="tab"]:has-text("Puan tablosu")').count()) === 2);
   check("kendi sonuçlarımda 'Senin sonucun', rakipte yok", (await results.nth(0).innerText()).toLocaleLowerCase("tr").includes("senin sonucun") && !(await results.nth(1).innerText()).toLocaleLowerCase("tr").includes("senin sonucun"));

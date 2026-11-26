@@ -48,8 +48,9 @@ export function LeagueTable({
                 </span>
               </span>
               <span className="flex min-w-0 items-center gap-1.5 text-left">
-                <Avatar name={r.name} photoUrl={r.photoUrl} className="h-7 w-7 bg-white/10 text-[10px] text-white" />
-                <span className="truncate text-[13px] font-semibold">{r.name}</span>
+                {/* Dar telefonda ada yer kalsın diye fotoğraf gizlenir */}
+                <Avatar name={r.name} photoUrl={r.photoUrl} className="h-7 w-7 bg-white/10 text-[10px] text-white max-[399px]:hidden" />
+                <span className="line-clamp-2 min-w-0 break-words text-[13px] font-semibold leading-tight">{r.name}</span>
               </span>
               <span className="text-white/60">{r.played}</span>
               <span className="font-bold">{r.goals}</span>
