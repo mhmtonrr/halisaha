@@ -37,6 +37,8 @@ Formül değişirse `recomputeGroup(groupId)` ile grubun tüm sonuçları yenide
 
 **Maç özeti** (`MatchSummary.tsx`, oylamada ve sonrasında): skor + taraf bazında gol/asist/kurtarış yapanlar (gol krallığı bölümü yok).
 
+**Sonuç ekranı** (`ResultsView.tsx`, kapanmış maç; rakip sonuçları aynı görünüm): maçın adamı, senin sonucun, performans sıralaması. Takımlarda ikinci sekme **puan tablosu** (`leagueTable`, tüm zamanlar, sezon yok, asıl kadro, rating sırası; M/G/G-M/A/MVP; ▲▼ takımın son kapanmış maçından önceki sıraya göre).
+
 **Genel rating (migration 0010; saklama 0032/0033)**: hesap sahibi oyuncunun rating'i tüm grup/takım/maçlardan **tek** hesaplanır ve
 `user_ratings`'e (anahtar `user_id`, hesap başına TEK satır) yazılır; üyelik satırı başına kopya yok. Misafirler (`user_id` boş)
 `player_ratings`'te kendi `group_players.id` satırıyla kalır (misafirin rating'i kendi grubunda kalır). Okuma: `src/lib/user-cards.ts`. Bir kişinin rating'i sadece oynadığı maçlara

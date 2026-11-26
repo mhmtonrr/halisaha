@@ -152,3 +152,51 @@ export function leaders(rows: PlayerStatRow[], key: LeaderKey, n = 5): PlayerSta
 
 /** Oyuncu başına maç başı ortalama (gol/asist verimi) */
 export const perMatch = (value: number, played: number) => (played ? Math.round((value / played) * 100) / 100 : 0);
+
+// ---------------------------------------------------------------------------
+// Puan tablosu
+// ---------------------------------------------------------------------------
+
+export interface TableRow extends PlayerStatRow {
+  /** Takımın son maçındaki katkısı; o maçta oynamadıysa null */
+  last: { goals: number; assists: number; ratingDelta: number } | null;
+}
+
+export interface TableRank extends TableRow {
+  rank: number;
+  /** Son maça göre sıra değişimi (artı: yükseldi); tabloya yeni girdiyse null */
+  move: number | null;
+}
+
+const byTable = (a: PlayerStatRow, b: PlayerStatRow) =>
+  b.overall - a.overall ||
+  b.played - a.played ||
+  b.goals - a.goals ||
+  b.assists - a.assists ||
+  a.name.localeCompare(b.name, "tr");
+
+/** Oynamış oyuncular rating sırasında; önceki sıra, son maçın katkısı geri alınarak bulunur. */
+export function leagueTable<T extends TableRow>(rows: T[]): (T & TableRank)[] {
+  const before = rows
+    .map((r) =>
+      r.last
+        ? {
+            ...r,
+            played: r.played - 1,
+            goals: r.goals - r.last.goals,
+            assists: r.assists - r.last.assists,
+            overall: r.overall - r.last.ratingDelta,
+          }
+        : r,
+    )
+    .filter((r) => r.played > 0)
+    .sort(byTable);
+  const prev = new Map(before.map((r, i) => [r.playerId, i + 1]));
+  return rows
+    .filter((r) => r.played > 0)
+    .sort(byTable)
+    .map((r, i) => {
+      const old = prev.get(r.playerId);
+      return { ...r, rank: i + 1, move: old === undefined ? null : old - (i + 1) };
+    });
+}

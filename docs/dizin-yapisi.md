@@ -15,6 +15,7 @@ src/lib/match-manage-actions.ts  Maç ekranı yönetimi (4b): kadro/yedek/başvu
 src/app/g/[groupId]/m/[matchId]/ManageSections.tsx  Maç ekranı yönetim bölümleri (başvurular, adam ara, rakip seç, kesinleştir/ertele/iptal) + CounterForm
 src/app/g/[groupId]/m/[matchId]/LineupStage.tsx  Diziliş sahnesi (sürükle-bırak, kulübe, karşılaşma görünümü); StageField.tsx perspektifli saha zemini
 src/app/g/[groupId]/m/[matchId]/MatchSummary.tsx  Maç özeti (oylamada ve sonrasında): skor + gol/asist/kurtarış
+src/app/g/[groupId]/m/[matchId]/ResultsView.tsx  Maç sonuçları (maçın adamı, senin sonucun, performans sıralaması); LeagueTable.tsx takım puan tablosu, ResultTabs.tsx sekmeler
 src/app/g/[groupId]/m/[matchId]/RosterBoard.tsx  Kadro panosu: toplanırken Kadromuz / Yedekler / Kadro dışı (sürükle-bırak); planlanmış maçta yalnızca Kadro dışı
 src/app/g/[groupId]/m/[matchId]/AddPlayer.tsx  Oyuncu ekle: arkadaşlardan / uygulamada arayarak davet, misafir (GuestForm)
 src/app/g/[groupId]/m/[matchId]/InviteBox.tsx  Davet bağlantısı kutusu; RivalChooser.tsx maç ekranında rakip seçimi (components/RivalPicker.tsx: Maç ayarla ile ortak)

@@ -27,6 +27,7 @@ import { Badge, Button, Card, ErrorNote, Header, Input, SectionTitle, cx } from 
 import { OvrBadge, PositionChip, shortName } from "@/components/PlayerCard";
 import { VoteForm, VoteHeader } from "./VoteForm";
 import { MatchSummary, type SummarySide } from "./MatchSummary";
+import { ResultsView } from "./ResultsView";
 import { WithdrawalSection, type WithdrawalRow } from "./WithdrawalSection";
 
 type Team = "A" | "B";
@@ -679,7 +680,13 @@ export default async function MatchPage({
       )}
 
       {match.status === "closed" && (
-        <ResultsView groupId={groupId} matchId={matchId} roster={roster} myId={me?.id} external={external} />
+        <ResultsView
+          groupId={groupId}
+          matchId={matchId}
+          roster={roster.map((r) => ({ ...r, color: stageSides[!external && r.team === "B" ? 1 : 0].color }))}
+          myId={me?.id}
+          isTeam={myTeam?.kind === "team"}
+        />
       )}
 
       {manage && (
@@ -700,7 +707,7 @@ export default async function MatchPage({
         />
       )}
 
-      {linked && opp && <OpponentSection opp={opp} />}
+      {linked && opp && <OpponentSection opp={opp} color={stageSides[1].color} />}
 
       {planned && (
         <WithdrawalSection
@@ -1012,103 +1019,6 @@ async function VotingView({
   );
 }
 
-async function ResultsView({
-  groupId,
-  matchId,
-  roster,
-  myId,
-  external,
-}: {
-  groupId: string;
-  matchId: string;
-  roster: RosterEntry[];
-  myId?: string;
-  external: boolean;
-}) {
-  const { supabase } = await requireUser();
-  const { data: results } = await supabase
-    .from("match_results")
-    .select("player_id, match_score, votes_received, rating_before, rating_after, is_mvp, weight")
-    .eq("match_id", matchId);
-  const byId = new Map((results ?? []).map((r) => [r.player_id, r]));
-  const rows = roster
-    .map((p) => ({ p, r: byId.get(p.id) }))
-    .sort((a, b) => (b.r?.match_score ?? 0) - (a.r?.match_score ?? 0));
-  const mvp = rows.find((x) => x.r?.is_mvp);
-
-  return (
-    <>
-      {mvp && (
-        <Card className="mb-4 flex items-center gap-4 border-amber-400/40 bg-amber-400/10">
-          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-amber-400/20">
-            <Icon name="star" fill className="text-[34px] text-gold-1" />
-          </span>
-          <div className="min-w-0">
-            <div className="t-label-caps uppercase text-amber-300">Maçın adamı</div>
-            <div className="truncate font-display text-xl font-bold">{mvp.p.name}</div>
-            <div className="text-sm text-muted">Maç puanı {mvp.r!.match_score.toFixed(1)}</div>
-          </div>
-        </Card>
-      )}
-
-      <Card className="p-0">
-        <div className="grid grid-cols-[1.5rem_1fr_3rem_4.5rem] gap-2 border-b border-line px-3 py-2 text-[11px] uppercase text-muted">
-          <span />
-          <span>Oyuncu</span>
-          <span className="text-center">Puan</span>
-          <span className="text-right">Rating</span>
-        </div>
-        {rows.map(({ p, r }, i) => {
-          const delta = r ? r.rating_after - r.rating_before : 0;
-          return (
-            <Link
-              key={p.id}
-              href={`/g/${groupId}/p/${p.id}`}
-              className={cx(
-                "grid grid-cols-[1.5rem_1fr_3rem_4.5rem] items-center gap-2 px-3 py-2.5 transition hover:bg-pitch-800",
-                p.id === myId && "bg-accent/5",
-              )}
-            >
-              <span className="text-sm font-bold text-muted">{i + 1}</span>
-              <span className="min-w-0">
-                <span className="flex items-center gap-2">
-                  {!external && <span className={cx("h-2 w-2 shrink-0 rounded-full", TEAM[p.team].bg)} />}
-                  <span className="truncate font-medium">{p.name}</span>
-                  <PositionChip position={p.position} />
-                  {r?.is_mvp && <Icon name="star" fill className="text-[16px] text-gold-1" />}
-                </span>
-                <span className={cx("block text-xs text-muted", !external && "pl-4")}>
-                  {[p.goals && `${p.goals} gol`, p.assists && `${p.assists} asist`, p.saves && `${p.saves} kurtarış`]
-                    .filter(Boolean)
-                    .join(" · ") || " "}
-                </span>
-              </span>
-              <span className="text-center text-lg font-black tabular-nums">
-                {r && r.weight > 0 ? r.match_score.toFixed(1) : "–"}
-              </span>
-              <span className="text-right text-sm tabular-nums">
-                {r ? (
-                  <>
-                    <b>{r.rating_after}</b>{" "}
-                    <span className={delta > 0 ? "text-accent" : delta < 0 ? "text-red-400" : "text-muted"}>
-                      {delta > 0 ? `+${delta}` : delta < 0 ? delta : "±0"}
-                    </span>
-                  </>
-                ) : (
-                  "–"
-                )}
-              </span>
-            </Link>
-          );
-        })}
-      </Card>
-      <p className="mt-3 text-center text-xs text-muted">
-        Puanlar, herkesin kendi oy verme ölçeğine göre düzeltilmiş ve uç oylar atılmış ortalamadır.
-      </p>
-    </>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Takımlar arası maç: karşılaşma kartı, skor onayı, rakip kadro
 // ---------------------------------------------------------------------------
@@ -1226,7 +1136,7 @@ function PlayedView({
 }
 
 /** Maç kapanınca rakip takımın oyuncu puanları (kadro zaten karşılaşma kartında) */
-function OpponentSection({ opp }: { opp: Opponent }) {
+function OpponentSection({ opp, color }: { opp: Opponent; color: string }) {
   if (opp.match.status !== "closed") return null;
   return (
     <>
@@ -1239,9 +1149,9 @@ function OpponentSection({ opp }: { opp: Opponent }) {
       >
         Rakip takım sonuçları · {opp.team.name}
       </SectionTitle>
-      <ResultsView groupId={opp.team.id} matchId={opp.match.id} roster={opp.roster} external />
+      <ResultsView groupId={opp.team.id} matchId={opp.match.id} roster={opp.roster.map((r) => ({ ...r, color }))} isTeam />
       <p className="mt-2 text-center text-xs text-muted">
-        Her takım kendi oyuncularını puanlar; rakip oyuncuların puanları senin kartlarını etkilemez.
+        Sahadaki herkes iki takımın oyuncularını da puanlar; sonuçlar her takımda ayrı listelenir.
       </p>
     </>
   );
