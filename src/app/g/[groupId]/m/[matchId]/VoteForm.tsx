@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { submitVotes } from "@/lib/actions";
 import { cx } from "@/components/ui";
@@ -30,6 +30,30 @@ const SCORES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 const scoreLabel = (s: number) =>
   s >= 9 ? "Efsane" : s >= 8 ? "Çok iyi" : s >= 7 ? "İyi" : s >= 6 ? "Ortalama" : s >= 4 ? "Zayıf" : "Kötü";
+
+interface Draft {
+  scores: Record<string, number>;
+  mvp: string | null;
+}
+
+/** Cihazdaki taslak; bozuk veya erişilemezse yok sayılır, artık kadroda olmayan oyuncular atılır */
+function readDraft(key: string, ids: Set<string>): Draft | null {
+  try {
+    const raw = JSON.parse(localStorage.getItem(key) ?? "null") as Draft | null;
+    if (!raw?.scores) return null;
+    return {
+      scores: Object.fromEntries(Object.entries(raw.scores).filter(([id, n]) => ids.has(id) && SCORES.includes(n))),
+      mvp: raw.mvp && ids.has(raw.mvp) ? raw.mvp : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+const sameDraft = (a: Draft, b: Draft) =>
+  a.mvp === b.mvp &&
+  Object.keys(a.scores).length === Object.keys(b.scores).length &&
+  Object.entries(a.scores).every(([id, n]) => b.scores[id] === n);
 
 function Bar({ value, max, color }: { value: number; max: number; color: string }) {
   return (
@@ -79,6 +103,7 @@ export function VoteHeader({ status, title, mine }: { status: VoteStatus; title:
 export function VoteForm({
   groupId,
   matchId,
+  voterId,
   myTeam,
   targets,
   initialScores,
@@ -89,6 +114,7 @@ export function VoteForm({
 }: {
   groupId: string;
   matchId: string;
+  voterId: string;
   myTeam: "A" | "B";
   targets: Target[];
   initialScores: Record<string, number>;
@@ -107,6 +133,34 @@ export function VoteForm({
     { key: "rival", label: rivalLabel, color: colors[myTeam === "A" ? "B" : "A"], list: targets.filter((t) => t.team !== myTeam) },
   ].filter((g) => g.list.length > 0);
   const [tab, setTab] = useState(() => (groups.find((g) => g.list.some((t) => !initialScores[t.id])) ?? groups[0])?.key);
+
+  // Gönderilmemiş oylar cihazda saklanır (sayfadan çıkılsa da kaybolmaz); sunucudakiyle aynıysa taslak silinir
+  const draftKey = `hs-oy-${matchId}-${voterId}`;
+  const [restored, setRestored] = useState(false);
+  const unsaved = restored && !sameDraft({ scores, mvp }, { scores: initialScores, mvp: initialMvp });
+
+  useEffect(() => {
+    const draft = readDraft(draftKey, new Set(targets.map((t) => t.id)));
+    if (draft) {
+      const merged = { ...initialScores, ...draft.scores };
+      setScores(merged);
+      setMvp(draft.mvp);
+      setTab((cur) => (groups.find((g) => g.list.some((t) => !merged[t.id]))?.key ?? cur));
+    }
+    setRestored(true);
+    // Sadece ilk açılışta; canlı yenilemeler girilen puanların üstüne yazmasın
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey]);
+
+  useEffect(() => {
+    if (!restored) return;
+    try {
+      if (unsaved) localStorage.setItem(draftKey, JSON.stringify({ scores, mvp }));
+      else localStorage.removeItem(draftKey);
+    } catch {
+      // Gizli sekme / dolu depolama: taslaksız devam
+    }
+  }, [restored, unsaved, draftKey, scores, mvp]);
 
   const done = targets.filter((t) => scores[t.id]).length;
   const left = targets.length - done;
@@ -231,6 +285,7 @@ export function VoteForm({
       <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-10 mt-3 rounded-2xl border border-line bg-pitch-900/95 p-2 shadow-lg backdrop-blur">
         <div className="mb-1.5 px-1 text-center text-xs text-muted">
           {left > 0 ? `${left} oyuncu daha puanlamalısın` : mvp ? "Hazırsın" : "MVP seçmeyi unutma"}
+          {unsaved && " · Taslak bu cihazda saklanıyor"}
         </div>
         <SubmitButton className="w-full" disabled={left > 0} pendingLabel="Kaydediliyor…">
           Oylarımı gönder

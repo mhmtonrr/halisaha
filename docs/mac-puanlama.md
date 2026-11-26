@@ -33,7 +33,9 @@ galibiyet ±0.15; maçın önemi çarpanı (`MatchInput.importance`: takım raki
 Oylama süre dolunca **grup/maç sayfası açıldığında** veya en geç **günlük cron**da (`/api/cron/vote-reminders`, tüm gruplar, en fazla 50 maç) kapanır (`finalizeExpired`), herkes oy verince anında kapanır. Kapanınca kadroya "🏆 Sonuçlar açıklandı" bildirimi gider.
 Formül değişirse `recomputeGroup(groupId)` ile grubun tüm sonuçları yeniden yazılabilir (oylara dokunmaz).
 
-**Oylama ekranı** (`VoteForm.tsx`): puanlar boş başlar, 1–10 düğmeleri + MVP (isteğe bağlı), takım arkadaşı/rakip sekmeleri. Kendi dışındaki **tüm oyuncuları puanlamak zorunlu** (düğme kapalı kalır; `submitVotes` eksik puanı reddeder).
+**Oylama ekranı** (`VoteForm.tsx`): puanlar boş başlar, 1–10 düğmeleri + MVP (isteğe bağlı), takım arkadaşı/rakip sekmeleri. Kendi dışındaki **tüm oyuncuları puanlamak zorunlu** (düğme kapalı kalır; `submitVotes` eksik puanı reddeder). Gönderilmemiş puan/MVP cihazda taslak kalır (`localStorage` `hs-oy-<maç>-<oyuncu>`), sunucudakiyle eşleşince silinir.
+
+**Maç özeti** (`MatchSummary.tsx`, oylamada ve sonrasında): skor + taraf bazında gol/asist/kurtarış yapanlar (gol krallığı bölümü yok).
 
 **Genel rating (migration 0010; saklama 0032/0033)**: hesap sahibi oyuncunun rating'i tüm grup/takım/maçlardan **tek** hesaplanır ve
 `user_ratings`'e (anahtar `user_id`, hesap başına TEK satır) yazılır; üyelik satırı başına kopya yok. Misafirler (`user_id` boş)

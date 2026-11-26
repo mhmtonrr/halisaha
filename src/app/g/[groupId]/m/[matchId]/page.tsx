@@ -26,6 +26,7 @@ import { SkillQueueBanner } from "@/components/SkillQueueBanner";
 import { Badge, Button, Card, ErrorNote, Header, Input, SectionTitle, cx } from "@/components/ui";
 import { OvrBadge, PositionChip, shortName } from "@/components/PlayerCard";
 import { VoteForm, VoteHeader } from "./VoteForm";
+import { MatchSummary, type SummarySide } from "./MatchSummary";
 import { WithdrawalSection, type WithdrawalRow } from "./WithdrawalSection";
 
 type Team = "A" | "B";
@@ -411,6 +412,23 @@ export default async function MatchPage({
     />
   ) : null;
 
+  // Maç özeti (oylamada ve sonrasında): skor + gol/asist/kurtarış
+  const summarized = match.status === "voting" || match.status === "closed";
+  const summarySide = (s: StageSide, score: number | null, list: RosterEntry[]): SummarySide => ({
+    key: s.key,
+    title: s.title,
+    color: s.color,
+    score,
+    players: list,
+  });
+  const summarySides: SummarySide[] = external
+    ? [
+        summarySide(stageSides[0], match.score_a, roster),
+        // Rakibin skoru bizim kaydımızdaki score_b (iki takımın girişi eşleşmiş)
+        ...(opp ? [summarySide(stageSides[1], match.score_b, opp.roster)] : []),
+      ]
+    : [summarySide(stageSides[0], match.score_a, teams.A), summarySide(stageSides[1], match.score_b, teams.B)];
+
   return (
     <main>
       <LiveRefresh
@@ -559,7 +577,11 @@ export default async function MatchPage({
         <VersusCard mine={{ id: groupId, name: myTeamName, color: myTeamColor, roster }} opp={null} />
       )}
 
-      {["played", "voting", "closed"].includes(match.status) && (
+      {summarized && (
+        <MatchSummary sides={summarySides} rival={external && !opp ? { title: labels.B, score: match.score_b } : undefined} />
+      )}
+
+      {match.status === "played" && (
         <Card className="mb-4 flex items-center justify-around bg-gradient-to-br from-primary/10 via-surface-container to-surface-container py-5 shadow-md">
           {(["A", "B"] as const).map((t, i) => (
             <div key={t} className="flex items-center gap-4">
@@ -939,6 +961,7 @@ async function VotingView({
         <VoteForm
           groupId={groupId}
           matchId={matchId}
+          voterId={me.id}
           myTeam={me.team}
           status={status}
           colors={colors}
