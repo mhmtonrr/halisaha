@@ -149,7 +149,7 @@ export default async function ManagePage({
 
   /** Bu oyuncuyu ben çıkarabilir miyim? (veritabanı kuralıyla aynı) */
   const canRemove = (p: (typeof players)[number]) =>
-    canManage && p.id !== me?.id && p.role !== "captain" && (p.role === "member" || p.role === "organizer" || isCaptain) && (!!p.user_id || p.totals.played === 0);
+    canManage && p.id !== me?.id && p.role !== "captain" && (p.role === "member" || p.role === "organizer" || isCaptain);
 
   return (
     <main>
@@ -318,7 +318,7 @@ export default async function ManagePage({
                         note={
                           p.user_id
                             ? `${p.display_name} listeden çıkarılacak. Geçmiş maçları ve puanı korunur.`
-                            : `${p.display_name} adlı misafir kaydı silinecek. Geri alamazsın.`
+                            : `${p.display_name} adlı misafir sistemden tamamen silinecek: maç kadrolarındaki yeri, golleri, asistleri ve puanları da gider. Maç skorları değişmez. Geri alamazsın.`
                         }
                       />
                     )}
