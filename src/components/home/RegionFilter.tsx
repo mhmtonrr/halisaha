@@ -1,35 +1,51 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { RegionSelect } from "@/components/RegionSelect";
 import { Button, cx } from "@/components/ui";
 
-/** Öne çıkanların bölge filtresi: düğme açılır pencerede il/ilçe (veya tüm Türkiye) seçtirir; seçim adrese yazılır (?il=&ilce=) */
-export function RegionFilter({ city, district, label }: { city: string; district: string; label: string }) {
-  const router = useRouter();
+/** Öne çıkanların bölge filtresi: başlıktaki düğme açılır pencerede il/ilçe (veya tüm Türkiye) seçtirir */
+export function RegionFilter({
+  city,
+  district,
+  label,
+  pending,
+  onSelect,
+}: {
+  city: string;
+  district: string;
+  label: string;
+  pending: boolean;
+  onSelect: (city: string, district: string) => void;
+}) {
   const ref = useRef<HTMLDialogElement>(null);
   const [value, setValue] = useState({ city, district });
-  const [pending, startTransition] = useTransition();
+  // Pencere her açılışta gösterilen bölgeden başlar (kapatılan seçim kalmasın)
+  const [opened, setOpened] = useState(0);
+
+  const open = () => {
+    setValue({ city, district });
+    setOpened((n) => n + 1);
+    ref.current?.showModal();
+  };
 
   const apply = () => {
     ref.current?.close();
-    const q = new URLSearchParams({ il: value.city, ...(value.district ? { ilce: value.district } : {}) });
-    startTransition(() => router.replace(`/?${q}`, { scroll: false }));
+    onSelect(value.city, value.district);
   };
 
   return (
     <>
       <button
         type="button"
-        onClick={() => ref.current?.showModal()}
+        onClick={open}
         aria-label="Öne çıkanların bölgesi"
-        className={cx("flex min-h-11 w-full items-center gap-2 rounded-full border border-primary/40 bg-surface-container px-4 text-sm font-semibold", pending && "animate-pulse")}
+        className={cx("flex min-h-9 min-w-0 max-w-[60%] items-center gap-1 rounded-full border border-primary/40 bg-surface-container pl-2.5 pr-1.5 text-xs font-semibold", pending && "animate-pulse")}
       >
-        <Icon name="location_on" fill className="text-[18px] text-primary" />
-        <span className="min-w-0 flex-1 truncate text-left">{label}</span>
-        <Icon name="expand_more" className="text-[20px] text-muted" />
+        <Icon name="location_on" fill className="text-[16px] text-primary" />
+        <span className="min-w-0 truncate">{label}</span>
+        <Icon name="expand_more" className="text-[18px] text-muted" />
       </button>
       <dialog
         ref={ref}
@@ -45,8 +61,7 @@ export function RegionFilter({ city, district, label }: { city: string; district
             </button>
           </div>
           <RegionSelect
-            // "Tüm Türkiye" düğmesinden sonra seçiciler de sıfırlansın
-            key={value.city === "" ? "tr" : "region"}
+            key={opened}
             defaultCity={value.city}
             defaultDistrict={value.district}
             cityName="oneCikanIl"

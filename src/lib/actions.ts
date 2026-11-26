@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath, revalidateTag } from "next/cache";
-import { FEATURED_TAG } from "@/lib/featured-data";
+import { FEATURED_TAG, loadFeatured, type Featured } from "@/lib/featured-data";
 import { validateCardName } from "@/lib/card-name";
 import { cardPhotoPath, cardPhotoUrl } from "@/lib/card-photo";
 import { redirect } from "next/navigation";
@@ -23,6 +23,13 @@ import { canonicalDistrict, isProvince } from "@/lib/regions";
 import { getFormation, inferSize, isValidSize, validAssignment, type Role } from "@/lib/formations";
 
 const VOTING_HOURS = 24;
+
+/** Ana sayfa öne çıkanları: bölge değişince sayfayı yenilemeden o bölgenin listeleri (il boş: Türkiye) */
+export async function fetchFeatured(city: string, district: string): Promise<Featured> {
+  await requireUser();
+  const il = isProvince(city) ? city : null;
+  return loadFeatured(il, il ? (canonicalDistrict(il, district) ?? null) : null);
+}
 const asPosition = (v: string): Position | null => (POSITIONS.includes(v as Position) ? (v as Position) : null);
 
 function fail(path: string, message: string): never {

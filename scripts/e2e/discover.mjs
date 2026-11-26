@@ -99,7 +99,7 @@ try {
   await other.goto(BASE + "/");
   await other.waitForFunction(() => document.body.innerText.toLowerCase().includes("öne çıkan"), null, { timeout: 15000 }).catch(() => {});
   t = await body(other);
-  check("'Öne çıkan oyuncular' bölümü", t.includes("öne çıkan oyuncular"));
+  check("'Öne çıkanlar' bölümü", t.includes("öne çıkanlar") && t.includes("oyuncular"));
   check("öne çıkanlarda yüksek ratingli oyuncu", t.includes("zeki forvet"));
   check("gizlenen (kaleci, defans) öne çıkanlarda yok", !t.includes("zeki kaleci") && !t.includes("zeki defans"));
   const filter = other.locator('button[aria-label="Öne çıkanların bölgesi"]');
@@ -118,8 +118,9 @@ try {
   await filter.click();
   await other.selectOption('dialog select[aria-label="İl"]', "");
   await other.click('dialog button:text-is("Göster")');
-  await other.waitForURL(/\?il=$/);
-  await other.waitForLoadState("networkidle");
+  await filter.filter({ hasText: "Tüm Türkiye" }).waitFor();
+  await other.locator('[aria-busy="false"]').first().waitFor();
+  check("bölge seçimi adresi değiştirmez", new URL(other.url()).search === "");
   check("Tüm Türkiye seçilince düğme güncellenir", (await filter.innerText()).includes("Tüm Türkiye"));
   await other.screenshot({ path: `${SHOTS}/discover-home-tr.png`, fullPage: true });
   const bad = await other.evaluate(() => document.documentElement.scrollWidth > innerWidth);

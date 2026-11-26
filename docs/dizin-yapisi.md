@@ -63,7 +63,8 @@ src/components/CardPhotoUploader.tsx  Kart fotoğrafı yükleme: küçült, arka
 src/components/BottomNav.tsx  Alt gezinme çubuğu (sohbet ekranında gizlenir); NotificationBadge.tsx okunmamış bildirim rozeti (Realtime)
 src/components/ui.tsx  Ortak parçalar (Card, Button/LinkButton, Input, Label, SectionTitle, Header, Badge, ErrorNote) Obsidian Pitch/profil stilinde; `cx` = tailwind-merge (sonradan verilen sınıf kazanır)
 src/components/Icon.tsx  Material Symbols ikonu (tasarımdaki adlarla)
-src/components/home/RegionFilter.tsx  Öne çıkanların il/ilçe filtresi (açılır pencere, ?il=&ilce=)
+src/components/home/RegionFilter.tsx  Öne çıkanların il/ilçe filtresi (başlıkta düğme + açılır pencere)
+src/components/home/FeaturedPanel.tsx  Öne çıkanlar bölümü (istemci): bölge seçimi, Takımlar/Oyuncular listeleri; DragStrip.tsx çubuksuz sürüklenebilir kart şeridi
 src/components/home/UpcomingMatches.tsx  Yaklaşan maç kartları (sürükle/kaydır, Tümü, boşken Maça katıl kartı)
 src/components/home/  Ana sayfa parçaları: ActionItem (Yapılacaklar satırı, aciliyet rengi), HomeTabs (Takımlar/Gruplar hap sekmesi, istemci)
 src/lib/home.ts  Ana sayfa yardımcıları: seviye ilerlemesi, maça kalan gün, kadro kapasitesi (saf, testli)

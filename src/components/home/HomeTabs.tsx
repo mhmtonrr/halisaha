@@ -5,7 +5,7 @@ import { cx } from "@/components/ui";
 
 /**
  * Sekmeler; içerikler sunucuda çizilir, sadece görünürlük değişir (sayfa yenilenmez).
- * `pill`: tam genişlik hap çubuk (Takımlar/Gruplar); `chips`: küçük çipler (bölge seçici).
+ * `pill`: tam genişlik hap çubuk (Takımlar/Gruplar); `chips`: küçük çipler (öne çıkanlar).
  */
 export function HomeTabs({
   tabs,
