@@ -1,12 +1,13 @@
 "use client";
 
 import { useRef, type PointerEvent, type ReactNode } from "react";
+import { cx } from "@/components/ui";
 
 /**
  * Kaydırma çubuğu olmayan yatay kart şeridi; kenarlara taşar. Dokunmatikte tarayıcı kendisi kaydırır,
  * fareyle sürüklenir (bırakınca tıklama sayılmaz).
  */
-export function DragStrip({ children }: { children: ReactNode }) {
+export function DragStrip({ children, className }: { children: ReactNode; className?: string }) {
   const strip = useRef<HTMLDivElement>(null);
   const drag = useRef({ x: 0, left: 0, moved: false, down: false });
 
@@ -45,7 +46,7 @@ export function DragStrip({ children }: { children: ReactNode }) {
         }
       }}
       onDragStart={(e) => e.preventDefault()}
-      className="no-scrollbar -mx-4 flex snap-x snap-mandatory scroll-px-4 select-none gap-3 overflow-x-auto px-4 pb-1"
+      className={cx("no-scrollbar -mx-4 flex snap-x snap-mandatory scroll-px-4 select-none gap-3 overflow-x-auto px-4 pb-1", className)}
     >
       {children}
     </div>

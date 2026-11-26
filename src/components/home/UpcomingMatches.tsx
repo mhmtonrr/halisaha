@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState, type PointerEvent } from "react";
+import { useState } from "react";
 import { Icon } from "@/components/Icon";
+import { DragStrip } from "@/components/home/DragStrip";
 import { JoinMatchCard, JoinMatchPopup } from "@/components/JoinMatchCard";
 import { cx } from "@/components/ui";
 
@@ -27,28 +28,6 @@ export interface UpcomingCard {
 /** Ana sayfa "Yaklaşan maçlar": yatay kart şeridi (fareyle de sürüklenir), "Tümü" alt alta açar; maç yoksa "Maça katıl" kartı */
 export function UpcomingMatches({ matches }: { matches: UpcomingCard[] }) {
   const [all, setAll] = useState(false);
-  const strip = useRef<HTMLDivElement>(null);
-  const drag = useRef({ x: 0, left: 0, moved: false, down: false });
-
-  // Dokunmatikte tarayıcı kendisi kaydırır; fare için sürükleme (bırakınca tıklama sayılmasın)
-  const onDown = (e: PointerEvent) => {
-    if (e.pointerType !== "mouse" || e.button !== 0 || !strip.current) return;
-    drag.current = { x: e.clientX, left: strip.current.scrollLeft, moved: false, down: true };
-  };
-  const onMove = (e: PointerEvent) => {
-    const d = drag.current;
-    if (!d.down || !strip.current) return;
-    const dx = e.clientX - d.x;
-    if (Math.abs(dx) > 5) {
-      d.moved = true;
-      strip.current.style.scrollSnapType = "none";
-    }
-    if (d.moved) strip.current.scrollLeft = d.left - dx;
-  };
-  const onUp = () => {
-    drag.current.down = false;
-    if (strip.current) strip.current.style.scrollSnapType = "";
-  };
 
   return (
     <section>
@@ -70,27 +49,18 @@ export function UpcomingMatches({ matches }: { matches: UpcomingCard[] }) {
 
       {matches.length === 0 ? (
         <JoinMatchCard />
-      ) : (
-        <div
-          ref={strip}
-          onPointerDown={onDown}
-          onPointerMove={onMove}
-          onPointerUp={onUp}
-          onPointerLeave={onUp}
-          onClickCapture={(e) => {
-            if (drag.current.moved) {
-              e.preventDefault();
-              e.stopPropagation();
-              drag.current.moved = false;
-            }
-          }}
-          onDragStart={(e) => e.preventDefault()}
-          className={all ? "flex flex-col gap-3" : "no-scrollbar -mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-2 pt-1 select-none"}
-        >
+      ) : all ? (
+        <div className="flex flex-col gap-3">
           {matches.map((m) => (
-            <MatchCard key={m.id} m={m} wide={all || matches.length === 1} />
+            <MatchCard key={m.id} m={m} wide />
           ))}
         </div>
+      ) : (
+        <DragStrip className="pb-2 pt-1">
+          {matches.map((m) => (
+            <MatchCard key={m.id} m={m} wide={matches.length === 1} />
+          ))}
+        </DragStrip>
       )}
     </section>
   );
