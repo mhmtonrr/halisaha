@@ -76,7 +76,7 @@ src/components/home/  Ana sayfa parçaları: ActionItem (Yapılacaklar satırı,
 src/lib/home.ts  Ana sayfa yardımcıları: seviye ilerlemesi, maça kalan gün, kadro kapasitesi (saf, testli)
 src/components/AutoOpenDetails.tsx  İlk yüklemede bir kez açılan açılır bölüm
 src/components/ProfileFields.tsx  Profil ve karşılama formlarının ortak alanları; RegionSelect.tsx bağlı il/ilçe seçimi
-src/components/TeamFields.tsx  Takım kurma ve takım/grup bilgileri düzenleme form alanları; TeamSizeSelect.tsx kaç kişilik (5v5…11v11); TeamBadge.tsx takım/grup logosu (görsel veya arma); Crest.tsx birleştirmeli arma SVG çizimi
+src/components/TeamFields.tsx  Takım kurma ve takım/grup bilgileri düzenleme form alanları; TeamSizeSelect.tsx kaç kişilik (5v5…11v11); TeamBadge.tsx takım/grup logosu (görsel veya arma); Crest.tsx birleştirmeli arma SVG çizimi; LogoPicker.tsx logo seçimi (canlı önizleme)
 src/components/RosterTabs.tsx  Kadro / Misafirler sekmesi
 src/components/ShareLink.tsx  Sayfa linkini paylaş (paylaşım menüsü ya da panoya kopyala); profile/ShareButton.tsx profil için
 src/components/SkillBars.tsx  Kartın 6 yeteneği çubuk olarak; SkillQueueBanner.tsx değerlendirme bekleyen varsa /yetenek kartı

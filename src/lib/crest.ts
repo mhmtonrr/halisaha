@@ -73,6 +73,18 @@ export function resolveLogo(logo: string | null | undefined, seed: string): Logo
   return { type: "crest", spec: (logo ? parseCrest(logo) : null) ?? autoCrest(seed) };
 }
 
+/**
+ * Formdan gelen logo seçimi: boş → null (otomatik), geçerli arma/hazır logo → aynen.
+ * Alan yoksa veya tanınmıyorsa (ör. yüklenmiş görsel adresi) undefined: kayıtlı logo değişmez.
+ */
+export function logoFromForm(value: unknown): string | null | undefined {
+  if (value === "") return null;
+  if (typeof value !== "string") return undefined;
+  if (parseCrest(value)) return value;
+  if (value.startsWith("preset:") && PRESET_LOGOS.includes(value.slice(7))) return value;
+  return undefined;
+}
+
 /** Adın ilk iki kelimesinin baş harfleri (Türkçe büyük harf) */
 export function teamInitials(name: string) {
   return (

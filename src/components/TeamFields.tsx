@@ -1,3 +1,4 @@
+import { LogoPicker } from "./LogoPicker";
 import { RegionSelect } from "./RegionSelect";
 import { TEAM_COLORS } from "@/lib/teams-data";
 import { Input, Label } from "./ui";
@@ -8,7 +9,16 @@ export function TeamFields({
   values,
   kind = "team",
 }: {
-  values?: { name: string; city: string | null; district: string | null; color: string | null; description: string | null };
+  values?: {
+    /** Kayıtlı takım/grup (kurulumda yok) */
+    id?: string;
+    logo?: string | null;
+    name: string;
+    city: string | null;
+    district: string | null;
+    color: string | null;
+    description: string | null;
+  };
   kind?: "team" | "community";
 }) {
   const isTeam = kind === "team";
@@ -43,6 +53,7 @@ export function TeamFields({
           ))}
         </div>
       </div>
+      <LogoPicker id={values?.id} logo={values?.logo ?? null} name={values?.name ?? ""} color={color} />
       <label className="block">
         <Label hint="isteğe bağlı">{isTeam ? "Kısa açıklama" : "Grup hakkında"}</Label>
         <textarea

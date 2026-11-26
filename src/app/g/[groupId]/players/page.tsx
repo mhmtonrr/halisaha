@@ -63,7 +63,7 @@ export default async function ManagePage({
 
   const { data: group } = await supabase
     .from("groups")
-    .select("id, name, kind, city, district, color, description, archived_at, discoverable, join_requests_open")
+    .select("id, name, kind, city, district, color, logo, description, archived_at, discoverable, join_requests_open")
     .eq("id", groupId)
     .maybeSingle();
   if (!group) notFound();

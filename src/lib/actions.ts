@@ -1,5 +1,6 @@
 "use server";
 
+import { logoFromForm } from "@/lib/crest";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { FEATURED_TAG, loadFeatured, type Featured } from "@/lib/featured-data";
 import { validateCardName } from "@/lib/card-name";
@@ -373,7 +374,9 @@ export async function createGroup(fd: FormData) {
 function teamFields(fd: FormData) {
   const city = str(fd, "city");
   const color = str(fd, "color");
+  const logo = logoFromForm(fd.get("logo"));
   return {
+    ...(logo === undefined ? {} : { logo }),
     name: str(fd, "name").slice(0, 60),
     city: isProvince(city) ? city : null,
     district: canonicalDistrict(city, str(fd, "district")),
