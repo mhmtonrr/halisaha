@@ -31,7 +31,7 @@ function Empty({ children }: { children: ReactNode }) {
 
 /** Yatay kaydırmalı kart şeridi; kenarlara taşar (ana sayfadaki "Yaklaşan maçlar" ile aynı düzen) */
 function Strip({ children }: { children: ReactNode }) {
-  return <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1">{children}</div>;
+  return <div className="-mx-4 flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pb-1">{children}</div>;
 }
 
 /** Öne çıkan oyuncu: profildeki oyuncu kartının küçüğü + altında sıra ve neden öne çıktığı */

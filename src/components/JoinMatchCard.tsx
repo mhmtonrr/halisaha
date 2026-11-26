@@ -41,7 +41,7 @@ export function JoinMatchPopup() {
   return (
     <>
       <button type="button" onClick={() => ref.current?.showModal()} className="flex min-h-8 shrink-0 items-center gap-0.5 whitespace-nowrap rounded-full border border-primary/40 px-2.5 text-[11px] font-bold text-primary">
-        <Icon name="add" className="!text-[14px]" />
+        <Icon name="add" className="text-[14px]" />
         Maça katıl
       </button>
       {/* Dışına (karartmaya) dokununca da kapanır */}

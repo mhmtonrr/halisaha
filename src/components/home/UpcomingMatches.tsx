@@ -62,7 +62,7 @@ export function UpcomingMatches({ matches }: { matches: UpcomingCard[] }) {
             <JoinMatchPopup />
             <button type="button" onClick={() => setAll(!all)} aria-expanded={all} className="flex min-h-9 shrink-0 items-center whitespace-nowrap text-[11px] font-semibold text-primary">
               {all ? "Daralt" : `Tümü (${matches.length})`}
-              <Icon name={all ? "expand_less" : "chevron_right"} className="!text-[16px]" />
+              <Icon name={all ? "expand_less" : "chevron_right"} className="text-[16px]" />
             </button>
           </>
         )}
@@ -117,7 +117,7 @@ function MatchCard({ m, wide }: { m: UpcomingCard; wide: boolean }) {
             tone === "on" ? "bg-primary/20 text-primary" : tone === "warn" ? "bg-amber-400/15 text-amber-300" : "bg-surface-high text-on-surface",
           )}
         >
-          {m.status.icon ? <Icon name={m.status.icon} className="!text-[14px]" /> : <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />}
+          {m.status.icon ? <Icon name={m.status.icon} className="text-[14px]" /> : <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />}
           {m.status.label}
         </span>
         <span className="shrink-0 rounded-full bg-primary/15 px-2 py-0.5 text-xs font-semibold text-primary">{m.days}</span>
@@ -125,21 +125,21 @@ function MatchCard({ m, wide }: { m: UpcomingCard; wide: boolean }) {
 
       <div className="min-w-0">
         <div className="mb-1 flex items-start gap-2">
-          <Icon name="sports_soccer" className="!text-[18px] leading-5 text-primary" />
+          <Icon name="sports_soccer" className="text-[18px] leading-5 text-primary" />
           <h3 className="line-clamp-2 min-w-0 break-words font-display text-base font-bold leading-5 text-on-surface">{m.title}</h3>
         </div>
         <p className="flex items-center gap-1 text-[13px] text-on-surface-variant">
-          <Icon name="calendar_today" className="!text-[15px] text-muted" />
+          <Icon name="calendar_today" className="text-[15px] text-muted" />
           <span className="font-medium text-on-surface">{m.date}</span> • {m.time}
         </p>
         <p className="mt-0.5 flex items-center gap-1 text-[11px] text-on-surface-variant">
-          <Icon name="stadium" className="!text-[15px] text-muted" />
+          <Icon name="stadium" className="text-[15px] text-muted" />
           <span className="min-w-0 truncate">{m.venue}</span>
           <span className="shrink-0">• {m.fee}</span>
         </p>
         {m.pendingRival && (
           <p className="mt-0.5 flex items-center gap-1 text-[11px] text-amber-300">
-            <Icon name="hourglass_top" className="!text-[15px]" />
+            <Icon name="hourglass_top" className="text-[15px]" />
             Rakip onay bekliyor
           </p>
         )}
@@ -147,7 +147,7 @@ function MatchCard({ m, wide }: { m: UpcomingCard; wide: boolean }) {
 
       <div className="flex items-center justify-between gap-2 rounded-lg bg-surface-low p-2">
         <span className="flex min-w-0 items-center gap-1 text-[13px] text-on-surface-variant">
-          <Icon name={full ? "check" : "groups"} className="!text-[16px] text-primary" />
+          <Icon name={full ? "check" : "groups"} className="text-[16px] text-primary" />
           <span className="truncate tabular-nums">
             {full ? `Kadro Tamam (${m.count}/${m.capacity})` : `${m.count}/${m.capacity ?? "?"} Oyuncu`}
           </span>
