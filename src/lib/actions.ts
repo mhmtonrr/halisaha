@@ -942,8 +942,10 @@ export async function submitVotes(fd: FormData) {
       match_id: matchId,
       voter_id: me,
       target_id: r.player_id,
-      score: Math.min(10, Math.max(1, int(fd, `score_${r.player_id}`) || 6)),
+      score: int(fd, `score_${r.player_id}`),
     }));
+  // Herkesi puanlamak zorunlu; boş puan varsayılan sayılmaz
+  if (votes.some((v) => !(v.score >= 1 && v.score <= 10))) fail(back, "Göndermek için tüm oyuncuları puanlamalısın");
   const { error } = await supabase
     .from("votes")
     .upsert(votes, { onConflict: "match_id,voter_id,target_id" });

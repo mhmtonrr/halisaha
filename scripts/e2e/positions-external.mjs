@@ -42,8 +42,14 @@ try {
   };
   const shot = (page, name) => page.screenshot({ path: `${SHOTS}/${name}.png`, fullPage: true });
   const vote = async (page) => {
-    const sliders = page.locator('input[type="range"]'); const n = await sliders.count();
-    for (let j = 0; j < n; j++) { await sliders.nth(j).focus(); await page.keyboard.press("Home"); const t = 3 + ((j * 5 + Math.floor(Math.random() * 3)) % 7); for (let k = 1; k < t; k++) await page.keyboard.press("ArrowRight"); }
+    const rows = page.locator("[data-vote-row]"); const n = await rows.count();
+    const tabs = page.locator('[aria-label="Oylama"] [role="tab"]');
+    for (let j = 0; j < n; j++) {
+      const row = rows.nth(j);
+      for (let k = 0; !(await row.isVisible()) && k < (await tabs.count()); k++) await tabs.nth(k).click();
+      const t = 3 + ((j * 5 + Math.floor(Math.random() * 3)) % 7);
+      await row.locator('[role="radio"]').nth(t - 1).click();
+    }
     await page.locator('button:has-text("MVP")').first().click();
     await page.click('button:has-text("Oylarımı gönder")'); await page.waitForURL(/voted=1|m\//); await page.waitForLoadState("networkidle");
   };

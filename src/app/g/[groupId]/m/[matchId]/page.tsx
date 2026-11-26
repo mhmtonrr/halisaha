@@ -25,7 +25,7 @@ import { TeamBadge } from "@/components/TeamBadge";
 import { SkillQueueBanner } from "@/components/SkillQueueBanner";
 import { Badge, Button, Card, ErrorNote, Header, Input, SectionTitle, cx } from "@/components/ui";
 import { OvrBadge, PositionChip, shortName } from "@/components/PlayerCard";
-import { VoteForm } from "./VoteForm";
+import { VoteForm, VoteHeader } from "./VoteForm";
 import { WithdrawalSection, type WithdrawalRow } from "./WithdrawalSection";
 
 type Team = "A" | "B";
@@ -652,6 +652,7 @@ export default async function MatchPage({
           canManage={!!canManage}
           justVoted={voted === "1"}
           opp={opp}
+          colors={{ A: stageSides[0].color, B: stageSides[1]?.color ?? "#ff8a5b" }}
         />
       )}
 
@@ -897,6 +898,7 @@ async function VotingView({
   canManage,
   justVoted,
   opp,
+  colors,
 }: {
   groupId: string;
   matchId: string;
@@ -906,6 +908,7 @@ async function VotingView({
   canManage: boolean;
   justVoted: boolean;
   opp: Opponent | null;
+  colors: Record<Team, string>;
 }) {
   const { supabase } = await requireUser();
   const [{ data: progressRaw }, { data: myVotes }, { data: myMvp }] = await Promise.all([
@@ -920,24 +923,10 @@ async function VotingView({
   const progress = (Array.isArray(progressRaw) ? progressRaw[0] : progressRaw) as
     | { voters: number; eligible: number }
     | undefined;
-  const hasVoted = (myVotes?.length ?? 0) > 0;
-  const pct = progress && progress.eligible ? (progress.voters / progress.eligible) * 100 : 0;
+  const status = { voters: progress?.voters ?? 0, eligible: progress?.eligible ?? 0, timeLeft: timeLeft(deadline) };
 
   return (
     <>
-      <Card className="mb-4">
-        <div className="mb-2 flex justify-between text-sm">
-          <span>
-            <b>{progress?.voters ?? 0}</b>
-            <span className="text-muted"> / {progress?.eligible ?? 0} kişi oy verdi</span>
-          </span>
-          <span className="text-muted">{timeLeft(deadline)}</span>
-        </div>
-        <div className="h-2 overflow-hidden rounded-full bg-pitch-950">
-          <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
-        </div>
-      </Card>
-
       {justVoted && (
         <p className="mb-4 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">
           Oyların kaydedildi. Süre bitene kadar değiştirebilirsin.
@@ -947,32 +936,37 @@ async function VotingView({
       {justVoted && <SkillQueueBanner supabase={supabase} className="mb-4 block" />}
 
       {me && me.userId ? (
-        <>
-          <SectionTitle>{hasVoted ? "Oylarını güncelle" : "Arkadaşlarını puanla"}</SectionTitle>
-          <VoteForm
-            groupId={groupId}
-            matchId={matchId}
-            myTeam={me.team}
-            rivalLabel={opp ? `Rakip takım · ${opp.team.name}` : undefined}
-            targets={[
-              ...roster.filter((r) => r.id !== me.id),
-              // Takımlar arası maçta rakip takımın oyuncuları da oylanır
-              ...(opp?.roster.map((r) => ({ ...r, team: "B" as Team })) ?? []),
-            ].map((r) => ({
-                id: r.id,
-                name: r.name,
-                photoUrl: r.photoUrl,
-                team: r.team,
-                goals: r.goals,
-                assists: r.assists,
-                position: r.position,
-              }))}
-            initialScores={Object.fromEntries((myVotes ?? []).map((v) => [v.target_id, v.score]))}
-            initialMvp={myMvp?.target_id ?? null}
-          />
-        </>
+        <VoteForm
+          groupId={groupId}
+          matchId={matchId}
+          myTeam={me.team}
+          status={status}
+          colors={colors}
+          rivalLabel={opp ? `Rakip takım · ${opp.team.name}` : undefined}
+          targets={[
+            ...roster.filter((r) => r.id !== me.id),
+            // Takımlar arası maçta rakip takımın oyuncuları da oylanır
+            ...(opp?.roster.map((r) => ({ ...r, team: "B" as Team })) ?? []),
+          ].map((r) => ({
+            id: r.id,
+            name: r.name,
+            photoUrl: r.photoUrl,
+            team: r.team,
+            goals: r.goals,
+            assists: r.assists,
+            saves: r.saves,
+            position: r.position,
+          }))}
+          initialScores={Object.fromEntries((myVotes ?? []).map((v) => [v.target_id, v.score]))}
+          initialMvp={myMvp?.target_id ?? null}
+        />
       ) : (
-        <Card className="text-center text-sm text-muted">Bu maçta oynamadığın için oy veremezsin.</Card>
+        <>
+          <section aria-label="Oylama" className="-mx-4 mb-3 bg-[#060d14] sm:mx-0 sm:rounded-3xl sm:border sm:border-white/10">
+            <VoteHeader status={status} title="Oylama sürüyor" />
+          </section>
+          <Card className="text-center text-sm text-muted">Bu maçta oynamadığın için oy veremezsin.</Card>
+        </>
       )}
 
       {opp && (

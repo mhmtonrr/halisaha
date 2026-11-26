@@ -224,8 +224,12 @@ try {
   check("bağlı maçta elle 'oylamayı kapat' düğmesi yok", (await A1.locator('button:has-text("Oylamayı şimdi kapat")').count()) === 0);
   check("oy oranı açıklaması görünür (%60 / %40)", (await A1.locator("text=%60").count()) > 0 && (await A1.locator("text=%40").count()) > 0);
   await A2.goto(`${BASE}/g/${teamA}/m/${mA}`);
-  check("oy formunda rakip takım oyuncuları da var", (await A2.locator("text=Rakip takım · E2E Aslanlar").count()) > 0 && (await A2.locator('input[type="range"]').count()) === 3);
+  check("oy formunda rakip takım oyuncuları da var", (await A2.locator("text=Rakip takım · E2E Aslanlar").count()) > 0 && (await A2.locator("[data-vote-row]").count()) === 3);
   await shot(A2, "36b-capraz-oy-formu");
+  for (const tab of await A2.locator('[aria-label="Oylama"] [role="tab"]').all()) {
+    await tab.click();
+    for (const row of await A2.locator("[data-vote-row]:visible").all()) await row.locator('[role="radio"]').nth(6).click();
+  }
   await A2.click('button:has-text("Oylarımı gönder")'); await A2.waitForURL(/voted=1/);
   const { data: a2votes } = await admin.from("votes").select("target_id").eq("voter_id", a2).eq("match_id", mA);
   check("a2'nin 3 oyu (takım arkadaşı + 2 rakip) kendi maçına yazıldı", a2votes.length === 3 && a2votes.some((v) => v.target_id === b1) && a2votes.some((v) => v.target_id === b2));
