@@ -19,3 +19,5 @@ Senaryolar: `match-manage` (4b: Keşfet ilanı + yabancı başvurusu/onayı, ba�
 Kullanıcıyı API ile kuran senaryo karşılamayı atlamak için `profiles.onboarded_at` (+ il) doldurur; yoksa her sayfa `/hosgeldin`'e yönlenir.
 Ekran görüntülerine bak (390px genişlik, telefon) — görsel sorunlar çoğu zaman sadece orada yakalanıyor.
 Port doluysa: `fuser -k 3000/tcp`. Arayüzden kayıt (signUp) test etme: onay maili gönderir, limit saatte 2.
+
+**Güncel değil (0053 maç ekranı, 2026-11-26)**: `challenges`, `notifications`, `realtime`, `positions-external`, `match-setup`, `match-manage`, `withdrawal`, `guest-match` senaryoları kaldırılan arayüzü (Üye ekle/kadrodan çıkar, mevki ve ücret düzenleme, Rakip bölümü, "rakip belli değil") arıyor; test istenince önce güncellenmeli.

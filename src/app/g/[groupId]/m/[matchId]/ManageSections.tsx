@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Card, Input, SectionTitle, cx } from "@/components/ui";
@@ -8,24 +7,18 @@ import { matchWhen } from "@/lib/match-rules";
 import { InviteBox } from "./InviteBox";
 import { RivalChooser } from "./RivalChooser";
 import {
-  answerChallenge,
   cancelMatch,
   closeListing,
   confirmMatch,
   counterChallenge,
   createListing,
   decideApplication,
-  manageEntry,
-  removeGuest,
   rescheduleMatch,
   respondReschedule,
-  setMatchFee,
 } from "@/lib/match-manage-actions";
 
 // Yeniden tasarım 4b: maç ekranının yönetim bölümleri (sadece maçı yönetene; misafir işleri kaptan/yetkiliye)
 
-const selectCls = "min-h-11 w-full rounded-xl border border-line bg-pitch-950 px-3 text-sm";
-const smallBtn = "min-h-9 shrink-0 rounded-lg px-3 text-sm font-bold";
 
 export interface EntryRow {
   userId: string | null;
@@ -62,69 +55,11 @@ function dayTime(iso: string) {
   return { day: d.slice(0, 10), time: d.slice(11, 16) };
 }
 
-/** Kadro (çıkar), yedek (kadroya al), başvurular (al/reddet), davetliler, kesin gelen ekle */
-export function RosterManage({
-  groupId,
-  matchId,
-  roster,
-  entries,
-  addable,
-  isAdmin,
-  full,
-}: {
-  groupId: string;
-  matchId: string;
-  roster: { id: string; userId: string | null; name: string; overall: number; position: Position | null }[];
-  entries: EntryRow[];
-  addable: { userId: string; name: string }[];
-  isAdmin: boolean;
-  full: boolean;
-}) {
-  const reserve = entries.filter((e) => e.status === "reserve");
+/** Onay bekleyen başvurular (al/reddet) */
+export function Applications({ groupId, matchId, entries, full }: { groupId: string; matchId: string; entries: EntryRow[]; full: boolean }) {
   const pending = entries.filter((e) => e.status === "pending");
-  const invited = entries.filter((e) => e.status === "invited");
   return (
     <>
-      <SectionTitle>Kadro · {roster.length}</SectionTitle>
-      <Card className="mb-4 p-0">
-        {roster.length === 0 ? (
-          <p className="px-4 py-3 text-sm text-muted">Henüz kimse yok.</p>
-        ) : (
-          <ul className="divide-y divide-line">
-            {roster.map((r) => (
-              <li key={r.id} className="flex min-h-12 items-center gap-3 px-4 py-2">
-                <OvrBadge overall={r.overall} />
-                <Link href={`/g/${groupId}/p/${r.id}`} className="min-w-0 flex-1 truncate">
-                  {r.name}
-                </Link>
-                {!r.userId && <span className="text-xs text-muted">misafir</span>}
-                <PositionChip position={r.position} />
-                {r.userId ? (
-                  <form action={manageEntry}>
-                    <Hidden groupId={groupId} matchId={matchId} />
-                    <input type="hidden" name="userId" value={r.userId} />
-                    <input type="hidden" name="op" value="remove" />
-                    <button className="text-muted" aria-label={`${r.name} kadrodan çıkar`}>
-                      <Icon name="person_remove" className="text-[20px]" />
-                    </button>
-                  </form>
-                ) : (
-                  isAdmin && (
-                    <form action={removeGuest}>
-                      <Hidden groupId={groupId} matchId={matchId} />
-                      <input type="hidden" name="playerId" value={r.id} />
-                      <button className="text-muted" aria-label={`${r.name} misafirini çıkar`}>
-                        <Icon name="person_remove" className="text-[20px]" />
-                      </button>
-                    </form>
-                  )
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
-
       {pending.length > 0 && (
         <section id="basvurular" className="mb-4 space-y-2">
           <SectionTitle>Başvurular · {pending.length}</SectionTitle>
@@ -158,64 +93,6 @@ export function RosterManage({
         </section>
       )}
 
-      {reserve.length > 0 && (
-        <>
-          <SectionTitle>Yedek · {reserve.length}</SectionTitle>
-          <Card className="mb-4 p-0">
-            <ol className="divide-y divide-line">
-              {reserve.map((e, i) => (
-                <li key={e.userId} className="flex min-h-12 items-center gap-3 px-4 py-2">
-                  <span className="w-5 text-center text-sm font-bold text-muted">{i + 1}</span>
-                  <span className="min-w-0 flex-1 truncate">{e.name}</span>
-                  <form action={manageEntry}>
-                    <Hidden groupId={groupId} matchId={matchId} />
-                    <input type="hidden" name="userId" value={e.userId ?? ""} />
-                    <input type="hidden" name="op" value="promote" />
-                    <button disabled={full} className={cx(smallBtn, full ? "bg-pitch-800 text-muted" : "bg-accent text-pitch-950")}>
-                      Kadroya al
-                    </button>
-                  </form>
-                  <form action={manageEntry}>
-                    <Hidden groupId={groupId} matchId={matchId} />
-                    <input type="hidden" name="userId" value={e.userId ?? ""} />
-                    <input type="hidden" name="op" value="remove" />
-                    <button className="text-muted" aria-label={`${e.name} yedekten çıkar`}>
-                      <Icon name="close" className="text-[20px]" />
-                    </button>
-                  </form>
-                </li>
-              ))}
-            </ol>
-            {full && <p className="px-4 pb-3 text-xs text-muted">Kadro dolu; yer açılınca kadroya alabilirsin. Maça 3 saat kala boş yer kalırsa sıradaki otomatik alınır.</p>}
-          </Card>
-        </>
-      )}
-
-      {invited.length > 0 && (
-        <p className="mb-4 px-1 text-sm text-muted">
-          Davet bekleyen: {invited.map((e) => e.name).join(", ")}
-        </p>
-      )}
-
-      {!full && addable.length > 0 && (
-        <form action={manageEntry} className="mb-4 flex gap-2">
-          <Hidden groupId={groupId} matchId={matchId} />
-          <input type="hidden" name="op" value="add" />
-          <select name="userId" aria-label="Kesin gelen üye" className={cx(selectCls, "flex-1")} required defaultValue="">
-            <option value="" disabled>
-              Kesin gelen üye ekle…
-            </option>
-            {addable.map((p) => (
-              <option key={p.userId} value={p.userId}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-          <SubmitButton variant="secondary" className="shrink-0 px-4" pendingLabel="…">
-            Ekle
-          </SubmitButton>
-        </form>
-      )}
     </>
   );
 }
@@ -308,58 +185,14 @@ export function ListingManage({
   );
 }
 
-/** Rakip: isim veya uygulamadaki takıma teklif; bekleyen teklif (sıra/kabul/ret/karşı teklif) */
-export function RivalManage({
-  groupId,
-  matchId,
-  opponentName,
-  challenge,
-  homeCity,
-}: {
-  groupId: string;
-  matchId: string;
-  opponentName: string | null;
-  challenge: { id: string; toName: string; awaitingMe: boolean; proposedAt: string; proposedTbd: boolean; venue: string | null } | null;
-  homeCity: string;
-}) {
-  const back = `/g/${groupId}/m/${matchId}`;
+/** Rakibi olmayan maçta (teklif reddedildi / geri çekildi) yeni rakip seçimi */
+export function RivalMissing({ groupId, matchId, homeCity }: { groupId: string; matchId: string; homeCity: string }) {
   return (
     <section className="mb-4 space-y-2">
-      <SectionTitle>Rakip</SectionTitle>
+      <SectionTitle>Rakip seç</SectionTitle>
       <Card className="space-y-3">
-        {challenge ? (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm">
-              <Icon name="swords" className="text-[18px] text-primary" />
-              <span className="min-w-0 flex-1">
-                <b>{challenge.toName}</b> ile teklif · {matchWhen(challenge.proposedAt, challenge.proposedTbd)}
-                {challenge.venue ? ` · ${challenge.venue}` : ""}
-              </span>
-            </div>
-            {challenge.awaitingMe ? (
-              <>
-                <p className="text-sm text-amber-300">Rakip karşı teklif yaptı; kabul edersen maç bu tarihe geçer.</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {(["1", "0"] as const).map((a) => (
-                    <form key={a} action={answerChallenge}>
-                      <Hidden groupId={groupId} matchId={matchId} />
-                      <input type="hidden" name="challengeId" value={challenge.id} />
-                      <input type="hidden" name="accept" value={a} />
-                      <SubmitButton variant={a === "1" ? "primary" : "secondary"} className="w-full" pendingLabel="…">
-                        {a === "1" ? "Kabul et" : "Reddet"}
-                      </SubmitButton>
-                    </form>
-                  ))}
-                </div>
-                <CounterForm groupId={groupId} challengeId={challenge.id} back={back} at={challenge.proposedAt} />
-              </>
-            ) : (
-              <p className="text-sm text-muted">Sıra rakipte: kabul, ret veya karşı teklif bekleniyor.</p>
-            )}
-          </div>
-        ) : (
-          <RivalChooser groupId={groupId} matchId={matchId} opponentName={opponentName} homeCity={homeCity} />
-        )}
+        <p className="text-sm text-amber-300">Bu maçın rakibi yok; kesinleştirmek için rakip seçmen gerekiyor.</p>
+        <RivalChooser groupId={groupId} matchId={matchId} opponentName={null} homeCity={homeCity} />
       </Card>
     </section>
   );
@@ -383,29 +216,6 @@ export function CounterForm({ groupId, challengeId, back, at }: { groupId: strin
         <SubmitButton variant="secondary" className="w-full" pendingLabel="Gönderiliyor…">
           Karşı teklifi gönder
         </SubmitButton>
-      </form>
-    </details>
-  );
-}
-
-/** Saha ücretini sonradan ekle/değiştir/kaldır */
-export function FeeManage({ groupId, matchId, fee }: { groupId: string; matchId: string; fee: number | null }) {
-  return (
-    <details className="mb-4 rounded-2xl border border-line bg-surface-container">
-      <summary className="flex min-h-12 cursor-pointer items-center gap-2 px-4 font-semibold">
-        <Icon name="payments" className="text-[20px]" />
-        Saha ücreti
-        <span className="ml-auto text-sm font-normal text-muted">{fee ? `${fee} TL` : "belirtilmedi"}</span>
-      </summary>
-      <form action={setMatchFee} className="space-y-2 px-4 pb-4">
-        <Hidden groupId={groupId} matchId={matchId} />
-        <div className="flex gap-2">
-          <Input key={fee ?? ""} name="fee" inputMode="numeric" pattern="[0-9]*" maxLength={6} defaultValue={fee ?? ""} placeholder="Kişi başı TL" aria-label="Kişi başı saha ücreti" />
-          <SubmitButton variant="secondary" className="shrink-0" pendingLabel="…">
-            Kaydet
-          </SubmitButton>
-        </div>
-        <p className="text-xs text-muted">Kişi başı tutar. Boş bırakıp kaydedersen ücret kaldırılır.</p>
       </form>
     </details>
   );

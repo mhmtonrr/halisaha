@@ -27,15 +27,15 @@ const inRoster = async (m, p) => (await q(`select count(*)::int c from match_pla
 await as(3);
 ok("üye çekilme isteği gönderir (bekliyor)", (await q(`select request_withdrawal($1, 'Dizim ağrıyor') r`, [fut]))[0].r === "pending");
 ok("istek onaylanana kadar oyuncu kadroda kalır", await inRoster(fut, p3));
-ok("aynı maça ikinci bekleyen istek reddedilir", await fails(`select request_withdrawal($1, null)`, [fut]));
+ok("aynı maça ikinci bekleyen istek reddedilir", await fails(`select request_withdrawal($1, 'Mazeret')`, [fut]));
 ok("çok erken istek 'son dakika' değil", (await q(`select late from match_withdrawals where player_id=$1 and match_id=$2`, [p3, fut]))[0].late === false);
 ok("sebep kaydedilir", (await q(`select reason from match_withdrawals where match_id=$1`, [fut]))[0].reason === "Dizim ağrıyor");
-await db.query(`select request_withdrawal($1, null)`, [soon]);
+await db.query(`select request_withdrawal($1, 'Mazeret')`, [soon]);
 ok("3 saatten az kalınca 'son dakika' işaretlenir", (await q(`select late from match_withdrawals where match_id=$1 and player_id=$2`, [soon, p3]))[0].late === true);
 ok("201 karakterlik sebep reddedilir", await fails(`select request_withdrawal($1, $2)`, [past, "x".repeat(201)]));
-ok("maç saati geçmişse istek gönderilemez", await fails(`select request_withdrawal($1, null)`, [past]));
+ok("maç saati geçmişse istek gönderilemez", await fails(`select request_withdrawal($1, 'Mazeret')`, [past]));
 await as(5);
-ok("kadroda olmayan istek gönderemez", await fails(`select request_withdrawal($1, null)`, [fut]));
+ok("kadroda olmayan istek gönderemez", await fails(`select request_withdrawal($1, 'Mazeret')`, [fut]));
 
 // --- görünürlük
 ok("yabancı istekleri göremez", (await q(`select count(*)::int c from match_withdrawals`))[0].c === 0);
@@ -80,21 +80,21 @@ ok("geri çekilmiş istek tekrar geri çekilemez", await fails(`select cancel_wi
 await as(2);
 ok("yetkili kendini doğrudan çıkarır (onaylı kayıt)", (await q(`select request_withdrawal($1, 'İşim çıktı') r`, [fut]))[0].r === "approved" && !(await inRoster(fut, p2)));
 await as(1);
-ok("kaptan da doğrudan çıkar", (await q(`select request_withdrawal($1, null) r`, [fut]))[0].r === "approved" && !(await inRoster(fut, p1)));
+ok("kaptan da doğrudan çıkar", (await q(`select request_withdrawal($1, 'Mazeret') r`, [fut]))[0].r === "approved" && !(await inRoster(fut, p1)));
 
 // --- başka yolla kadrodan çıkma / maç başlaması bekleyeni kapatır
 await as(4);
-await db.query(`select request_withdrawal($1, null)`, [fut]);
+await db.query(`select request_withdrawal($1, 'Mazeret')`, [fut]);
 await as(1);
 await db.query(`delete from match_players where match_id=$1 and player_id=$2`, [fut, p4]);
 ok("kaptan oyuncuyu çıkarırsa bekleyen istek 'closed' olur", (await q(`select status from match_withdrawals where match_id=$1 and player_id=$2`, [fut, p4]))[0].status === "closed");
 await as(4);
-await db.query(`select request_withdrawal($1, null)`, [soon]);
+await db.query(`select request_withdrawal($1, 'Mazeret')`, [soon]);
 await db.exec("reset role");
 await db.query(`update matches set status='played' where id=$1`, [soon]);
 ok("maç planlanmış olmaktan çıkınca bekleyen istek 'closed' olur", (await q(`select status from match_withdrawals where match_id=$1 and player_id=$2`, [soon, p4]))[0].status === "closed");
 await as(4);
-ok("planlanmamış maça istek gönderilemez", await fails(`select request_withdrawal($1, null)`, [soon]));
+ok("planlanmamış maça istek gönderilemez", await fails(`select request_withdrawal($1, 'Mazeret')`, [soon]));
 // --- yetkisiz karar
 await as(5);
 ok("yabancı karar veremez", await fails(`select decide_withdrawal($1, true)`, [reqFut]));

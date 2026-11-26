@@ -106,7 +106,6 @@ export function MatchSetupForm({
   const [size, setSize] = useState(7);
   const [venue, setVenue] = useState("");
   const [fee, setFee] = useState("");
-  const [rivalKnown, setRivalKnown] = useState(!!rival);
   const [rivalSource, setRivalSource] = useState<"app" | "name">("app");
   const [rivalTeam, setRivalTeam] = useState<RivalTeam | null>(rival);
   const [rivalName, setRivalName] = useState("");
@@ -125,8 +124,8 @@ export function MatchSetupForm({
   const hasTime = (timeMode === "quick" || timeMode === "other") && !!time;
   // Saatler Türkiye saati (+03:00)
   const timePassed = (t: string) => !!day && !!t && Date.parse(parseLocalDateTime(`${day}T${t}`)) <= Date.now();
-  const appRival = team && rivalKnown && rivalSource === "app" ? rivalTeam : null;
-  const typedRival = team && rivalKnown && rivalSource === "name" ? rivalName.trim() : "";
+  const appRival = team && rivalSource === "app" ? rivalTeam : null;
+  const typedRival = team && rivalSource === "name" ? rivalName.trim() : "";
   const direct = !over && opensConfirmed({ count, capacity, hasTime, kind, hasOpponent: typedRival.length >= 2 });
 
   // Her adımın "İleri" koşulu ve neden pasif olduğu
@@ -143,7 +142,7 @@ export function MatchSetupForm({
               : fee && !(Number(fee) >= 1 && Number(fee) <= 100000)
                 ? "Saha ücretini kontrol et"
                 : null,
-    rival: !rivalKnown ? null : rivalSource === "app" ? (rivalTeam ? null : "Rakip takımı seç") : typedRival.length >= 2 ? null : "Rakip adını yaz",
+    rival: !team ? null : rivalSource === "app" ? (rivalTeam ? null : "Rakip takımı seç") : typedRival.length >= 2 ? null : "Rakip adını yaz",
     roster: over ? `${count - capacity} kişi fazla seçtin` : null,
     review: null,
   };
@@ -355,44 +354,17 @@ export function MatchSetupForm({
         )}
 
         {step === "rival" && (
-          <>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { known: false, icon: "help", title: "Belli değil", text: "Sonra belirlerim" },
-                { known: true, icon: "swords", title: "Rakip belli", text: "Takımı seç veya yaz" },
-              ].map((o) => (
-                <button
-                  key={o.title}
-                  type="button"
-                  onClick={() => setRivalKnown(o.known)}
-                  aria-pressed={rivalKnown === o.known}
-                  className={cx(
-                    "flex flex-col items-center gap-1 rounded-2xl border border-line bg-surface-container px-2 py-5 text-center",
-                    rivalKnown === o.known && "border-primary bg-primary/10",
-                  )}
-                >
-                  <Icon name={o.icon} className={cx("text-[30px]", rivalKnown === o.known ? "text-primary" : "text-muted")} />
-                  <span className="font-display font-bold">{o.title}</span>
-                  <span className="text-xs text-muted">{o.text}</span>
-                </button>
-              ))}
-            </div>
-            {rivalKnown ? (
-              <RivalPicker
-                groupId={group.id}
-                source={rivalSource}
-                onSource={setRivalSource}
-                team={rivalTeam}
-                onTeam={setRivalTeam}
-                name={rivalName}
-                onName={setRivalName}
-                search={rivalSearch}
-                onSearch={setRivalSearch}
-              />
-            ) : (
-              <p className="px-1 text-sm text-muted">Maç ekranından sonra rakip ekleyebilir veya bir takıma teklif gönderebilirsin.</p>
-            )}
-          </>
+          <RivalPicker
+            groupId={group.id}
+            source={rivalSource}
+            onSource={setRivalSource}
+            team={rivalTeam}
+            onTeam={setRivalTeam}
+            name={rivalName}
+            onName={setRivalName}
+            search={rivalSearch}
+            onSearch={setRivalSearch}
+          />
         )}
 
         {step === "roster" && (

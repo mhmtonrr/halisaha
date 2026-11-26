@@ -305,6 +305,12 @@ export const text = {
     tag: `match-no-result:${matchId}`,
   }),
   /** Elle kadrodan çıkarılan oyuncuya */
+  movedToReserve: (groupName: string, groupId: string, matchId: string, when: string): Content => ({
+    title: "Yedeğe alındın",
+    body: truncate(join(groupName, when), 300),
+    url: `/g/${groupId}/m/${matchId}`,
+    tag: `match:${matchId}`,
+  }),
   removedFromMatch: (groupName: string, groupId: string, matchId: string, when: string): Content => ({
     title: "Maç kadrosundan çıkarıldın",
     body: truncate(join(groupName, when), 300),

@@ -6,16 +6,8 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { finalizeExpired } from "@/lib/finalize";
-import { formatDate, getGroupPlayers, getGroupSummaries, one, POSITION_NAME, POSITIONS, type Position } from "@/lib/data";
-import {
-  addToMatch,
-  closeVoting,
-  movePlayer,
-  removeFromMatch,
-  reshuffleTeams,
-  setMatchPositions,
-  submitResult,
-} from "@/lib/actions";
+import { formatDate, getGroupPlayers, getGroupSummaries, one, POSITION_NAME, POSITIONS, type GroupPlayer, type Position } from "@/lib/data";
+import { closeVoting, reshuffleTeams, submitResult } from "@/lib/actions";
 import { CONFIG } from "@/lib/rating";
 import { teamRating } from "@/lib/teams-data";
 import { getFormation, inferSize } from "@/lib/formations";
@@ -23,7 +15,9 @@ import { LineupPitch, type PitchPlayer } from "@/components/LineupPitch";
 import { LineupEditor } from "./LineupEditor";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { AddPlayer, type Person } from "./AddPlayer";
-import { FeeManage, ListingManage, RivalManage, RosterManage, ScheduleManage, type EntryRow } from "./ManageSections";
+import { Applications, ListingManage, RivalMissing, ScheduleManage, type EntryRow } from "./ManageSections";
+import { RosterBoard, type BoardPerson } from "./RosterBoard";
+import { AutoOpenDetails } from "@/components/AutoOpenDetails";
 import { applyMatch, cancelApplication } from "@/lib/match-manage-actions";
 import { SubmitButton } from "@/components/SubmitButton";
 import { PushPrompt } from "@/components/PushControls";
@@ -49,14 +43,11 @@ const OK_TEXT: Record<string, string> = {
   kod: "Bağlantı yenilendi; eski bağlantı artık çalışmaz.",
   rakip: "Rakip kaydedildi.",
   teklif: "Teklif gönderildi; rakibin yanıtı bekleniyor.",
-  "teklif-kabul": "Teklif kabul edildi, maç rakiple bağlandı.",
-  "teklif-ret": "Teklif reddedildi.",
   "tarih-onerildi": "Tarih önerisi rakibe gitti.",
   "tarih-reddedildi": "Tarih önerisi reddedildi.",
   ertelendi: "Maçın tarihi değişti; kadroya bildirim gitti.",
   kesin: "Maç kesinleşti; kadroya bildirim gitti.",
   iptal: "Maç iptal edildi; herkese bildirim gitti.",
-  ucret: "Saha ücreti kaydedildi.",
 };
 const TEAM = {
   A: { label: "Sarı", text: "text-team-a", bg: "bg-team-a" },
@@ -211,10 +202,10 @@ export default async function MatchPage({
   searchParams,
 }: {
   params: Promise<{ groupId: string; matchId: string }>;
-  searchParams: Promise<{ error?: string; voted?: string; positions?: string; kabul?: string; dizilis?: string; cekilme?: string; yanit?: string; ok?: string }>;
+  searchParams: Promise<{ error?: string; voted?: string; kabul?: string; dizilis?: string; cekilme?: string; yanit?: string; ok?: string }>;
 }) {
   const { groupId, matchId } = await params;
-  const { error, voted, positions, kabul, dizilis, cekilme, yanit, ok } = await searchParams;
+  const { error, voted, kabul, dizilis, cekilme, yanit, ok } = await searchParams;
   const { supabase, user } = await requireUser();
 
   const { data: first } = await supabase
@@ -249,8 +240,8 @@ export default async function MatchPage({
   const manage = open && !!canManage;
   // Yönetim verisi (yeniden tasarım 4b): kayıtlar, ilanlar, bağlantı kodu, hedef gruplar, rakip teklifi
   const [entryRows, listingRows, code, targetRows, pendingChallenge, applyListing] = await Promise.all([
-    manage
-      ? supabase.from("match_entries").select("user_id, player_id, status, source, position, note, queued_at, created_at, profiles!match_entries_user_id_fkey(display_name)").eq("match_id", matchId).then((r) => r.data ?? [])
+    open
+      ? supabase.from("match_entries").select("user_id, player_id, status, source, position, note, queued_at, created_at, profiles!match_entries_user_id_fkey(display_name), group_players(display_name, position)").eq("match_id", matchId).then((r) => r.data ?? [])
       : Promise.resolve([]),
     manage
       ? supabase.from("match_listings").select("id, status, target_group_id, groups(name)").eq("match_id", matchId).in("status", ["pending", "active"]).then((r) => r.data ?? [])
@@ -275,21 +266,12 @@ export default async function MatchPage({
       ? await supabase.from("match_challenges").select("id, pending_at, pending_tbd, awaiting_group_id").eq("id", match.challenge_id).maybeSingle()
       : { data: null };
   const entryUserIds = (entryRows as { user_id: string | null }[]).map((e) => e.user_id).filter(Boolean) as string[];
+  const rawEntries = entryRows as unknown as RawEntry[];
   const { data: entryRatings } = entryUserIds.length
     ? await supabase.from("user_ratings").select("user_id, overall").in("user_id", entryUserIds)
     : { data: [] as { user_id: string; overall: number }[] };
   const ovr = new Map((entryRatings ?? []).map((r) => [r.user_id as string, r.overall as number]));
-  const entries: EntryRow[] = (entryRows as {
-    user_id: string | null;
-    player_id: string | null;
-    status: string;
-    source: string;
-    position: Position | null;
-    note: string | null;
-    queued_at: string | null;
-    created_at: string;
-    profiles: { display_name: string } | { display_name: string }[] | null;
-  }[])
+  const entries: EntryRow[] = [...rawEntries]
     .sort((a, b) => (a.queued_at ?? a.created_at).localeCompare(b.queued_at ?? b.created_at))
     .map((e) => ({
       userId: e.user_id,
@@ -302,10 +284,6 @@ export default async function MatchPage({
       overall: (e.user_id && ovr.get(e.user_id)) || 65,
     }));
   const busy = new Set(entries.filter((e) => ["in", "reserve", "pending", "invited"].includes(e.status)).map((e) => e.userId));
-  const addable = players
-    .filter((p) => p.user_id && !p.is_loan && !busy.has(p.user_id))
-    .map((p) => ({ userId: p.user_id as string, name: p.display_name }))
-    .sort((a, b) => a.name.localeCompare(b.name, "tr"));
   const listings = (listingRows as { id: string; status: string; target_group_id: string | null; groups: { name: string } | { name: string }[] | null }[]).map((l) => ({
     id: l.id,
     status: l.status,
@@ -356,8 +334,22 @@ export default async function MatchPage({
     }));
   }
   const teams = { A: roster.filter((r) => r.team === "A"), B: roster.filter((r) => r.team === "B") };
-  const avg = (t: RosterEntry[]) =>
-    t.length ? Math.round((t.reduce((s, p) => s + p.overall, 0) / t.length) * 10) / 10 : 0;
+  // Kadro / Yedek / Gelmeyenler: takımdaki herkes bu üç bölümden birinde
+  let board: BoardPerson[] = [];
+  if (open) {
+    // Takımdan ayrılanlar listelenmez
+    const { data: gone } = await supabase.from("group_players").select("user_id").eq("group_id", groupId).eq("is_loan", false).not("left_at", "is", null);
+    const former = new Set((gone ?? []).map((g) => g.user_id as string | null).filter(Boolean) as string[]);
+    board = buildBoard({
+      roster,
+      entries: rawEntries,
+      members: players,
+      former,
+      ratings: ovr,
+      isAdmin: !!isAdmin,
+      showTeams: planned && match.kind === "internal",
+    });
+  }
 
   const statusBadge =
     match.status === "gathering" ? (
@@ -451,29 +443,6 @@ export default async function MatchPage({
           flash={yanit}
         />
       )}
-      {match.status === "gathering" && !manage && (
-        <>
-          <SectionTitle>Kadro · {roster.length}</SectionTitle>
-          {roster.length === 0 ? (
-            <p className="mb-4 px-1 text-sm text-muted">Henüz kimse yok.</p>
-          ) : (
-            <Card className="mb-4 p-0">
-              <ul className="divide-y divide-line">
-                {roster.map((r) => (
-                  <li key={r.id}>
-                    <Link href={`/g/${groupId}/p/${r.id}`} className="flex min-h-12 items-center gap-3 px-4 py-2">
-                      <OvrBadge overall={r.overall} />
-                      <span className="min-w-0 flex-1 truncate">{r.name}</span>
-                      {!r.userId && <span className="text-xs text-muted">misafir</span>}
-                      <PositionChip position={r.position} />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
-        </>
-      )}
       {applyListing && (
         <Card className="mb-4 space-y-2 border-amber-400/40 bg-amber-400/10">
           <div className="font-semibold">Bu maça adam aranıyor</div>
@@ -512,60 +481,21 @@ export default async function MatchPage({
           {OK_TEXT[ok]}
         </p>
       )}
-      {manage && match.status === "gathering" && (
-        <RosterManage
-          groupId={groupId}
-          matchId={matchId}
-          roster={roster.map((r) => ({ id: r.id, userId: r.userId, name: r.name, overall: r.overall, position: r.position }))}
-          entries={entries}
-          addable={addable}
-          isAdmin={!!isAdmin}
-          full={full}
-        />
+      {manage && match.kind === "external" && !match.challenge_id && !match.opponent_name && !pendingChallenge && (
+        <RivalMissing groupId={groupId} matchId={matchId} homeCity={myTeam?.city ?? ""} />
       )}
-      {manage && planned && entries.some((e) => ["reserve", "pending"].includes(e.status)) && (
-        <RosterManage groupId={groupId} matchId={matchId} roster={[]} entries={entries} addable={[]} isAdmin={false} full={full} />
-      )}
-      {manage && <ListingManage groupId={groupId} matchId={matchId} listings={listings} targets={targets} code={code} full={full} />}
-      {manage && (
-        <AddPlayer
-          groupId={groupId}
-          matchId={matchId}
-          meId={user.id}
-          friends={friends}
-          statuses={statuses}
-          homeCity={myTeam?.city ?? ""}
-          canAddGuest={!!isAdmin}
-        />
-      )}
-      {manage && match.kind === "external" && !match.challenge_id && (
-        <RivalManage
-          groupId={groupId}
-          matchId={matchId}
-          opponentName={match.opponent_name}
-          challenge={
-            pendingChallenge
-              ? {
-                  id: pendingChallenge.id,
-                  toName: challengeTo ?? "Rakip",
-                  awaitingMe: pendingChallenge.awaiting_group_id === groupId,
-                  proposedAt: pendingChallenge.proposed_at,
-                  proposedTbd: pendingChallenge.proposed_tbd,
-                  venue: pendingChallenge.venue,
-                }
-              : null
-          }
-          homeCity={myTeam?.city ?? ""}
-        />
+      {manage && pendingChallenge?.awaiting_group_id === groupId && (
+        <Link href={`/g/${groupId}/teklifler`} className="mb-4 flex items-center gap-2 rounded-xl border border-amber-400/40 bg-amber-400/10 p-3 text-sm">
+          <Icon name="swords" className="text-[20px] text-amber-300" />
+          <span className="min-w-0 flex-1">{challengeTo} karşı teklif yaptı; yanıtın bekleniyor.</span>
+          <Icon name="chevron_right" className="text-[20px] text-muted" />
+        </Link>
       )}
       {kabul && (
         <p className="mb-4 flex items-start gap-1.5 rounded-xl bg-primary/10 p-3 text-sm text-primary">
           <Icon name="check_circle" fill className="mt-0.5 text-[18px]" />
           <span>Teklif kabul edildi. Şimdi kadronu belirle. Rakip takım da kendi kadrosunu belirliyor.</span>
         </p>
-      )}
-      {positions && (
-        <p className="mb-4 flex items-center justify-center gap-1.5 rounded-xl bg-primary/10 p-3 text-center text-sm text-primary"><Icon name="check_circle" fill className="text-[18px]" />Mevkiler kaydedildi</p>
       )}
       {dizilis && (
         <p className="mb-4 flex items-center justify-center gap-1.5 rounded-xl bg-primary/10 p-3 text-center text-sm text-primary"><Icon name="check_circle" fill className="text-[18px]" />Diziliş kaydedildi. Rakip takım da görebilir.</p>
@@ -592,6 +522,20 @@ export default async function MatchPage({
         </Card>
       )}
 
+      {match.status === "planned" && (
+        <WithdrawalSection
+          part="requests"
+          groupId={groupId}
+          matchId={matchId}
+          playedAt={match.played_at}
+          myPlayerId={me?.id ?? null}
+          canManage={!!canManage}
+          rows={withdrawals}
+          flash={cekilme}
+        />
+      )}
+      {manage && <Applications groupId={groupId} matchId={matchId} entries={entries} full={full} />}
+
       {match.status !== "gathering" && (
         <div id="dizilis" className="scroll-mt-4">
           <LineupsSection
@@ -612,34 +556,52 @@ export default async function MatchPage({
         </div>
       )}
 
-      {match.status === "planned" && (
-        <WithdrawalSection
-          groupId={groupId}
-          matchId={matchId}
-          playedAt={match.played_at}
-          myPlayerId={me?.id ?? null}
-          canManage={!!canManage}
-          rows={withdrawals}
-          flash={cekilme}
-        />
-      )}
-
-      {match.status === "planned" && (
-        <PlannedView
+      {planned && canManage && (
+        <LineupTools
           groupId={groupId}
           matchId={matchId}
           teams={teams}
-          avg={avg}
-          canManage={!!canManage}
           external={external}
           labels={labels}
-          linked={linked}
           teamSize={match.team_size}
           formations={{ A: match.formation_a, B: match.formation_b }}
-          bench={players
-            .filter((p) => !roster.some((r) => r.id === p.id))
-            .sort((a, b) => a.display_name.localeCompare(b.display_name, "tr"))}
         />
+      )}
+
+      {open && <RosterBoard groupId={groupId} matchId={matchId} people={board} capacity={match.capacity} canManage={manage} onlyRoster={!manage && !isMember} />}
+
+      {manage && (
+        <AutoOpenDetails
+          openInitially={!!ok && ["ilan", "ilan-kapandi", "kod"].includes(ok)}
+          className="mb-4 rounded-2xl border border-line bg-surface-container px-3 open:pb-1"
+          summaryClassName="flex min-h-14 cursor-pointer items-center gap-2 px-1 font-semibold"
+          summary={
+            <>
+              <Icon name="person_add" className="text-[22px] text-primary" />
+              <span className="flex-1">Oyuncu mu eksik?</span>
+              <span className="text-xs font-normal text-muted">Adam ara · Oyuncu ekle</span>
+              <Icon name="expand_more" className="text-[20px] text-muted" />
+            </>
+          }
+        >
+          <ListingManage groupId={groupId} matchId={matchId} listings={listings} targets={targets} code={code} full={full} />
+          <AddPlayer
+            groupId={groupId}
+            matchId={matchId}
+            meId={user.id}
+            friends={friends}
+            statuses={statuses}
+            homeCity={myTeam?.city ?? ""}
+            canAddGuest={!!isAdmin}
+          />
+        </AutoOpenDetails>
+      )}
+
+      {planned && canManage && (
+        <>
+          <SectionTitle>Maç bitti mi? Sonucu gir</SectionTitle>
+          <ResultForm groupId={groupId} matchId={matchId} all={roster} external={external} labels={labels} linked={linked} allowNoShow />
+        </>
       )}
 
       {match.status === "played" && (
@@ -671,8 +633,6 @@ export default async function MatchPage({
         <ResultsView groupId={groupId} matchId={matchId} roster={roster} myId={me?.id} external={external} />
       )}
 
-      {manage && <FeeManage groupId={groupId} matchId={matchId} fee={match.fee_per_person} />}
-
       {manage && (
         <ScheduleManage
           groupId={groupId}
@@ -692,11 +652,113 @@ export default async function MatchPage({
       )}
 
       {linked && opp && <OpponentSection opp={opp} />}
+
+      {planned && (
+        <WithdrawalSection
+          part="mine"
+          groupId={groupId}
+          matchId={matchId}
+          playedAt={match.played_at}
+          myPlayerId={me?.id ?? null}
+          canManage={!!canManage}
+          rows={withdrawals}
+          flash={cekilme}
+        />
+      )}
     </main>
   );
 }
 
 // ---------------------------------------------------------------------------
+
+interface RawEntry {
+  user_id: string | null;
+  player_id: string | null;
+  status: string;
+  source: string;
+  position: Position | null;
+  note: string | null;
+  queued_at: string | null;
+  created_at: string;
+  profiles: { display_name: string } | { display_name: string }[] | null;
+  group_players: { display_name: string; position: Position | null } | { display_name: string; position: Position | null }[] | null;
+}
+
+/** Gelmeyenlerdeki sebep metni ve sıralaması */
+const OUT_TAG: Record<string, string> = {
+  declined: "Gelemem dedi",
+  left: "Kadrodan çıktı",
+  invited: "Davetli, yanıt bekleniyor",
+  rejected: "Başvurusu reddedildi",
+  none: "Yanıt vermedi",
+};
+const OUT_ORDER = Object.keys(OUT_TAG);
+
+/** Kadro panosunun kişileri: kadro (maç kadrosu), yedek (sıra ile), gelmeyenler (kalan herkes) */
+function buildBoard({
+  roster,
+  entries,
+  members,
+  former,
+  ratings,
+  isAdmin,
+  showTeams,
+}: {
+  roster: RosterEntry[];
+  entries: RawEntry[];
+  members: GroupPlayer[];
+  former: Set<string>;
+  ratings: Map<string, number>;
+  isAdmin: boolean;
+  showTeams: boolean;
+}): BoardPerson[] {
+  const team = members.filter((m) => m.user_id && !m.is_loan);
+  const byUser = new Map(team.map((m) => [m.user_id as string, m]));
+  const inRoster: BoardPerson[] = roster.map((r) => ({
+    key: r.userId ?? r.id,
+    userId: r.userId,
+    playerId: r.id,
+    name: r.name,
+    overall: r.overall,
+    position: r.position,
+    zone: "in",
+    team: showTeams ? r.team : undefined,
+    movable: !!r.userId || isAdmin,
+  }));
+  const seen = new Set(inRoster.map((p) => p.key));
+  const reserve: BoardPerson[] = [];
+  const out: (BoardPerson & { order: number })[] = [];
+  const add = (key: string, status: string, p: Omit<BoardPerson, "key" | "zone" | "tag">) => {
+    if (seen.has(key)) return;
+    seen.add(key);
+    if (status === "reserve") reserve.push({ ...p, key, zone: "reserve" });
+    else out.push({ ...p, key, zone: "out", tag: OUT_TAG[status], order: OUT_ORDER.indexOf(status) });
+  };
+  for (const e of [...entries].sort((a, b) => (a.queued_at ?? a.created_at).localeCompare(b.queued_at ?? b.created_at))) {
+    // Onay bekleyen başvurular ayrı kartlarda
+    if (e.status === "pending" || e.status === "in") continue;
+    const key = e.user_id ?? e.player_id;
+    if (!key || (e.user_id && former.has(e.user_id))) continue;
+    const member = e.user_id ? byUser.get(e.user_id) : undefined;
+    const guest = one(e.group_players);
+    add(key, e.status, {
+      userId: e.user_id,
+      playerId: e.user_id ? (member?.id ?? null) : e.player_id,
+      name: member?.display_name ?? one(e.profiles)?.display_name ?? guest?.display_name ?? "Oyuncu",
+      overall: member?.overall ?? (e.user_id ? ratings.get(e.user_id) : undefined) ?? 65,
+      position: e.position ?? member?.position ?? guest?.position ?? null,
+      // Takım dışından davetli / gelemem diyen elle kadroya yazılamaz
+      movable: e.user_id ? !!member || e.status === "reserve" || e.status === "left" : isAdmin,
+    });
+  }
+  // Başvurusu bekleyen üye "yanıt vermedi" sayılmaz
+  for (const e of entries) if (e.status === "pending" && e.user_id) seen.add(e.user_id);
+  for (const m of team) {
+    add(m.user_id as string, "none", { userId: m.user_id, playerId: m.id, name: m.display_name, overall: m.overall, position: m.position, movable: true });
+  }
+  out.sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, "tr"));
+  return [...inRoster, ...reserve, ...out];
+}
 
 /** Arkadaşlarım (ada göre) — "Oyuncu ekle" listesi */
 async function loadFriends(supabase: Awaited<ReturnType<typeof requireUser>>["supabase"], userId: string): Promise<Person[]> {
@@ -709,230 +771,71 @@ async function loadFriends(supabase: Awaited<ReturnType<typeof requireUser>>["su
     .sort((a, b) => a.name.localeCompare(b.name, "tr"));
 }
 
-async function PlannedView({
+/** Yönetenin diziliş araçları: takımları karıştır (kendi aramızda) ve sürükle-bırak editörü */
+function LineupTools({
   groupId,
   matchId,
   teams,
-  avg,
-  canManage,
   external,
   labels,
-  linked,
   teamSize,
   formations,
-  bench,
 }: {
   groupId: string;
   matchId: string;
   teams: Record<Team, RosterEntry[]>;
-  avg: (t: RosterEntry[]) => number;
-  canManage: boolean;
   external: boolean;
   labels: Labels;
-  linked: boolean;
   teamSize: number | null;
   formations: Record<Team, string | null>;
-  bench: { id: string; display_name: string }[];
 }) {
-  const all = [...teams.A, ...teams.B];
-  const counts = Object.fromEntries(POSITIONS.map((p) => [p, all.filter((r) => r.position === p).length]));
-
   return (
-    <>
-      {linked && all.length === 0 && (
-        <Card className="mb-3 border-amber-400/40 bg-amber-400/10 text-center text-sm text-amber-200">
-          Kadro boş. {canManage ? "Aşağıdan oyuncuları ekle; rakip takım da bu ekrandan kadronu görebilir." : "Kaptan veya yetkililer kadroyu belirler."}
-        </Card>
+    <div className="mb-4">
+      {!external && (
+        <form action={reshuffleTeams}>
+          <Hidden groupId={groupId} matchId={matchId} />
+          <Button variant="secondary" className="w-full">
+            <Icon name="shuffle" className="text-[20px]" />
+            Takımları yeniden karıştır
+          </Button>
+        </form>
       )}
-      {linked ? null : external ? (
-        <Card className="p-3">
-          <div className="mb-2 flex items-baseline justify-between font-bold">
-            <span>Kadromuz ({all.length})</span>
-            <span className="text-xs font-normal text-muted">
-              {POSITIONS.filter((p) => counts[p]).map((p) => `${counts[p]} ${POSITION_NAME[p].toLocaleLowerCase("tr")}`).join(" · ")}
-            </span>
-          </div>
-          <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-            {all.map((p) => (
-              <li key={p.id} className="flex items-center gap-2">
-                <OvrBadge overall={p.overall} className="h-7 w-7 text-xs" />
-                <Link href={`/g/${groupId}/p/${p.id}`} className="min-w-0 flex-1 truncate text-sm hover:underline">
-                  {shortName(p.name)}
-                </Link>
-                <PositionChip position={p.position} />
-              </li>
-            ))}
-          </ul>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-2 gap-3">
-          {(["A", "B"] as const).map((t) => (
-            <Card key={t} className="p-3">
-              <div className={cx("mb-2 flex items-baseline justify-between font-bold", TEAM[t].text)}>
-                <span>
-                  {labels[t]} ({teams[t].length})
-                </span>
-                <span className="text-sm">{avg(teams[t])}</span>
+      <details className="mt-1">
+        <summary className="cursor-pointer py-2 text-sm text-muted">
+          <span className="inline-flex items-center gap-1.5 align-middle">
+            <Icon name="sports" className="text-[18px]" />
+            Diziliş (sürükle-bırak)
+          </span>
+        </summary>
+        <div className="mt-2 space-y-6">
+          {(external ? (["A"] as const) : (["A", "B"] as const)).map((t) => {
+            const mine = teams[t];
+            if (mine.length === 0) {
+              return (
+                <p key={t} className="text-center text-sm text-muted">
+                  Önce kadroya oyuncu ekle; sonra dizilişi ayarlayabilirsin.
+                </p>
+              );
+            }
+            return (
+              <div key={t}>
+                {!external && <div className={cx("mb-2 text-sm font-bold", TEAM[t].text)}>{labels[t]}</div>}
+                <LineupEditor
+                  key={`${t}-${mine.map((p) => p.id).join()}`}
+                  groupId={groupId}
+                  matchId={matchId}
+                  team={t}
+                  size={teamSize ?? inferSize(mine.length)}
+                  players={mine.map(toPitch)}
+                  initialFormation={formations[t]}
+                  initialAssign={Object.fromEntries(mine.map((p) => [p.id, p.slot]))}
+                />
               </div>
-              <ul className="space-y-1.5">
-                {teams[t].map((p) => (
-                  <li key={p.id} className="flex items-center gap-1.5">
-                    <OvrBadge overall={p.overall} className="h-7 w-7 text-xs" />
-                    <Link href={`/g/${groupId}/p/${p.id}`} className="min-w-0 flex-1 truncate text-sm hover:underline">
-                      {shortName(p.name)}
-                    </Link>
-                    <PositionChip position={p.position} />
-                    {canManage && (
-                      <form action={movePlayer}>
-                        <Hidden groupId={groupId} matchId={matchId} />
-                        <input type="hidden" name="playerId" value={p.id} />
-                        <input type="hidden" name="team" value={t} />
-                        <button className="rounded px-1 text-muted hover:bg-pitch-700" title="Diğer takıma geçir">
-                          {t === "A" ? "→" : "←"}
-                        </button>
-                      </form>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          ))}
+            );
+          })}
         </div>
-      )}
-
-      {canManage && (
-        <>
-          {!external && (
-            <form action={reshuffleTeams} className="mt-3">
-              <Hidden groupId={groupId} matchId={matchId} />
-              <Button variant="secondary" className="w-full">
-                <Icon name="shuffle" className="text-[20px]" />
-                Takımları yeniden karıştır
-              </Button>
-            </form>
-          )}
-
-          <details className="mt-3">
-            <summary className="cursor-pointer py-2 text-sm text-muted">Bu maçın mevkilerini düzenle</summary>
-            <form action={setMatchPositions} className="mt-2">
-              <Hidden groupId={groupId} matchId={matchId} />
-              <Card className="space-y-1.5">
-                {all.map((p) => (
-                  <label key={p.id} className="flex items-center gap-2 text-sm">
-                    {!external && <span className={cx("h-2 w-2 shrink-0 rounded-full", TEAM[p.team].bg)} />}
-                    <span className="min-w-0 flex-1 truncate">{p.name}</span>
-                    <select
-                      name={`pos_${p.id}`}
-                      defaultValue={p.position ?? ""}
-                      className="min-h-9 rounded-lg border border-line bg-pitch-950 px-2 text-sm"
-                    >
-                      <option value="">—</option>
-                      {POSITIONS.map((pos) => (
-                        <option key={pos} value={pos}>
-                          {POSITION_NAME[pos]}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ))}
-              </Card>
-              <Button variant="secondary" className="mt-2 w-full">
-                Mevkileri kaydet
-              </Button>
-              <p className="mt-1 text-center text-xs text-muted">
-                Sadece bu maç için geçerli. Oyuncuların profilindeki mevki değişmez.
-                {!external && " Kaydettikten sonra karıştırırsan takımlar yeni mevkilere göre dengelenir."}
-              </p>
-            </form>
-          </details>
-
-
-          <details className="mt-1">
-            <summary className="cursor-pointer py-2 text-sm text-muted">
-              <span className="inline-flex items-center gap-1.5 align-middle">
-                <Icon name="sports" className="text-[18px]" />
-                Diziliş (sürükle-bırak)
-              </span>
-            </summary>
-            <div className="mt-2 space-y-6">
-              {(external ? (["A"] as const) : (["A", "B"] as const)).map((t) => {
-                const mine = teams[t];
-                if (mine.length === 0) {
-                  return (
-                    <p key={t} className="text-center text-sm text-muted">
-                      Önce kadroya oyuncu ekle; sonra dizilişi ayarlayabilirsin.
-                    </p>
-                  );
-                }
-                return (
-                  <div key={t}>
-                    {!external && <div className={cx("mb-2 text-sm font-bold", TEAM[t].text)}>{labels[t]}</div>}
-                    <LineupEditor
-                      key={`${t}-${mine.map((p) => p.id).join()}`}
-                      groupId={groupId}
-                      matchId={matchId}
-                      team={t}
-                      size={teamSize ?? inferSize(mine.length)}
-                      players={mine.map(toPitch)}
-                      initialFormation={formations[t]}
-                      initialAssign={Object.fromEntries(mine.map((p) => [p.id, p.slot]))}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </details>
-
-          <details className="mt-1" open={linked && all.length === 0}>
-            <summary className="cursor-pointer py-2 text-sm text-muted">Üye ekle / kadrodan çıkar</summary>
-            <Card className="mt-2 space-y-3">
-              <ul className="space-y-1">
-                {all.map((p) => (
-                  <li key={p.id} className="flex items-center gap-2 text-sm">
-                    <span className="flex-1 truncate">{p.name}</span>
-                    <form action={removeFromMatch}>
-                      <Hidden groupId={groupId} matchId={matchId} />
-                      <input type="hidden" name="playerId" value={p.id} />
-                      <button className="rounded px-2 py-1 text-xs text-muted hover:bg-red-950 hover:text-red-300">
-                        Çıkar
-                      </button>
-                    </form>
-                  </li>
-                ))}
-              </ul>
-              {bench.length > 0 && (
-                <form action={addToMatch} className="space-y-2">
-                  <Hidden groupId={groupId} matchId={matchId} />
-                  <div className="text-xs uppercase tracking-wide text-muted">Eklenecekleri seç</div>
-                  <ul className="grid max-h-56 grid-cols-2 gap-1 overflow-y-auto">
-                    {bench.map((p) => (
-                      <li key={p.id}>
-                        <label className="flex min-h-9 cursor-pointer items-center gap-2 rounded-lg border border-line px-2 text-sm has-checked:border-accent has-checked:bg-accent/10">
-                          <input type="checkbox" name="playerId" value={p.id} className="accent-accent" />
-                          <span className="truncate">{p.display_name}</span>
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                  <SubmitButton variant="secondary" className="w-full" pendingLabel="Ekleniyor…">
-                    Seçilenleri ekle
-                  </SubmitButton>
-                </form>
-              )}
-            </Card>
-          </details>
-
-          <SectionTitle>Maç bitti mi? Sonucu gir</SectionTitle>
-          <ResultForm groupId={groupId} matchId={matchId} all={all} external={external} labels={labels} linked={linked} allowNoShow />
-
-        </>
-      )}
-      {!canManage && (
-        <p className="mt-4 text-center text-sm text-muted">
-          Takımları, mevkileri ve sonucu maçı kuran kişi veya grup yöneticisi düzenler.
-        </p>
-      )}
-    </>
+      </details>
+    </div>
   );
 }
 

@@ -45,6 +45,7 @@ export async function setupMatch(fd: FormData) {
   if (fee !== null && !(Number.isInteger(fee) && fee >= 1 && fee <= 100000)) fail(back, "Saha ücreti 1 ile 100000 TL arasında olmalı");
   const kind = str(fd, "kind") === "internal" ? "internal" : "external";
   const rival = str(fd, "rivalTeam");
+  if (kind === "external" && !UUID_RE.test(rival) && str(fd, "opponent").length < 2) fail(back, "Rakibi seç veya adını yaz");
   // Üyeler + takım dışı arkadaşlar; kendim ayrıca withMe ile
   const confirmed = fd.getAll("confirmed").map(String).filter((id) => UUID_RE.test(id) && id !== user.id);
   const guestNames = fd.getAll("guestName").map((v) => String(v).trim());

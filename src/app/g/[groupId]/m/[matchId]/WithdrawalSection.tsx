@@ -20,8 +20,12 @@ const FLASH: Record<string, string> = {
   "denied-by-admin": "Çekilme isteği reddedildi; oyuncu kadroda kalıyor.",
 };
 
-/** Maçtan çekilme: oyuncu isteği gönderir/geri çeker, kaptan ve yetkililer onaylar veya reddeder (planlanmış maçta) */
+/**
+ * Maçtan çekilme (planlanmış maçta). part="requests": yetkililerin onay listesi (ekranın üstünde);
+ * part="mine": oyuncunun "gelemeyeceğim" bölümü, mazeret zorunlu (ekranın en altında).
+ */
 export function WithdrawalSection({
+  part,
   groupId,
   matchId,
   playedAt,
@@ -30,6 +34,7 @@ export function WithdrawalSection({
   rows,
   flash,
 }: {
+  part: "requests" | "mine";
   groupId: string;
   matchId: string;
   playedAt: string;
@@ -45,15 +50,19 @@ export function WithdrawalSection({
   const waiting = canManage ? rows.filter((r) => r.status === "pending") : [];
   const hoursLeft = (new Date(playedAt).getTime() - Date.now()) / 3600_000;
   const soon = hoursLeft < 3;
-  const flashText = flash ? FLASH[flash] : null;
+  // Yetkilinin karar mesajları üstte, oyuncunun kendi mesajları altta
+  const adminFlash = !!flash?.endsWith("-by-admin");
+  const flashText = flash && adminFlash === (part === "requests") ? FLASH[flash] : null;
+  const showRequests = part === "requests" && waiting.length > 0;
+  const showMine = part === "mine" && !!myPlayerId;
 
-  if (!myPlayerId && waiting.length === 0 && !flashText) return null;
+  if (!showRequests && !showMine && !flashText) return null;
 
   return (
     <>
       {flashText && <p className="mb-3 rounded-xl bg-accent/10 p-3 text-center text-sm text-accent">{flashText}</p>}
 
-      {waiting.length > 0 && (
+      {showRequests && (
         <>
           <SectionTitle>Çekilme istekleri · {waiting.length}</SectionTitle>
           <Card className="p-0">
@@ -64,7 +73,7 @@ export function WithdrawalSection({
                     <span className="min-w-0 flex-1 truncate font-medium">{w.name}</span>
                     {w.late && <Badge tone="warn">Son dakika</Badge>}
                   </div>
-                  <p className="mt-0.5 text-xs text-muted">{w.reason ? `“${w.reason}”` : "Sebep yazmadı"}</p>
+                  <p className="mt-0.5 text-xs text-muted">{w.reason ? `“${w.reason}”` : "Mazeret yazmadı"}</p>
                   <div className="mt-2 flex gap-2">
                     {(["1", "0"] as const).map((approve) => (
                       <form key={approve} action={decideWithdrawal} className="flex-1">
@@ -88,7 +97,7 @@ export function WithdrawalSection({
         </>
       )}
 
-      {myPlayerId && (
+      {showMine && (
         <>
           <SectionTitle>Maça katılımım</SectionTitle>
           {pending ? (
@@ -113,14 +122,16 @@ export function WithdrawalSection({
                 </p>
               )}
               <details>
-                <summary className="cursor-pointer text-sm text-red-300">Maçtan çekilmek istiyorum…</summary>
+                <summary className="cursor-pointer text-sm text-red-300">Maça gelemeyeceğim…</summary>
                 <form action={requestWithdrawal} className="mt-3 space-y-3">
                   <input type="hidden" name="groupId" value={groupId} />
                   <input type="hidden" name="matchId" value={matchId} />
                   <label className="block text-xs text-muted">
-                    Sebep (isteğe bağlı)
+                    Mazeretin (zorunlu)
                     <textarea
                       name="reason"
+                      required
+                      minLength={3}
                       maxLength={200}
                       rows={2}
                       placeholder="Örn. işim çıktı, sakatım"

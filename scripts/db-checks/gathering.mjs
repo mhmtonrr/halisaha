@@ -102,7 +102,7 @@ ok("kesin maç tekrar kesinleştirilemez", await fails(`select confirm_match($1,
 // Kesin maçta çıkış onaylı; ertelemeden sonra 24 saat serbest
 await as(5);
 ok("kesin maçta 'gelemem' ile çıkılamaz", await fails(`select respond_match($1, 'no')`, [M]));
-ok("kesin maçta çekilme isteği bekler", (await one(`select request_withdrawal($1) r`, [M])).r === "pending");
+ok("kesin maçta çekilme isteği bekler", (await one(`select request_withdrawal($1, 'Mazeret') r`, [M])).r === "pending");
 await db.exec(`reset role; update match_withdrawals set status='cancelled' where match_id='${M}'`);
 await as(1);
 ok("kesin maç saatsiz ertelenemez", await fails(`select reschedule_match($1, ${day} + 1, null)`, [M]));

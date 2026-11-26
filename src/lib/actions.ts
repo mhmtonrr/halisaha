@@ -552,7 +552,8 @@ export async function requestWithdrawal(fd: FormData) {
   const matchId = str(fd, "matchId");
   const back = `/g/${groupId}/m/${matchId}`;
   const reason = str(fd, "reason").slice(0, 200);
-  const { data, error } = await supabase.rpc("request_withdrawal", { p_match: matchId, p_reason: reason || null });
+  if (reason.length < 3) fail(back, "Mazeretini yaz (en az 3 karakter)");
+  const { data, error } = await supabase.rpc("request_withdrawal", { p_match: matchId, p_reason: reason });
   if (error) fail(back, rpcMessage(error, "İstek gönderilemedi"));
   const result = data as "pending" | "approved";
   later(async () => {
@@ -802,95 +803,6 @@ export async function movePlayer(fd: FormData) {
     .eq("match_id", matchId)
     .eq("player_id", str(fd, "playerId"));
   if (error) fail(back, "Oyuncu taşınamadı");
-  revalidatePath(back);
-}
-
-/** Maça özel mevkiler. RLS sadece maçı kuranın veya yöneticinin değiştirmesine izin verir. */
-export async function setMatchPositions(fd: FormData) {
-  const { supabase } = await requireUser();
-  const groupId = str(fd, "groupId");
-  const matchId = str(fd, "matchId");
-  const back = `/g/${groupId}/m/${matchId}`;
-  const roster = await loadRoster(supabase, matchId);
-  const results = await Promise.all(
-    roster.map((r) => {
-      const position = asPosition(str(fd, `pos_${r.player_id}`));
-      return supabase
-        .from("match_players")
-        .update({ position, is_goalkeeper: position === "GK" })
-        .eq("match_id", matchId)
-        .eq("player_id", r.player_id)
-        .select("player_id");
-    }),
-  );
-  if (results.some((r) => r.error || !r.data?.length))
-    fail(back, "Mevkileri sadece maçı kuran kişi veya yönetici değiştirebilir");
-  revalidatePath(back);
-  redirect(`${back}?positions=1`);
-}
-
-export async function addToMatch(fd: FormData) {
-  const { supabase, user } = await requireUser();
-  const groupId = str(fd, "groupId");
-  const matchId = str(fd, "matchId");
-  const back = `/g/${groupId}/m/${matchId}`;
-  const playerIds = [...new Set(fd.getAll("playerId").map(String).filter(Boolean))];
-  if (!playerIds.length) fail(back, "Eklenecek oyuncuyu seçin");
-  const [roster, { data: match }, { data: players }] = await Promise.all([
-    loadRoster(supabase, matchId),
-    supabase.from("matches").select("kind, played_at").eq("id", matchId).single(),
-    supabase.from("group_players").select("id, position, user_id").in("id", playerIds),
-  ]);
-  let countA = roster.filter((r) => r.team === "A").length;
-  let countB = roster.length - countA;
-  const rows = (players ?? []).map((pl) => {
-    const team = match?.kind === "external" || countA <= countB ? "A" : "B";
-    if (team === "A") countA++;
-    else countB++;
-    const position = (pl.position as Position | null) ?? null;
-    return { match_id: matchId, player_id: pl.id, team, position, is_goalkeeper: position === "GK" };
-  });
-  const { error } = await supabase.from("match_players").insert(rows);
-  if (error) fail(back, rpcMessage(error, "Oyuncu eklenemedi"));
-  // Elle eklenen oyunculara "kadrodasın" (çağrıdan seçilmekle aynı bildirim)
-  const added = (players ?? []).map((pl) => pl.user_id as string | null).filter((id): id is string => !!id);
-  if (added.length && match) {
-    later(async () => {
-      const admin = createAdminClient();
-      await notify(added, "match", text.selectedForMatch(await groupName(admin, groupId), groupId, matchId, formatDate(match.played_at as string)), { excludeUserId: user.id });
-    });
-  }
-  revalidatePath(back);
-}
-
-export async function removeFromMatch(fd: FormData) {
-  const { supabase, user } = await requireUser();
-  const groupId = str(fd, "groupId");
-  const matchId = str(fd, "matchId");
-  const playerId = str(fd, "playerId");
-  const back = `/g/${groupId}/m/${matchId}`;
-  const { data: removed, error } = await supabase
-    .from("match_players")
-    .delete()
-    .eq("match_id", matchId)
-    .eq("player_id", playerId)
-    .select("player_id");
-  if (error) fail(back, "Oyuncu çıkarılamadı");
-  if (removed?.length) {
-    // Çıkarılana haber; toplama çağrısında yedek varsa organizatöre "yer açıldı" (çıkaran kendisiyse gitmez)
-    later(async () => {
-      const admin = createAdminClient();
-      const [{ data: m }, { data: gp }] = await Promise.all([
-        admin.from("matches").select("status, played_at").eq("id", matchId).maybeSingle(),
-        admin.from("group_players").select("user_id, display_name").eq("id", playerId).maybeSingle(),
-      ]);
-      if (m?.status !== "planned") return;
-      if (gp?.user_id) {
-        await notify([gp.user_id as string], "match", text.removedFromMatch(await groupName(admin, groupId), groupId, matchId, formatDate(m.played_at as string)), { excludeUserId: user.id });
-      }
-      await notifySpotOpened(admin, matchId, (gp?.display_name as string | undefined) ?? "Bir oyuncu", user.id);
-    });
-  }
   revalidatePath(back);
 }
 

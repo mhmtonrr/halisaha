@@ -11,11 +11,13 @@ export function AutoOpenDetails({
   summary,
   children,
   className,
+  summaryClassName = "cursor-pointer py-2 text-sm text-muted",
 }: {
   openInitially: boolean;
   summary: ReactNode;
   children: ReactNode;
   className?: string;
+  summaryClassName?: string;
 }) {
   const ref = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
@@ -25,7 +27,7 @@ export function AutoOpenDetails({
   }, []);
   return (
     <details ref={ref} className={className}>
-      <summary className="cursor-pointer py-2 text-sm text-muted">{summary}</summary>
+      <summary className={summaryClassName}>{summary}</summary>
       {children}
     </details>
   );

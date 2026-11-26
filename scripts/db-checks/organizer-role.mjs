@@ -76,7 +76,7 @@ ok("yetkili organizatörün maçını yönetir", !(await fails(`select reschedul
 
 // --- çekilme kararı: maçı kuran organizatör verir
 await as(4);
-ok("üye organizatörün maçından çekilme ister", (await q(`select request_withdrawal($1, null) r`, [M3]))[0].r === "pending");
+ok("üye organizatörün maçından çekilme ister", (await q(`select request_withdrawal($1, 'Mazeret') r`, [M3]))[0].r === "pending");
 const W = (await q(`select id from match_withdrawals where match_id=$1`, [M3]))[0].id;
 await as(3);
 ok("organizatör kendi maçındaki isteği görür", (await q(`select count(*)::int c from match_withdrawals where id=$1`, [W]))[0].c === 1);

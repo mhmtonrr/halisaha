@@ -65,34 +65,45 @@ function done(back: string, flash: string): never {
   redirect(`${back}${back.includes("?") ? "&" : "?"}ok=${flash}`);
 }
 
-/** Yöneten: kesin gelen ekle / yedekten kadroya al / kadrodan çıkar */
-export async function manageEntry(fd: FormData) {
+/**
+ * Kadro panosu: yöneten kişiyi kadro / yedek / gelmeyenler arasında taşır ("delete": misafiri bu maçtan siler).
+ * Yönlendirmeden döner; hata metni sonuçta.
+ */
+export async function moveRoster(input: {
+  groupId: string;
+  matchId: string;
+  userId: string | null;
+  playerId: string | null;
+  to: "in" | "reserve" | "out" | "delete";
+}): Promise<{ error?: string }> {
   const { supabase, user } = await requireUser();
-  const { matchId, back } = ids(fd);
-  const target = str(fd, "userId");
-  const op = str(fd, "op");
-  if (!UUID_RE.test(target) || !["add", "promote", "remove"].includes(op)) fail(back, "Geçersiz işlem");
-  const { error } = await supabase.rpc("manage_entry", { p_match: matchId, p_user: target, p_action: op });
-  if (error) fail(back, rpcMessage(error, "Kadro güncellenemedi"));
-  later(async () => {
-    const admin = createAdminClient();
-    const m = await matchInfo(admin, matchId);
-    if (!m) return;
-    const name = await groupName(admin, m.group_id);
-    const when = matchWhen(m.played_at, m.time_tbd);
-    if (op === "remove") await notify([target], "match", text.removedFromMatch(name, m.group_id, matchId, when), { excludeUserId: user.id });
-    else await notify([target], "match", text.addedToRoster(await displayName(admin, user.id), name, m.group_id, matchId, when), { excludeUserId: user.id });
-  });
-  done(back, op === "remove" ? "cikarildi" : "eklendi");
-}
-
-/** Kaptan/yetkili: misafiri kadrodan çıkar (bu maç için açılan satırı da silinir) */
-export async function removeGuest(fd: FormData) {
-  const { supabase } = await requireUser();
-  const { matchId, back } = ids(fd);
-  const { error } = await supabase.rpc("remove_match_guest", { p_match: matchId, p_player: str(fd, "playerId") });
-  if (error) fail(back, rpcMessage(error, "Misafir çıkarılamadı"));
-  done(back, "cikarildi");
+  const { groupId, matchId, userId, playerId, to } = input;
+  if (!UUID_RE.test(matchId) || !UUID_RE.test(userId ?? playerId ?? "")) return { error: "Geçersiz işlem" };
+  const { data: from, error } =
+    to === "delete"
+      ? await supabase.rpc("remove_match_guest", { p_match: matchId, p_player: playerId })
+      : await supabase.rpc("move_roster", { p_match: matchId, p_user: userId, p_player: playerId, p_to: to });
+  revalidatePath(matchPath(groupId, matchId));
+  if (error) return { error: rpcMessage(error, "Kadro güncellenemedi") };
+  // Taşınan üyeye haber; gelmeyenler içinde kalan (kadroda/yedekte olmayan) için bildirim yok
+  const wasActive = from === "in" || from === "reserve";
+  if (userId && to !== "delete" && from !== to && (to !== "out" || wasActive)) {
+    later(async () => {
+      const admin = createAdminClient();
+      const m = await matchInfo(admin, matchId);
+      if (!m) return;
+      const name = await groupName(admin, m.group_id);
+      const when = matchWhen(m.played_at, m.time_tbd);
+      const content =
+        to === "in"
+          ? text.addedToRoster(await displayName(admin, user.id), name, m.group_id, matchId, when)
+          : to === "reserve"
+            ? text.movedToReserve(name, m.group_id, matchId, when)
+            : text.removedFromMatch(name, m.group_id, matchId, when);
+      await notify([userId], "match", content, { excludeUserId: user.id });
+    });
+  }
+  return {};
 }
 
 export type JoinMatchState = { error?: string; code?: string; at?: number };
@@ -278,25 +289,6 @@ export async function sendChallenge(fd: FormData) {
   done(back, "teklif");
 }
 
-/** Bekleyen teklife yanıt (sırası gelen taraf; maç ekranından) */
-export async function answerChallenge(fd: FormData) {
-  const { supabase, user } = await requireUser();
-  const { groupId, back } = ids(fd);
-  const challengeId = str(fd, "challengeId");
-  const accept = str(fd, "accept") === "1";
-  const { error } = await supabase.rpc("respond_challenge", { p_challenge_id: challengeId, p_accept: accept });
-  if (error) fail(back, rpcMessage(error, "Teklif yanıtlanamadı"));
-  later(async () => {
-    const admin = createAdminClient();
-    const { data: c } = await admin.from("match_challenges").select("from_group_id, to_group_id").eq("id", challengeId).maybeSingle();
-    if (!c) return;
-    const other = c.from_group_id === groupId ? c.to_group_id : c.from_group_id;
-    const admins = await groupMemberIds(admin, other, { adminsOnly: true });
-    await notify(admins, "offer", text.challengeAnswered(await groupName(admin, groupId), other, accept), { excludeUserId: user.id });
-  });
-  done(back, accept ? "teklif-kabul" : "teklif-ret");
-}
-
 /** Bekleyen teklifte sırası gelen: tarih/saha değiştirip geri yollar (maç ekranı veya teklifler sayfası) */
 export async function counterChallenge(fd: FormData) {
   const { supabase } = await requireUser();
@@ -403,19 +395,6 @@ export async function rescheduleMatch(fd: FormData) {
   if (error) fail(back, rpcMessage(error, "Maç ertelenemedi"));
   later(() => notifyRescheduled(matchId, user.id));
   done(back, "ertelendi");
-}
-
-/** Saha ücreti (kişi başı TL); boş bırakılırsa kaldırılır */
-export async function setMatchFee(fd: FormData) {
-  const { supabase } = await requireUser();
-  const { groupId, matchId, back } = ids(fd);
-  const raw = str(fd, "fee");
-  if (raw && !/^\d{1,6}$/.test(raw)) fail(back, "Ücreti sayı olarak yaz");
-  const { error } = await supabase.rpc("set_match_fee", { p_match: matchId, p_fee: raw ? Number(raw) : null });
-  if (error) fail(back, rpcMessage(error, "Ücret kaydedilemedi"));
-  revalidatePath(`/g/${groupId}`);
-  revalidatePath("/");
-  done(back, "ucret");
 }
 
 /** İptal (silinmez): kadro, yedek, davetli ve başvuranlara; bağlı maçta iki takıma */
