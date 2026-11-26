@@ -7,12 +7,12 @@ import { requireUser } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { finalizeExpired } from "@/lib/finalize";
 import { formatDate, getGroupPlayers, getGroupSummaries, one, POSITION_NAME, POSITIONS, type GroupPlayer, type Position } from "@/lib/data";
-import { closeVoting, reshuffleTeams, submitResult } from "@/lib/actions";
+import { closeVoting, submitResult } from "@/lib/actions";
 import { CONFIG } from "@/lib/rating";
 import { teamRating } from "@/lib/teams-data";
-import { getFormation, inferSize } from "@/lib/formations";
-import { LineupPitch, type PitchPlayer } from "@/components/LineupPitch";
-import { LineupEditor } from "./LineupEditor";
+import { inferSize } from "@/lib/formations";
+import type { PitchPlayer } from "@/components/LineupPitch";
+import { LineupStage, type StageSide } from "./LineupStage";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { AddPlayer, type Person } from "./AddPlayer";
 import { Applications, ListingManage, RivalMissing, ScheduleManage, type EntryRow } from "./ManageSections";
@@ -347,7 +347,6 @@ export default async function MatchPage({
       former,
       ratings: ovr,
       isAdmin: !!isAdmin,
-      showTeams: planned && match.kind === "internal",
     });
   }
 
@@ -367,6 +366,43 @@ export default async function MatchPage({
     ) : (
       <Badge tone="accent">Tamamlandı</Badge>
     );
+
+  // Diziliş sahnesi: planlanmış maçta herkes görür (kaydedilmemişse taslak); sonrasında sadece kaydedildiyse.
+  // Toplanma ekranında şimdilik yok.
+  const side = (key: StageSide["key"], title: string, color: string, gid: string, size: number | null, formationId: string | null, list: RosterEntry[], editable: boolean): StageSide => ({
+    key,
+    title,
+    color,
+    groupId: gid,
+    size: size ?? inferSize(list.length),
+    formationId,
+    rating: teamRating(list.map((p) => p.overall)),
+    players: list.map((r) => ({ ...toPitch(r), slot: r.slot })),
+    editable,
+  });
+  const canEdit = planned && !!canManage;
+  const stageSides: StageSide[] = external
+    ? [
+        side("A", myTeamName, myTeamColor ?? "#4be277", groupId, match.team_size, match.formation_a, roster, canEdit),
+        ...(opp
+          ? [side("opp", opp.team.name, opp.team.color && opp.team.color !== myTeamColor ? opp.team.color : "#ff8a5b", opp.team.id, opp.match.team_size, opp.match.formation_a, opp.roster, false)]
+          : []),
+      ]
+    : [
+        side("A", TEAM.A.label, "#f5c542", groupId, match.team_size, match.formation_a, teams.A, canEdit),
+        side("B", TEAM.B.label, "#5aa9ff", groupId, match.team_size, match.formation_b, teams.B, canEdit),
+      ];
+  const showStage = planned || (match.status !== "gathering" && stageSides.some((s) => s.players.some((p) => p.slot !== null)));
+  const stage = showStage ? (
+    <LineupStage
+      groupId={groupId}
+      matchId={matchId}
+      sides={stageSides}
+      faceOff={!external}
+      canShuffle={!external && canEdit && roster.length > 1}
+      initialTab={external ? "A" : (me?.team ?? (canEdit ? "A" : "vs"))}
+    />
+  ) : null;
 
   return (
     <main>
@@ -498,10 +534,13 @@ export default async function MatchPage({
         </p>
       )}
       {dizilis && (
-        <p className="mb-4 flex items-center justify-center gap-1.5 rounded-xl bg-primary/10 p-3 text-center text-sm text-primary"><Icon name="check_circle" fill className="text-[18px]" />Diziliş kaydedildi. Rakip takım da görebilir.</p>
+        <p className="mb-4 flex items-center justify-center gap-1.5 rounded-xl bg-primary/10 p-3 text-center text-sm text-primary"><Icon name="check_circle" fill className="text-[18px]" />Diziliş kaydedildi. Maçtaki herkes görebilir.</p>
       )}
 
-      {linked && opp && <VersusCard mine={{ id: groupId, name: myTeamName, color: myTeamColor, roster }} opp={opp} />}
+      {planned && stage}
+
+      {/* Planlanmış maçta iki takım sahnede */}
+      {linked && opp && !planned && <VersusCard mine={{ id: groupId, name: myTeamName, color: myTeamColor, roster }} opp={opp} />}
       {external && !opp && ["played", "voting", "closed"].includes(match.status) && roster.length > 0 && (
         <VersusCard mine={{ id: groupId, name: myTeamName, color: myTeamColor, roster }} opp={null} />
       )}
@@ -536,37 +575,7 @@ export default async function MatchPage({
       )}
       {manage && <Applications groupId={groupId} matchId={matchId} entries={entries} full={full} />}
 
-      {match.status !== "gathering" && (
-        <div id="dizilis" className="scroll-mt-4">
-          <LineupsSection
-            sides={
-              external
-                ? [
-                    { key: "me", title: myTeamName, groupId, size: match.team_size, formationId: match.formation_a, roster },
-                    ...(opp
-                      ? [{ key: "opp", title: opp.team.name, groupId: opp.team.id, size: opp.match.team_size, formationId: opp.match.formation_a, roster: opp.roster }]
-                      : []),
-                  ]
-                : [
-                    { key: "A", title: TEAM.A.label, groupId, size: match.team_size, formationId: match.formation_a, roster: teams.A },
-                    { key: "B", title: TEAM.B.label, groupId, size: match.team_size, formationId: match.formation_b, roster: teams.B },
-                  ]
-            }
-          />
-        </div>
-      )}
-
-      {planned && canManage && (
-        <LineupTools
-          groupId={groupId}
-          matchId={matchId}
-          teams={teams}
-          external={external}
-          labels={labels}
-          teamSize={match.team_size}
-          formations={{ A: match.formation_a, B: match.formation_b }}
-        />
-      )}
+      {!planned && stage}
 
       {open && <RosterBoard groupId={groupId} matchId={matchId} people={board} capacity={match.capacity} canManage={manage} onlyRoster={!manage && !isMember} />}
 
@@ -702,7 +711,6 @@ function buildBoard({
   former,
   ratings,
   isAdmin,
-  showTeams,
 }: {
   roster: RosterEntry[];
   entries: RawEntry[];
@@ -710,7 +718,6 @@ function buildBoard({
   former: Set<string>;
   ratings: Map<string, number>;
   isAdmin: boolean;
-  showTeams: boolean;
 }): BoardPerson[] {
   const team = members.filter((m) => m.user_id && !m.is_loan);
   const byUser = new Map(team.map((m) => [m.user_id as string, m]));
@@ -722,7 +729,6 @@ function buildBoard({
     overall: r.overall,
     position: r.position,
     zone: "in",
-    team: showTeams ? r.team : undefined,
     movable: !!r.userId || isAdmin,
   }));
   const seen = new Set(inRoster.map((p) => p.key));
@@ -769,74 +775,6 @@ async function loadFriends(supabase: Awaited<ReturnType<typeof requireUser>>["su
   return (data ?? [])
     .map((p) => ({ id: p.id as string, name: p.display_name as string, photoUrl: p.photo_url as string | null, city: p.city as string | null, district: p.district as string | null }))
     .sort((a, b) => a.name.localeCompare(b.name, "tr"));
-}
-
-/** Yönetenin diziliş araçları: takımları karıştır (kendi aramızda) ve sürükle-bırak editörü */
-function LineupTools({
-  groupId,
-  matchId,
-  teams,
-  external,
-  labels,
-  teamSize,
-  formations,
-}: {
-  groupId: string;
-  matchId: string;
-  teams: Record<Team, RosterEntry[]>;
-  external: boolean;
-  labels: Labels;
-  teamSize: number | null;
-  formations: Record<Team, string | null>;
-}) {
-  return (
-    <div className="mb-4">
-      {!external && (
-        <form action={reshuffleTeams}>
-          <Hidden groupId={groupId} matchId={matchId} />
-          <Button variant="secondary" className="w-full">
-            <Icon name="shuffle" className="text-[20px]" />
-            Takımları yeniden karıştır
-          </Button>
-        </form>
-      )}
-      <details className="mt-1">
-        <summary className="cursor-pointer py-2 text-sm text-muted">
-          <span className="inline-flex items-center gap-1.5 align-middle">
-            <Icon name="sports" className="text-[18px]" />
-            Diziliş (sürükle-bırak)
-          </span>
-        </summary>
-        <div className="mt-2 space-y-6">
-          {(external ? (["A"] as const) : (["A", "B"] as const)).map((t) => {
-            const mine = teams[t];
-            if (mine.length === 0) {
-              return (
-                <p key={t} className="text-center text-sm text-muted">
-                  Önce kadroya oyuncu ekle; sonra dizilişi ayarlayabilirsin.
-                </p>
-              );
-            }
-            return (
-              <div key={t}>
-                {!external && <div className={cx("mb-2 text-sm font-bold", TEAM[t].text)}>{labels[t]}</div>}
-                <LineupEditor
-                  key={`${t}-${mine.map((p) => p.id).join()}`}
-                  groupId={groupId}
-                  matchId={matchId}
-                  team={t}
-                  size={teamSize ?? inferSize(mine.length)}
-                  players={mine.map(toPitch)}
-                  initialFormation={formations[t]}
-                  initialAssign={Object.fromEntries(mine.map((p) => [p.id, p.slot]))}
-                />
-              </div>
-            );
-          })}
-        </div>
-      </details>
-    </div>
-  );
 }
 
 function ResultForm({
@@ -1274,52 +1212,3 @@ function OpponentSection({ opp }: { opp: Opponent }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Dizilişler (herkes görür)
-// ---------------------------------------------------------------------------
-
-interface LineupSide {
-  key: string;
-  title: string;
-  groupId: string;
-  size: number | null;
-  formationId: string | null;
-  roster: RosterEntry[];
-}
-
-/** Kaydedilmiş dizilişleri sahada kartlarla gösterir; hiç diziliş yoksa görünmez */
-function LineupsSection({ sides }: { sides: LineupSide[] }) {
-  const shown = sides.flatMap((side) => {
-    const formation = getFormation(side.size ?? inferSize(side.roster.length), side.formationId);
-    if (!formation || !side.roster.some((r) => r.slot !== null)) return [];
-    return [{ side, formation }];
-  });
-  if (!shown.length) return null;
-  return (
-    <>
-      <SectionTitle>Dizilişler</SectionTitle>
-      <div className="space-y-4">
-        {shown.map(({ side, formation }) => {
-          const placed = new Map<number, PitchPlayer>(
-            side.roster
-              .filter((r) => r.slot !== null)
-              .map((r) => [r.slot as number, toPitch(r)]),
-          );
-          const bench = side.roster.filter((r) => r.slot === null);
-          return (
-            <div key={side.key}>
-              <div className="mb-2 flex items-baseline justify-between">
-                <span className="font-bold">{side.title}</span>
-                <span className="text-sm font-black tabular-nums text-accent">{formation.id}</span>
-              </div>
-              <LineupPitch slots={formation.slots} placed={placed} playerHref={(id) => `/g/${side.groupId}/p/${id}`} />
-              {bench.length > 0 && (
-                <p className="mt-1.5 text-xs text-muted">Yedek: {bench.map((r) => shortName(r.name)).join(", ")}</p>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </>
-  );
-}

@@ -5,7 +5,6 @@ import { useOptimistic, useRef, useState, useTransition } from "react";
 import { Icon } from "@/components/Icon";
 import { OvrBadge, PositionChip } from "@/components/PlayerCard";
 import { Card, SectionTitle, cx } from "@/components/ui";
-import { movePlayer } from "@/lib/actions";
 import { moveRoster } from "@/lib/match-manage-actions";
 import type { Position } from "@/lib/data";
 
@@ -22,8 +21,6 @@ export interface BoardPerson {
   zone: Zone;
   /** Gelmeyenlerde sebep: "Gelemem dedi", "Yanıt vermedi"… */
   tag?: string;
-  /** Kendi aramızda kesin maçta tarafı */
-  team?: "A" | "B";
   /** Yetkim varsa bu kişiyi taşıyabilir miyim */
   movable: boolean;
 }
@@ -165,9 +162,6 @@ export function RosterBoard({
                             </span>
                             <PositionChip position={p.position} />
                           </button>
-                          {p.team && z.id === "in" && p.playerId && (
-                            <TeamSwitch groupId={groupId} matchId={matchId} playerId={p.playerId} team={p.team} canManage={canManage} />
-                          )}
                           {editable ? (
                             <span
                               {...handleProps(p.key)}
@@ -246,23 +240,5 @@ export function RosterBoard({
         </>
       )}
     </section>
-  );
-}
-
-/** Kendi aramızda maçta taraf rozeti; yöneten dokununca diğer takıma geçirir */
-function TeamSwitch({ groupId, matchId, playerId, team, canManage }: { groupId: string; matchId: string; playerId: string; team: "A" | "B"; canManage: boolean }) {
-  const cls = cx("flex min-h-8 items-center rounded-full px-2.5 text-xs font-bold text-pitch-950", team === "A" ? "bg-team-a" : "bg-team-b");
-  const label = team === "A" ? "Sarı" : "Mavi";
-  if (!canManage) return <span className={cls}>{label}</span>;
-  return (
-    <form action={movePlayer}>
-      <input type="hidden" name="groupId" value={groupId} />
-      <input type="hidden" name="matchId" value={matchId} />
-      <input type="hidden" name="playerId" value={playerId} />
-      <input type="hidden" name="team" value={team} />
-      <button className={cls} title="Diğer takıma geçir">
-        {label}
-      </button>
-    </form>
   );
 }
