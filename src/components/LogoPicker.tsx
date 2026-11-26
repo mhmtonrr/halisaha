@@ -7,6 +7,7 @@ import {
 } from "@/lib/crest";
 import { TEAM_COLORS } from "@/lib/teams-data";
 import { Crest } from "./Crest";
+import { LogoUploader } from "./LogoUploader";
 import { TeamBadge } from "./TeamBadge";
 import { cx, Label } from "./ui";
 
@@ -41,6 +42,7 @@ function Option({ on, label, onClick, children }: { on: boolean; label: string; 
 
 /**
  * Logo seçimi (formun `logo` alanı): otomatik arma, arma yap veya hazır logo; canlı önizleme.
+ * Görsel yükleme formdan bağımsız, hemen kaydedilir (LogoUploader).
  * Ad ve takım rengi aynı formun `name` / `color` alanlarından okunur.
  */
 export function LogoPicker({ id, logo, name, color }: { id?: string; logo: string | null; name: string; color: string }) {
@@ -74,7 +76,7 @@ export function LogoPicker({ id, logo, name, color }: { id?: string; logo: strin
     { key: "auto", label: "Otomatik" },
     { key: "crest", label: "Arma yap" },
     ...(PRESET_LOGOS.length ? [{ key: "preset" as const, label: "Hazır logolar" }] : []),
-    ...(modeOf(logo) === "upload" ? [{ key: "upload" as const, label: "Yüklenen" }] : []),
+    { key: "upload", label: "Yükle" },
   ];
 
   const row = <K extends "shape" | "emblem" | "pattern">(
@@ -151,6 +153,13 @@ export function LogoPicker({ id, logo, name, color }: { id?: string; logo: strin
           </div>
         </div>
       )}
+
+      {mode === "upload" &&
+        (id ? (
+          <LogoUploader groupId={id} uploaded={modeOf(logo) === "upload"} />
+        ) : (
+          <p className="text-center text-xs text-muted">Kendi görselini kurduktan sonra bilgileri düzenleme bölümünden yükleyebilirsin.</p>
+        ))}
 
       {mode === "preset" && (
         <div className="grid grid-cols-4 gap-2">

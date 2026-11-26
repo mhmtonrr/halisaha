@@ -85,6 +85,21 @@ export function logoFromForm(value: unknown): string | null | undefined {
   return undefined;
 }
 
+/** Yüklenen logonun `logos` deposundaki yolu: grup başına tek dosya */
+export function logoPath(groupId: string) {
+  return `${groupId}/logo`;
+}
+
+/** Kaydedilecek herkese açık adres (veritabanındaki `logo_ok` ile uyumlu); `?v=` önbellek kırıcı */
+export function logoUrl(supabaseUrl: string, groupId: string, version: number) {
+  return `${supabaseUrl.replace(/\/+$/, "")}/storage/v1/object/public/logos/${logoPath(groupId)}?v=${Math.floor(version)}`;
+}
+
+/** Logo kırpma konumu (tek eksen): görsel çerçeveden küçükse ortalanır, büyükse çerçeveyi boşluksuz kaplar */
+export function clampLogoOffset(offset: number, size: number, frame: number) {
+  return size <= frame ? (frame - size) / 2 : Math.min(0, Math.max(frame - size, offset));
+}
+
 /** Adın ilk iki kelimesinin baş harfleri (Türkçe büyük harf) */
 export function teamInitials(name: string) {
   return (

@@ -1,6 +1,6 @@
 "use server";
 
-import { logoFromForm } from "@/lib/crest";
+import { logoFromForm, logoPath, logoUrl } from "@/lib/crest";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { FEATURED_TAG, loadFeatured, type Featured } from "@/lib/featured-data";
 import { validateCardName } from "@/lib/card-name";
@@ -350,21 +350,11 @@ export async function completeOnboarding(fd: FormData) {
 export async function createGroup(fd: FormData) {
   const { supabase, user } = await requireUser();
   const back = "/grup-kur";
-  const name = str(fd, "name");
-  if (name.length < 2) fail(back, "Grup adı en az 2 karakter olmalı");
-  const city = str(fd, "city");
-  const color = str(fd, "color");
+  const fields = teamFields(fd);
+  if (fields.name.length < 2) fail(back, "Grup adı en az 2 karakter olmalı");
   const { data, error } = await supabase
     .from("groups")
-    .insert({
-      name: name.slice(0, 60),
-      created_by: user.id,
-      kind: "community",
-      description: str(fd, "description").slice(0, 200) || null,
-      city: isProvince(city) ? city : null,
-      district: canonicalDistrict(city, str(fd, "district")),
-      color: /^#[0-9a-fA-F]{6}$/.test(color) ? color : null,
-    })
+    .insert({ ...fields, kind: "community", created_by: user.id })
     .select("id")
     .single();
   if (error) fail(back, "Grup oluşturulamadı");
@@ -413,6 +403,8 @@ export async function updateTeam(fd: FormData) {
   if (isTeam && !fields.city) fail(back, "Takımın ilini seç");
   const { data, error } = await supabase.from("groups").update(fields).eq("id", groupId).select("id");
   if (error || !data?.length) fail(back, `${word} bilgilerini sadece ${isTeam ? "kaptan" : "kurucu"} ve yetkililer değiştirebilir`);
+  // Arma veya otomatik seçildiyse eski yüklenmiş görsel depoda kalmasın
+  if (fields.logo !== undefined) await supabase.storage.from("logos").remove([logoPath(groupId)]);
   // Keşfet / katılma isteği anahtarları (0044); işaretsiz kutu formda gelmez
   if (fd.get("discovery")) {
     const { error: dErr } = await supabase.rpc("set_group_discovery", {
@@ -424,6 +416,29 @@ export async function updateTeam(fd: FormData) {
   }
   revalidatePath(`/g/${groupId}`, "layout");
   redirect(`${back}?saved=1`);
+}
+
+/** Depoya yüklenen logoyu takıma/gruba bağlar (adres sunucuda kurulur; yetki RLS'de) */
+export async function saveLogo(groupId: string, version: number): Promise<{ error?: string }> {
+  const { supabase } = await requireUser();
+  if (!Number.isFinite(version) || version <= 0) return { error: "Geçersiz istek" };
+  const url = logoUrl(process.env.NEXT_PUBLIC_SUPABASE_URL!, groupId, version);
+  const { data, error } = await supabase.from("groups").update({ logo: url }).eq("id", groupId).select("id");
+  if (error || !data?.length) return { error: "Logo kaydedilemedi" };
+  revalidateTag(FEATURED_TAG);
+  revalidatePath("/", "layout");
+  return {};
+}
+
+/** Yüklenen logoyu siler (adres + depodaki dosya); otomatik armaya dönülür */
+export async function deleteLogo(groupId: string): Promise<{ error?: string }> {
+  const { supabase } = await requireUser();
+  const { data, error } = await supabase.from("groups").update({ logo: null }).eq("id", groupId).select("id");
+  if (error || !data?.length) return { error: "Logo silinemedi" };
+  await supabase.storage.from("logos").remove([logoPath(groupId)]);
+  revalidateTag(FEATURED_TAG);
+  revalidatePath("/", "layout");
+  return {};
 }
 
 export async function setMemberRole(fd: FormData) {

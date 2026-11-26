@@ -2,8 +2,8 @@ import { Icon } from "@/components/Icon";
 import { requireUser } from "@/lib/supabase/server";
 import { createGroup } from "@/lib/actions";
 import { TEAM_COLORS } from "@/lib/teams-data";
-import { Button, Card, ErrorNote, Header, Input, Label } from "@/components/ui";
-import { RegionSelect } from "@/components/RegionSelect";
+import { TeamFields } from "@/components/TeamFields";
+import { Button, Card, ErrorNote, Header } from "@/components/ui";
 
 export default async function NewGroupPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { error } = await searchParams;
@@ -24,38 +24,7 @@ export default async function NewGroupPage({ searchParams }: { searchParams: Pro
       <ErrorNote message={error} />
       <form action={createGroup} className="space-y-4">
         <Card className="space-y-4">
-          <label className="block">
-            <Label>Grup adı</Label>
-            <Input name="name" required minLength={2} maxLength={60} placeholder="Örn. Moda Futbol Severler" />
-          </label>
-          <label className="block">
-            <Label hint="isteğe bağlı">Grup hakkında</Label>
-            <textarea
-              name="description"
-              maxLength={200}
-              rows={3}
-              placeholder="Örn. Kadıköy'de yaşayan, hafta içi akşamları top oynamak isteyenlerin topluluğu."
-              className="w-full rounded-xl border border-line bg-pitch-950 p-3 text-sm outline-none placeholder:text-muted/60 focus:border-accent"
-            />
-          </label>
-          <div>
-            <p className="mb-2 text-xs text-muted">Grubun bir bölgesi varsa seç (isteğe bağlı)</p>
-            <RegionSelect defaultCity={profile?.city} defaultDistrict={null} requireCity={false} />
-          </div>
-          <div>
-            <Label>Grup rengi</Label>
-            <div className="flex flex-wrap gap-2">
-              {TEAM_COLORS.map((c, i) => (
-                <label key={c} className="cursor-pointer">
-                  <input type="radio" name="color" value={c} defaultChecked={i === 6} className="peer sr-only" />
-                  <span
-                    className="block h-9 w-9 rounded-full ring-offset-2 ring-offset-pitch-900 peer-checked:ring-2 peer-checked:ring-white"
-                    style={{ background: c }}
-                  />
-                </label>
-              ))}
-            </div>
-          </div>
+          <TeamFields kind="community" values={{ name: "", city: profile?.city ?? null, district: null, color: TEAM_COLORS[6], description: null }} />
         </Card>
         <Button className="w-full">Grubu kur</Button>
       </form>
