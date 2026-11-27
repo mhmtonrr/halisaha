@@ -74,7 +74,7 @@ try {
   await B.click('button:has-text("Devam et")'); await B.click('button:has-text("Bitir")'); await settle(B, BASE + "/");
   await B.goto(`${BASE}/join/${g.invite_code}`); await B.waitForURL(/\/g\//);
   await P.goto(`${BASE}/g/${gid}`); await shot(P, "33-topluluk-sayfasi");
-  log("topluluk sayfası:", (await P.locator("text=👥 Topluluk").count()) ? "✓ Topluluk etiketi" : "HATA", "|", (await P.locator("text=2 üye").count()) ? "✓ üye şeridi" : "HATA");
+  log("topluluk sayfası:", (await P.getByText("Topluluk", { exact: true }).count()) ? "✓ Topluluk etiketi" : "HATA", "|", (await P.locator("text=2 üye").count()) ? "✓ üye şeridi" : "HATA");
 
   // Grubu yönet: kurucu adı/açıklamayı değiştirir; profil kısayolu kaldırıldı; üye formu görmez
   await P.goto(`${BASE}/g/${gid}/players?bolum=bilgiler`);

@@ -1,5 +1,6 @@
 // Giriş + karşılama: yanlış şifre, ilk girişte karşılama zorunlu, il/ilçe seçimi, davet linkiyle gelenin karşılama sonrası gruba katılması,
-// profilde ve oyuncu sayfasında bölge, çıkış/tekrar girişte karşılama sorulmaması. Arayüzden kayıt (signUp) test edilmez (onay maili limiti).
+// profilde ve oyuncu sayfasında bölge, çıkış/tekrar girişte karşılama sorulmaması; arayüzden kayıt (e-posta onayı kapalıyken mail gitmez),
+// kartta 65 ve canlı önizleme, "Kaydet"e basılmamış fotoğrafın "Bitir"de kaydedilmesi.
 // Canlı Supabase'e karşı çalışır; test verisini sonunda siler. Kullanım: node scripts/e2e/auth-onboarding.mjs [ekran-klasörü]
 import { createRequire } from "module";
 import fs from "fs";
@@ -25,6 +26,8 @@ const settle = async (page, re, ms = 15000) => {
 const check = (label, cond) => { console.log(cond ? "  ✓" : "  ✗ HATA:", label); if (!cond) failed++; };
 
 const users = []; let groupId; let browser;
+const signupEmail = `e2e-signup-${Date.now()}@example.com`;
+const findSignup = async () => (await admin.auth.admin.listUsers({ perPage: 1000 })).data.users.find((u) => u.email === signupEmail);
 try {
   for (const [i, n] of ["Kemal Arslan", "Levent Koç"].entries()) {
     const email = `e2e-auth-${Date.now()}-${i}@example.com`, password = "Sifre-" + Math.random().toString(36).slice(2, 8) + "9";
@@ -111,13 +114,59 @@ try {
   const pa = profs.find((p) => p.id === users[0].id), pb = profs.find((p) => p.id === users[1].id);
   check("profil kaydı: Kadıköy/İstanbul, 1994, MID", pa.city === "İstanbul" && pa.district === "Kadıköy" && pa.birth_year === 1994 && pa.preferred_position === "MID" && !!pa.onboarded_at);
   check("davetli profili: İzmir, GK", pb.city === "İzmir" && pb.preferred_position === "GK" && !!pb.onboarded_at);
+
+  // 6) Arayüzden kayıt → sihirbaz → fotoğraf "Kaydet"siz "Bitir"
+  const C = await newPage();
+  await C.goto(BASE + "/login", { waitUntil: "networkidle" });
+  await C.click('button:has-text("Kayıt ol")');
+  await C.fill('input[autocomplete="name"]', "Mert Yeni");
+  await C.fill('input[type="email"]', signupEmail);
+  await C.fill('input[type="password"]', "Sifre-" + Math.random().toString(36).slice(2, 8) + "9");
+  await C.click('button:has-text("Hesap oluştur")'); await settle(C, /\/hosgeldin/);
+  check("kayıt sonrası karşılamaya yönlenir", new URL(C.url()).pathname === "/hosgeldin");
+  await C.waitForLoadState("networkidle");
+  check("kayıttaki ad dolu geliyor", (await C.inputValue('input[name="name"]')) === "Mert Yeni");
+  check("yeni kartta rating 65", (await C.getByText("65", { exact: true }).locator("visible=true").count()) >= 1);
+  await C.fill('input[name="cardName"]', "Merto");
+  check("kart önizlemesi yazdıkça güncellenir", (await C.getByText("Merto", { exact: true }).locator("visible=true").count()) === 1);
+  await shot(C, "14-sihirbaz-1");
+  await C.click('button:has-text("Devam et")');
+  await C.selectOption('select[name="city"]', "Bursa"); await shot(C, "15-sihirbaz-2");
+  await C.click('button:has-text("Devam et")');
+  await C.click('button:has-text("Devam et")');
+  check("mevki seçmeden devam edilemez", (await C.getByText("Ana mevkini seç").count()) === 1);
+  await C.locator('input[name="position"][value="FWD"]').check({ force: true });
+  await C.fill('input[name="shirt"]', "9"); await C.fill('input[name="height"]', "181"); await shot(C, "16-sihirbaz-3");
+  await C.click('button:has-text("Devam et")');
+  const png = await C.evaluate(() => {
+    const c = document.createElement("canvas"); c.width = 800; c.height = 1000;
+    const x = c.getContext("2d"); x.fillStyle = "#d33"; x.beginPath(); x.arc(400, 450, 250, 0, Math.PI * 2); x.fill();
+    return c.toDataURL("image/png").split(",")[1];
+  });
+  await C.locator('input[type="file"]').setInputFiles({ name: "kesim.png", mimeType: "image/png", buffer: Buffer.from(png, "base64") });
+  await C.getByRole("button", { name: "Kırp ve devam" }).waitFor();
+  check("kırpma sürerken Bitir kapalı", await C.getByRole("button", { name: "Bitir" }).isDisabled());
+  await C.getByRole("button", { name: "Kırp ve devam" }).click();
+  await C.getByRole("button", { name: "Başka fotoğraf" }).waitFor({ timeout: 20000 });
+  await C.getByRole("button", { name: "Önceki adım" }).click();
+  await C.click('button:has-text("Devam et")');
+  check("geri dönünce seçilen fotoğraf duruyor", (await C.getByRole("button", { name: "Başka fotoğraf" }).count()) === 1);
+  await shot(C, "17-sihirbaz-4");
+  await C.getByRole("button", { name: "Bitir" }).click(); await C.waitForURL(BASE + "/", { timeout: 30000 });
+  await shot(C, "18-ana-sayfa");
+  const id = (await findSignup())?.id;
+  const { data: pc } = await admin.from("profiles").select("display_name, card_name, city, preferred_position, shirt_number, height_cm, photo_url, onboarded_at").eq("id", id).single();
+  check("kayıt profili: ad, kart adı, Bursa, FWD, forma, boy", pc.display_name === "Mert Yeni" && pc.card_name === "Merto" && pc.city === "Bursa" && pc.preferred_position === "FWD" && pc.shirt_number === 9 && pc.height_cm === 181 && !!pc.onboarded_at);
+  check("Kaydet'e basılmayan fotoğraf Bitir'de kaydedildi", !!pc.photo_url?.includes(`/avatars/${id}/card?v=`));
 } catch (e) {
   console.log("  ✗ ÇÖKTÜ:", e?.message ?? e);
   failed++;
 } finally {
   await browser?.close();
   if (groupId) await admin.from("groups").delete().eq("id", groupId);
-  await removeTestUsers(admin, users.map((u) => u.id));
+  const signed = await findSignup();
+  if (signed) await admin.storage.from("avatars").remove([`${signed.id}/card`]);
+  await removeTestUsers(admin, [...users.map((u) => u.id), ...(signed ? [signed.id] : [])]);
   console.log(failed ? `\n${failed} kontrol BAŞARISIZ` : "\nTüm kontroller geçti");
   process.exit(failed ? 1 : 0);
 }

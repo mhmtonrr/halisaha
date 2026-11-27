@@ -18,5 +18,5 @@ Senaryolar: `match-manage` (4b: Keşfet ilanı + yabancı başvurusu/onayı, ba�
 **Temizlik kuralı**: her senaryo `finally` içinde `removeTestUsers(admin, ids)` (`scripts/e2e/cleanup.mjs`) çağırır: test kullanıcılarının kurduğu/üye olduğu gruplar (başka hesaplı üyesi yoksa), teklifler ve kullanıcılar silinir; eksik kalırsa `⚠ TEMİZLİK EKSİK` yazar. Yeni senaryoda `deleteUser`'ı doğrudan çağırma (grup/maç `created_by` kullanıcıyı tutar, silme sessizce başarısız olur). Test kullanıcıları `@example.com`; kontrol: canlıda bu alan adıyla kullanıcı kalmamalı.
 Kullanıcıyı API ile kuran senaryo karşılamayı atlamak için `profiles.onboarded_at` (+ il) doldurur; yoksa her sayfa `/hosgeldin`'e yönlenir.
 Ekran görüntülerine bak (390px genişlik, telefon) — görsel sorunlar çoğu zaman sadece orada yakalanıyor.
-Port doluysa: `fuser -k 3000/tcp`. Arayüzden kayıt (signUp) test etme: onay maili gönderir, limit saatte 2.
+Port doluysa: `fuser -k 3000/tcp`. Arayüzden kayıt (signUp) sadece e-posta onayı kapalıyken test edilir (`auth-onboarding`); onay açılırsa mail gönderir (limit saatte 2), o bölüm kaldırılmalı.
 

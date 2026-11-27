@@ -144,7 +144,7 @@ function validBirthDate(birth: string) {
   if (!birth) return true;
   const d = new Date(`${birth}T00:00:00Z`);
   const y = d.getUTCFullYear();
-  return /^d{4}-d{2}-d{2}$/.test(birth) && !Number.isNaN(d.getTime()) && y >= 1940 && y <= new Date().getFullYear() - 8;
+  return /^\d{4}-\d{2}-\d{2}$/.test(birth) && !Number.isNaN(d.getTime()) && y >= 1940 && y <= new Date().getFullYear() - 8;
 }
 
 /** Kişisel bilgiler: ad soyad, kartta görünen ad, il/ilçe, doğum tarihi (özel) */

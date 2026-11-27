@@ -1,7 +1,7 @@
 "use client";
 import { Icon } from "@/components/Icon";
 
-import { useEffect, useRef, useState, type ComponentProps } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, type ComponentProps, type Ref } from "react";
 import { useRouter } from "next/navigation";
 import { CardFace } from "./PlayerCard";
 import { PhotoCropper } from "./PhotoCropper";
@@ -12,6 +12,8 @@ import { MAX_PHOTO_BYTES, alphaBounds, cardPhotoPath, centerCrop, fitWithin, cle
 
 type Preview = Omit<ComponentProps<typeof CardFace>, "photoUrl" | "compact" | "fontSize" | "className">;
 type Box = { x: number; y: number; width: number; height: number };
+/** Dışarıdan (karşılama sihirbazı) bekleyen fotoğrafı kaydettirmek için; false = kaydedilemedi, hata ekranda */
+export type CardPhotoHandle = { savePending: () => Promise<boolean> };
 
 /** İşlemeden önce büyük fotoğraf bu boyuta indirilir (model hızı/bellek) */
 const INPUT_MAX = 1280;
@@ -72,7 +74,16 @@ async function encode(c: HTMLCanvasElement): Promise<Blob> {
  * Kart fotoğrafı: seç → arka planı tarayıcıda kaldır (fotoğraf sunucuya ham gitmez) → kartta önizle → Kaydet / Başka fotoğraf.
  * Model (~80 MB) sadece fotoğraf seçilince indirilir. Şeffaf PNG/WebP yüklenirse işlem atlanır; model çalışmazsa düz kırpılır.
  */
-export function CardPhotoUploader({ userId, currentUrl, preview }: { userId: string; currentUrl: string | null; preview: Preview }) {
+export function CardPhotoUploader({
+  userId, currentUrl, preview, handleRef, onWorkingChange,
+}: {
+  userId: string;
+  currentUrl: string | null;
+  preview: Preview;
+  handleRef?: Ref<CardPhotoHandle>;
+  /** Kırpma ya da işleme sürerken true */
+  onWorkingChange?: (working: boolean) => void;
+}) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [result, setResult] = useState<{ blob: Blob; url: string } | null>(null);
@@ -83,6 +94,9 @@ export function CardPhotoUploader({ userId, currentUrl, preview }: { userId: str
   const [pending, setPending] = useState<{ file: File; img: HTMLImageElement } | null>(null);
 
   useEffect(() => () => { if (result) URL.revokeObjectURL(result.url); }, [result]);
+
+  const working = busy || !!pending;
+  useEffect(() => { onWorkingChange?.(working); }, [working, onWorkingChange]);
 
   /** Seçilen dosyayı açıp kırpma adımına geçer */
   async function pick(file: File) {
@@ -160,8 +174,8 @@ export function CardPhotoUploader({ userId, currentUrl, preview }: { userId: str
     }
   }
 
-  async function save() {
-    if (!result) return;
+  async function save(refresh = true) {
+    if (!result) return true;
     setBusy(true);
     setError(null);
     setStatus("Kaydediliyor…");
@@ -171,11 +185,18 @@ export function CardPhotoUploader({ userId, currentUrl, preview }: { userId: str
     const res = upErr ? { error: "Fotoğraf yüklenemedi" } : await saveCardPhoto(Date.now());
     setBusy(false);
     setStatus(null);
-    if (res.error) return setError(res.error);
+    if (res.error) {
+      setError(res.error);
+      return false;
+    }
     setResult(null);
     setNote(null);
-    router.refresh();
+    if (refresh) router.refresh();
+    return true;
   }
+
+  // Ardından sayfa değişeceği için yenileme yapılmaz
+  useImperativeHandle(handleRef, () => ({ savePending: () => save(false) }));
 
   async function remove() {
     if (!confirm("Kart fotoğrafın silinsin mi?")) return;
@@ -219,7 +240,7 @@ export function CardPhotoUploader({ userId, currentUrl, preview }: { userId: str
       />
       {result ? (
         <div className="grid grid-cols-2 gap-2">
-          <Button type="button" onClick={save} disabled={busy}>{busy ? "…" : "Kaydet"}</Button>
+          <Button type="button" onClick={() => save()} disabled={busy}>{busy ? "…" : "Kaydet"}</Button>
           <Button type="button" variant="secondary" onClick={() => input.current?.click()} disabled={busy}>Başka fotoğraf</Button>
         </div>
       ) : (

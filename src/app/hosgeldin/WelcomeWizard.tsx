@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { completeOnboarding } from "@/lib/actions";
 import { CardFace } from "@/components/PlayerCard";
-import { CardPhotoUploader } from "@/components/CardPhotoUploader";
+import { CardPhotoUploader, type CardPhotoHandle } from "@/components/CardPhotoUploader";
 import { RegionSelect } from "@/components/RegionSelect";
 import { Icon } from "@/components/Icon";
 import { chip, fieldCard, primaryButton, textareaClass } from "@/components/settings/blocks";
@@ -31,7 +31,7 @@ const STEPS = [
   { title: "Seni tanıyalım", text: "Kartında ve uygulamada nasıl görüneceksin?" },
   { title: "Nerede oynuyorsun?", text: "Yakınındaki maçları ve oyuncuları gösterebilmemiz için." },
   { title: "Sahadaki yerin", text: "Mevkin kartında görünür, takımlar buna göre kurulur." },
-  { title: "Kart fotoğrafın", text: "İsteğe bağlı. Fotoğraf seçersen önce Kaydet'e, sonra Bitir'e bas." },
+  { title: "Kart fotoğrafın", text: "İsteğe bağlı; sonradan Ayarlar'dan da ekleyebilirsin." },
 ];
 
 /** İlk girişteki adım adım karşılama: üstteki kart yazdıkça güncellenir, bilgiler son adımda tek seferde kaydedilir */
@@ -58,6 +58,8 @@ export function WelcomeWizard({
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
   const panels = useRef<(HTMLDivElement | null)[]>([]);
+  const photo = useRef<CardPhotoHandle>(null);
+  const [photoWorking, setPhotoWorking] = useState(false);
   const last = step === STEPS.length - 1;
 
   const preview = {
@@ -90,11 +92,13 @@ export function WelcomeWizard({
 
   function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (pending || !stepValid()) return;
+    if (pending || (last && photoWorking) || !stepValid()) return;
     if (!last) return go(step + 1);
     const fd = new FormData(e.currentTarget);
     setError("");
     startTransition(async () => {
+      // Seçilip "Kaydet"e basılmamış fotoğraf kaybolmasın
+      if (photo.current && !(await photo.current.savePending())) return;
       const res = await completeOnboarding(fd);
       if (res?.error) setError(res.error);
     });
@@ -265,15 +269,13 @@ export function WelcomeWizard({
         </div>
       </form>
 
-      {/* Fotoğraf kendi başına kaydedilir; formun dışında durur */}
-      {last && (
-        <div className={fieldCard}>
-          <CardPhotoUploader userId={userId} currentUrl={photoUrl} preview={preview} />
-        </div>
-      )}
+      {/* Formun dışında; geri dönüldüğünde seçilen fotoğraf kaybolmasın diye hep bağlı, sadece gizlenir */}
+      <div className={cx(fieldCard, !last && "hidden")}>
+        <CardPhotoUploader userId={userId} currentUrl={photoUrl} preview={preview} handleRef={photo} onWorkingChange={setPhotoWorking} />
+      </div>
 
       <ErrorNote message={error} />
-      <button type="submit" form="welcome" disabled={pending} className={cx(primaryButton, "mt-4 disabled:opacity-50")}>
+      <button type="submit" form="welcome" disabled={pending || (last && photoWorking)} className={cx(primaryButton, "mt-4 disabled:opacity-50")}>
         {pending ? "Kaydediliyor…" : last ? "Bitir" : "Devam et"}
       </button>
     </main>
