@@ -519,7 +519,7 @@ export default async function MatchPage({
       {applyListing && (
         <Card className="mb-4 space-y-2 border-amber-400/40 bg-amber-400/10">
           <div className="font-semibold">Bu maça adam aranıyor</div>
-          <p className="text-sm text-on-surface-variant">Başvurunu maçı ayarlayan kişi onaylar. Kadro doluysa yedeğe yazılırsın.</p>
+          <p className="text-sm text-on-surface-variant">Başvurunu maçı ayarlayan kişi onaylar. Kadro doluysa yedeğe yazılırsın. Başvurun beklerken istatistiklerin ve maç geçmişin karar verecek kişiye görünür.</p>
           <form action={applyMatch} className="space-y-2">
             <input type="hidden" name="groupId" value={groupId} />
             <input type="hidden" name="matchId" value={matchId} />

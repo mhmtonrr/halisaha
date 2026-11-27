@@ -144,7 +144,10 @@ export default async function MatchInvitePage({
       ) : (
         <Card className="mb-4 space-y-2">
           <div className="font-semibold">Maça katılmak ister misin?</div>
-          <p className="text-sm text-muted">Başvurunu maçı ayarlayan kişi onaylar. {missing ? "" : "Kadro dolu; onaylanırsan yedeğe yazılırsın."}</p>
+          <p className="text-sm text-muted">
+            Başvurunu maçı ayarlayan kişi onaylar. {missing ? "" : "Kadro dolu; onaylanırsan yedeğe yazılırsın. "}
+            Başvurun beklerken istatistiklerin ve maç geçmişin karar verecek kişiye görünür.
+          </p>
           <form action={applyMatch} className="space-y-2">
             <input type="hidden" name="groupId" value={m.group_id} />
             <input type="hidden" name="matchId" value={m.match_id} />

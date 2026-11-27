@@ -6,6 +6,8 @@ import { decideListing } from "@/lib/match-manage-actions";
 import { matchWhen } from "@/lib/match-rules";
 import { POSITION_NAME, type Position } from "@/lib/data";
 import { formatRegion } from "@/lib/regions";
+import { DEFAULT_OVERALL } from "@/lib/rating";
+import { OvrBadge } from "@/components/PlayerCard";
 import { Avatar } from "@/components/Avatar";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { Icon } from "@/components/Icon";
@@ -23,6 +25,8 @@ interface JoinReq {
   city: string | null;
   district: string | null;
   message: string | null;
+  overall: number | null;
+  position: Position | null;
 }
 interface ListingReq {
   id: string;
@@ -134,8 +138,12 @@ export default async function PendingPage({
                     <Avatar name={r.name} photoUrl={r.photo_url} className="h-10 w-10 bg-surface-highest text-xs" />
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-semibold">{r.name}</div>
-                      <div className="text-xs text-on-surface-variant">{formatRegion(r.city, r.district) || "Bölge yok"}</div>
+                      <div className="truncate text-xs text-on-surface-variant">
+                        {r.position ? `${POSITION_NAME[r.position]} · ` : ""}
+                        {formatRegion(r.city, r.district) || "Bölge yok"}
+                      </div>
                     </div>
+                    <OvrBadge overall={r.overall ?? DEFAULT_OVERALL} />
                     <span className="shrink-0 text-xs font-semibold text-primary">Profili gör</span>
                     <Icon name="chevron_right" className="shrink-0 text-[18px] text-on-surface-variant" />
                   </Link>

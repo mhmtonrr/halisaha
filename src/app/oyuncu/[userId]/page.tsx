@@ -24,7 +24,7 @@ export default async function PlayerProfilePage({
   if (!UUID.test(userId)) notFound();
   if (userId === user.id) redirect(sekme ? `/profil?sekme=${encodeURIComponent(sekme)}` : "/profil");
 
-  const data = await loadProfileForViewer(createAdminClient(), user.id, userId);
+  const data = await loadProfileForViewer(createAdminClient(), user.id, userId, supabase);
   if (!data) notFound();
 
   // Davet edebileceğim takım/gruplar: kaptanı/yetkilisi olduklarım; kişi zaten üye veya bekleyen davet varsa çıkar

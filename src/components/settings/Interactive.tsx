@@ -93,7 +93,7 @@ export function StatsShareRow({ initial }: { initial: boolean }) {
       icon="query_stats"
       tone="secondary"
       title="İstatistiklerimi Paylaş"
-      subtitle="Gol, asist ve maçın adamı verileri"
+      subtitle="Kapalıyken takım arkadaşların ve bekleyen başvurunu yanıtlayacak kişi görür"
       checked={on}
       onChange={() => {
         const next = !on;

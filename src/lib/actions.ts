@@ -217,7 +217,7 @@ export async function saveAvailability(days: number[]): Promise<{ error?: string
   return {};
 }
 
-/** "İstatistiklerimi paylaş": açık = herkes görür, kapalı = sadece takım arkadaşları */
+/** "İstatistiklerimi paylaş": açık = herkes görür, kapalı = takım arkadaşları ve bekleyen başvuruyu yanıtlayacak kişi */
 export async function setStatsShare(on: boolean): Promise<{ error?: string }> {
   const { supabase, user } = await requireUser();
   const { error } = await supabase.from("profiles").update({ stats_visibility: on ? "public" : "teammates" }).eq("id", user.id);

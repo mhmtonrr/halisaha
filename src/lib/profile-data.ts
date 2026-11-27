@@ -122,8 +122,11 @@ export async function loadPerson(admin: SupabaseClient, userId: string): Promise
   };
 }
 
-/** İstatistik görünürlüğü: kendisi, "herkes" ayarı veya ortak (ödünç olmayan) grup/takım */
-export async function canViewStats(admin: SupabaseClient, viewerId: string, target: Person): Promise<boolean> {
+/**
+ * İstatistik görünürlüğü: kendisi, "herkes" ayarı, ortak (ödünç olmayan) grup/takım veya izleyicinin karar vereceği
+ * bekleyen başvuru/katılma isteği (0055 is_my_applicant; auth.uid() gerektiği için izleyicinin oturum istemcisiyle).
+ */
+export async function canViewStats(admin: SupabaseClient, viewerId: string, target: Person, viewer?: SupabaseClient): Promise<boolean> {
   if (viewerId === target.profile.id) return true;
   if (target.profile.statsVisibility === "public") return true;
   const { data, error } = await admin
@@ -134,7 +137,10 @@ export async function canViewStats(admin: SupabaseClient, viewerId: string, targ
     .is("left_at", null);
   if (error) throw error;
   const mine = new Set((data ?? []).filter((r) => r.user_id === viewerId).map((r) => r.group_id));
-  return (data ?? []).some((r) => r.user_id === target.profile.id && mine.has(r.group_id));
+  if ((data ?? []).some((r) => r.user_id === target.profile.id && mine.has(r.group_id))) return true;
+  if (!viewer) return false;
+  const { data: applicant } = await viewer.rpc("is_my_applicant", { p_user: target.profile.id });
+  return applicant === true;
 }
 
 /** İzleyicinin üye olduğu gruplar: maç bağlantısı ve özel grup adı göstermek için */
@@ -279,10 +285,10 @@ export async function loadUpcomingMatches(admin: SupabaseClient, person: Person,
 }
 
 /** Bir profil sayfası için her şey: görünürlük kontrolü dahil. İstatistik göremiyorsa stats/matches/noShows null. */
-export async function loadProfileForViewer(admin: SupabaseClient, viewerId: string, targetId: string) {
+export async function loadProfileForViewer(admin: SupabaseClient, viewerId: string, targetId: string, viewer?: SupabaseClient) {
   const person = await loadPerson(admin, targetId);
   if (!person) return null;
-  const canStats = await canViewStats(admin, viewerId, person);
+  const canStats = await canViewStats(admin, viewerId, person, viewer);
   const [matches, noShows, viewerGroups, upcoming] = await Promise.all([
     canStats ? loadPersonMatches(admin, person) : Promise.resolve(null),
     canStats ? countNoShows(admin, targetId) : Promise.resolve(null),

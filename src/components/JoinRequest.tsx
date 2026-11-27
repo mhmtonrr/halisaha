@@ -31,6 +31,7 @@ export function JoinRequest({ groupId, back, pending, isTeam }: { groupId: strin
         <input type="hidden" name="groupId" value={groupId} />
         <input type="hidden" name="back" value={back} />
         <Input name="message" maxLength={200} placeholder={`Kısa not (isteğe bağlı): mevki, ne zaman boşsun…`} aria-label="İstek notu" />
+        <p className="text-[11px] text-muted">İsteğin beklerken istatistiklerin ve maç geçmişin kaptan ve yöneticilere görünür.</p>
         <SubmitButton className="min-h-10 w-full text-sm" pendingLabel="Gönderiliyor…">
           {isTeam ? "Takıma katılma isteği gönder" : "Gruba katılma isteği gönder"}
         </SubmitButton>

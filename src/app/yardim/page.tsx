@@ -30,7 +30,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "Profilimi kimler görür?",
-    a: "Kartın (rating, yetenekler, bölge) herkese görünür. İstatistik ve maç geçmişini sadece takım arkadaşların görür; Ayarlar'daki \"İstatistiklerimi Paylaş\" anahtarını açarsan giriş yapan herkes görür. Özel grupların adı hiçbir zaman başkalarına gösterilmez.",
+    a: "Kartın (rating, yetenekler, bölge) herkese görünür. İstatistik ve maç geçmişini takım arkadaşların görür; bir maça başvurduğunda veya takıma/gruba katılma isteği gönderdiğinde, karar verecek kişi de yanıtlanana kadar görür. Ayarlar'daki \"İstatistiklerimi Paylaş\" anahtarını açarsan giriş yapan herkes görür. Özel grupların adı hiçbir zaman başkalarına gösterilmez.",
   },
   {
     q: "Hesabımı geçici dondurursam ne olur?",
