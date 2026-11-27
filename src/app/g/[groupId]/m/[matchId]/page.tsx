@@ -613,21 +613,13 @@ export default async function MatchPage({
       {linked && opp && match.status === "gathering" && (
         <SectionTitle action={<Badge tone="accent">Teklif kabul edildi</Badge>}>Rakip</SectionTitle>
       )}
-      {linked && opp && !planned && !summarized && <VersusCard mine={{ id: groupId, name: myTeamName, color: myTeamColor, logo: myTeam?.logo ?? null, roster }} opp={opp} />}
-      {/* Bağlı maç iki tarafın onayıyla kesinleşir */}
-      {linked && opp && match.status === "gathering" && (
-        <Card className="mb-4 space-y-2 text-sm">
-          {[
-            { name: myTeamName, ready: !!match.confirmed_at },
-            { name: opp.team.name, ready: !!opp.match.confirmed_at },
-          ].map((s, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <Icon name={s.ready ? "check_circle" : "hourglass_top"} fill={s.ready} className={cx("text-[18px]", s.ready ? "text-primary" : "text-amber-300")} />
-              <span className="min-w-0 flex-1 truncate">{s.name}</span>
-              <span className={cx("text-xs font-semibold", s.ready ? "text-primary" : "text-amber-300")}>{s.ready ? "Kadro onaylandı" : "Onay bekliyor"}</span>
-            </div>
-          ))}
-        </Card>
+      {linked && opp && !planned && !summarized && (
+        <VersusCard
+          mine={{ id: groupId, name: myTeamName, color: myTeamColor, logo: myTeam?.logo ?? null, roster }}
+          opp={opp}
+          // Bağlı maç iki tarafın onayıyla kesinleşir
+          ready={match.status === "gathering" ? [!!match.confirmed_at, !!opp.match.confirmed_at] : undefined}
+        />
       )}
 
       {summarized && (
@@ -1083,9 +1075,12 @@ async function VotingView({
 function VersusCard({
   mine,
   opp,
+  ready,
 }: {
   mine: { id: string; name: string; color: string | null; logo: string | null; roster: RosterEntry[] };
   opp: Opponent;
+  /** Toplanırken tarafların kadro onayı: [biz, rakip] */
+  ready?: [boolean, boolean];
 }) {
   const sides = [
     { id: mine.id, name: mine.name, color: mine.color, logo: mine.logo, roster: mine.roster, self: true },
@@ -1110,6 +1105,12 @@ function VersusCard({
                 <OvrBadge overall={teamRating(t.roster.map((p) => p.overall))} className={cx("h-7 w-7 text-xs", t.roster.length === 0 && "opacity-40")} />
                 <span className="text-xs text-muted">{t.roster.length} kişi</span>
               </div>
+              {ready && (
+                <span className={cx("flex items-center gap-1 text-xs font-semibold", ready[i] ? "text-primary" : "text-amber-300")}>
+                  <Icon name={ready[i] ? "check_circle" : "hourglass_top"} fill={ready[i]} className="text-[16px]" />
+                  <span>{ready[i] ? "Kadro onaylandı" : "Onay bekliyor"}</span>
+                </span>
+              )}
             </div>
           </div>
         ))}

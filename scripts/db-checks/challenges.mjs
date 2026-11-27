@@ -80,6 +80,10 @@ await as(1);
 ok("A kaptanı rakip kadroyu görür", (await q(`select count(*)::int c from match_players where match_id=$1`, [mB]))[0].c === 3);
 
 // --- iki taraflı onay (0060)
+ok("onaysız bağlı maça doğrudan skor/durum yazılamaz (0061)", await fails(`update matches set score_a=5, score_b=3, status='played' where id=$1`, [mA])
+  && await fails(`update matches set status='planned' where id=$1`, [mA])
+  && await fails(`update matches set confirmed_at=now() where id=$1`, [mA])
+  && await fails(`update matches set challenge_id=null where id=$1`, [mA]));
 const kickoff = (await q(`select played_at from matches where id=$1`, [mA]))[0].played_at;
 const planned = async () => (await q(`select count(*)::int c from matches where challenge_id=$1 and status='planned'`, [ch]))[0].c;
 await db.query(`select confirm_match($1, $2)`, [mA, kickoff]);

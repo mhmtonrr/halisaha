@@ -38,7 +38,11 @@ const b2 = await gp(2, B);
 await as(3);
 ok("aynı kişi iki rakip kadroda birden olamaz", await fails(`insert into match_players (match_id, player_id, team) values ($1,$2,'A')`, [mB, b2]));
 
-// --- skor + oylama aç
+// --- iki taraflı onay (0060), sonra skor + oylama aç
+await db.exec("reset role");
+const kickoff = (await q(`select played_at from matches where id=$1`, [mA]))[0].played_at;
+await as(1); await db.query(`select confirm_match($1, $2)`, [mA, kickoff]);
+await as(3); await db.query(`select confirm_match($1, $2)`, [mB, kickoff]);
 await as(1); await db.query(`update matches set score_a=3, score_b=2, status='played' where id=$1`, [mA]);
 await as(3); await db.query(`update matches set score_a=2, score_b=3, status='played' where id=$1`, [mB]);
 ok("skorlar eşleşti", (await q(`select settle_linked_match($1) r`, [mB]))[0].r === "settled");
