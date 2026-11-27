@@ -156,3 +156,52 @@ await db.exec("reset role");
 ok("iptalde ilanlar kapanır", (await q(`select 1 from match_listings where match_id=$1 and status in ('pending','active')`, [M])).length === 0);
 await as(2);
 ok("ilana doğrudan yazma yok", await fails(`insert into match_listings (match_id, status) values ($1, 'active')`, [M2]));
+
+// --- 0058: herkese açık takımın açık maçı yalnızca ilgililere; eşleşmiş rakip ve oynanmış maç istisnası
+// T1: u1 kaptan, u2 üye · T2 (rakip): u4 kaptan, u5 üye · u8 yabancı
+const team = async (cap, mate, name) => {
+  await as(cap);
+  const id = (await one(`insert into groups (name, created_by, kind, city) values ($1,$2,'team','Kırklareli') returning id`, [name, U(cap)])).id;
+  const c = (await one(`select group_invite_code($1) c`, [id])).c;
+  await as(mate);
+  await db.query(`select join_group($1)`, [c]);
+  return id;
+};
+const T1 = await team(1, 2, "Kartallar");
+const T2 = await team(4, 5, "Aslanlar");
+await as(1);
+const A = (await one(`select create_match_v2($1, current_date + 5, time '21:00', 5::smallint, 'external') id`, [T1])).id;
+const visible = async (n, m) => {
+  await as(n);
+  return [
+    (await q(`select 1 from matches where id=$1`, [m])).length === 1,
+    (await q(`select 1 from match_players where match_id=$1`, [m])).length > 0,
+    (await q(`select 1 from match_overview($1)`, [[m]])).length === 1,
+  ];
+};
+const full = async (n, m) => (await visible(n, m)).every(Boolean);
+const none = async (n, m) => (await visible(n, m)).every((x) => !x);
+ok("takım üyesi toplanan maçı görür", await full(2, A));
+ok("yabancı takımın toplanan maçını göremez", await none(8, A));
+ok("takım sayfası yine herkese açık", (await q(`select 1 from groups where id=$1`, [T1])).length === 1);
+await as(1);
+const ch = (await one(`select create_challenge_v2($1, $2) id`, [A, T2])).id;
+ok("teklif bekleyen rakip maçı henüz göremez", (await none(4, A)) && (await none(5, A)));
+await as(4);
+await db.query(`select respond_challenge($1, true)`, [ch]);
+await db.exec("reset role");
+const B = (await one(`select id from matches where challenge_id=$1 and group_id=$2`, [ch, T2])).id;
+ok("eşleşmiş rakibin kaptanı ve üyesi karşı maçı ve kadroyu görür", (await full(4, A)) && (await full(5, A)));
+// Rakibin kadrosu henüz boş: maç ve özet
+ok("ilk takım da rakibin maçını görür", [await visible(1, B), await visible(2, B)].every(([m, , o]) => m && o));
+ok("eşleşmiş kesin maçı yabancı göremez", (await none(8, A)) && (await none(8, B)));
+for (const s of ["cancelled", "no_result"]) {
+  await db.exec(`reset role; update matches set status='${s}' where id='${A}'`);
+  ok(`${s} maçı yabancı göremez, üye görür`, (await none(8, A)) && (await full(2, A)));
+}
+for (const s of ["played", "voting", "closed"]) {
+  await db.exec(`reset role; update matches set status='${s}', score_a=3, score_b=2 where id='${A}'`);
+  ok(`${s} takım maçı herkese açık`, await full(8, A));
+}
+await db.exec(`reset role; insert into match_entries (match_id, user_id, status, source) values ('${A}','${U(8)}','removed','organizer')`);
+ok("çıkarılan, oynanmış maçı da göremez", await none(8, A));

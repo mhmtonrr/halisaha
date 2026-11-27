@@ -62,9 +62,9 @@ ok("kabul kartı gönderen takımın sohbetinde, maç kartları ikisinde", (awai
   && (await q(`select count(*)::int c from group_messages where body like '⚽%' and group_id in ($1,$2)`, [A, B]))[0].c === 2);
 await as(4);
 
-// --- karşı takım maçı ve kadrosunu görür (takımlar herkese açık)
+// --- eşleşmiş rakip karşı maçı görür; davetsiz yabancı açık maçı görmez (0058)
 await as(6);
-ok("yabancı iki maçı da görür", (await q(`select count(*)::int c from matches where challenge_id=$1`, [ch]))[0].c === 2);
+ok("yabancı eşleşmiş açık maçları göremez (0058)", (await q(`select count(*)::int c from matches where challenge_id=$1`, [ch]))[0].c === 0);
 ok("yabancı teklifi yine göremez", (await q(`select count(*)::int c from match_challenges`))[0].c === 0);
 
 // --- kadro: her takım kendi maçına oyuncu ekler

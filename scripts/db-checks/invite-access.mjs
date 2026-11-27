@@ -128,6 +128,14 @@ await as(1);
 await move(R, 7, "out");
 ok("yedekten çıkarılan dış oyuncu 'removed'", (await entry(R, 7)) === "removed" && (await blind(7, R)));
 
+// --- 0058: takımın açık maçı (ilansız) yalnızca ilgililere
+ok("davetsiz yabancı takımın açık maçını göremez", await blind(8, R));
+await as(1);
+await share(6, R);
+ok("ilansız takım maçında davetli görür", await sees(6, R));
+ok("yedekten kendisi çıkan dış oyuncu 'left'", (await respond(6, R, "yes")) === "reserve" && (await respond(6, R, "no")) === "declined" && (await entry(R, 6)) === "left");
+ok("kendisi çıkan takım maçını artık göremez", await blind(6, R));
+
 // --- Üye etkilenmez
 await as(1);
 await move(M, 2, "out");

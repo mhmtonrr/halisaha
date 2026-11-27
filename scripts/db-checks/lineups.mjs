@@ -50,6 +50,9 @@ await as(2);
 ok("normal oyuncu dizilişi değiştiremez", (await db.query(`update match_players set slot=5 where match_id=$1 and player_id=$2`, [m, p3])).affectedRows === 0
   && (await db.query(`update matches set formation_a='3-3' where id=$1`, [m])).affectedRows === 0);
 await as(5);
-ok("yabancı dizilişi okuyabilir (takım herkese açık)", (await q(`select formation_a from matches where id=$1`, [m]))[0].formation_a === "2-3-1"
+ok("yabancı açık maçın dizilişini göremez (0058)", (await q(`select formation_a from matches where id=$1`, [m])).length === 0);
+await db.exec(`reset role; update matches set status='closed', score_a=1, score_b=0 where id='${m}'`);
+await as(5);
+ok("yabancı oynanmış maçın dizilişini okur (takım herkese açık)", (await q(`select formation_a from matches where id=$1`, [m]))[0]?.formation_a === "2-3-1"
   && (await q(`select count(*)::int c from match_players where match_id=$1 and slot is not null`, [m]))[0].c === 3);
 ok("yabancı dizilişi değiştiremez", (await db.query(`update match_players set slot=4 where match_id=$1`, [m])).affectedRows === 0);

@@ -37,9 +37,12 @@ await as(1);
 await db.query(`select create_challenge_v2($1, $2)`, [M, R]);
 await as(3);
 const p = await q(`select name from match_pending_rivals($1::uuid[])`, [[M]]);
-ok("maçı gören bekleyen rakibin adını görür", p.length === 1 && p[0].name === "Aslanlar");
+ok("kadrodan kendisi çıkan dış arkadaş artık göremez (0058)", p.length === 0);
+await as(2);
+const pm = await q(`select name from match_pending_rivals($1::uuid[])`, [[M]]);
+ok("takım üyesi bekleyen rakibin adını görür", pm.length === 1 && pm[0].name === "Aslanlar");
 await as(4);
-ok("herkese açık takımın maçında yabancı da rakip adını görür", (await q(`select name from match_pending_rivals($1::uuid[])`, [[M]])).length === 1);
+ok("yabancı açık maçın bekleyen rakibini görmez (0058)", (await q(`select name from match_pending_rivals($1::uuid[])`, [[M]])).length === 0);
 
 // 0050: ücreti sonradan değiştirme ve davet bağlantısı
 await as(2);

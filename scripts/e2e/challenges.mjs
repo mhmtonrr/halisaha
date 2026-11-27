@@ -183,7 +183,9 @@ try {
   check("oyuncu iki takımın dizilişini görür", await bothSides(A2, teamA, mA, "E2E Kartallar", "1-2-1", "E2E Aslanlar", "2-2"));
   check("rakip sahada rakip oyuncuların kartları", (await A2.locator('#dizilis [aria-label="Buse Oyuncu kartı"]').count()) === 1);
   check("oyuncuda diziliş düzenleme yok", (await A2.locator(radios).count()) === 0 && (await A2.locator('#dizilis input[name="lineup"]').count()) === 0);
-  check("yabancı da dizilişleri görür (takımlar herkese açık)", await bothSides(X, teamB, mB, "E2E Aslanlar", "2-2", "E2E Kartallar", "1-2-1"));
+  check("rakip oyuncu karşı takımın maç sayfasında da kadroyu görür", await bothSides(B2, teamA, mA, "E2E Kartallar", "1-2-1", "E2E Aslanlar", "2-2"));
+  await X.goto(`${BASE}/g/${teamB}/m/${mB}`, { waitUntil: "networkidle" });
+  check("yabancı açık maça giremez (0058)", (await X.locator("text=Bu maça erişimin yok").count()) === 1 && (await X.locator("#dizilis").count()) === 0);
   await shot(X, "40b-dizilisler-gorunum");
 
   // 6) Ortak ekran
@@ -258,6 +260,8 @@ try {
   check("herkes oy verince iki maç birlikte kapandı", closed.every((m) => m.status === "closed"));
   const { data: res } = await admin.from("match_results").select("match_id, is_mvp").in("match_id", [mA, mB]);
   check("iki takımın oyuncuları puanlandı (4 sonuç)", res.length === 4 && res.filter((r) => r.match_id === mA).length === 2);
+  await X.goto(`${BASE}/g/${teamA}/m/${mA}`, { waitUntil: "networkidle" });
+  check("kapanmış takım maçını yabancı görür (0058)", (await X.locator("text=Bu maça erişimin yok").count()) === 0 && (await X.locator("text=E2E Aslanlar").count()) > 0);
   check("tek maçın adamı (iki takım arasından)", res.filter((r) => r.is_mvp).length <= 1);
 
   // 9) Sonuç: iki takımın puanları, rakip puanlar kendi kartlarını etkilemez

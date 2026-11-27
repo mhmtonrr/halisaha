@@ -28,7 +28,7 @@ ok("normal oyuncu takım maçı kuramaz", await fails(`insert into matches (grou
 await as(4);
 ok("yabancı takımı görür", (await db.query(`select count(*)::int c from groups where id=$1`, [t.id])).rows[0].c === 1);
 ok("yabancı kadroyu görür (aktif üyeler)", (await db.query(`select count(*)::int c from group_players where group_id=$1 and left_at is null`, [t.id])).rows[0].c === 3);
-ok("yabancı maçları görür", (await db.query(`select count(*)::int c from matches where group_id=$1`, [t.id])).rows[0].c === 1);
+ok("yabancı takımın açık maçını göremez (0058)", (await db.query(`select count(*)::int c from matches where group_id=$1`, [t.id])).rows[0].c === 0);
 ok("yabancı maç kuramaz", await fails(`insert into matches (group_id, played_at, created_by) values ($1, now(), $2)`, [t.id, U(4)]));
 await as(1);
 const g = (await db.query(`insert into groups (name, created_by) values ('Arkadaşlar','${U(1)}') returning id`)).rows[0];
