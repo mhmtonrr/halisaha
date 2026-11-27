@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { authErrorMessage } from "@/lib/authErrors";
-import { Button, Card, ErrorNote, Input, Label, cx } from "@/components/ui";
+import { Button, ErrorNote, Input, Label, cx } from "@/components/ui";
+import { fieldCard, primaryButton } from "@/components/settings/blocks";
 
 type Mode = "login" | "signup" | "forgot";
 
@@ -88,8 +89,8 @@ export function LoginForm({ next, initialError }: { next: string; initialError?:
       type="button"
       onClick={() => switchMode(m)}
       className={cx(
-        "flex-1 rounded-lg py-2 text-sm font-medium transition",
-        mode === m ? "bg-accent font-semibold text-pitch-950" : "text-muted hover:text-white",
+        "flex-1 rounded-lg py-2 font-display text-sm font-semibold transition",
+        mode === m ? "bg-primary font-bold text-on-primary" : "text-on-surface-variant hover:text-on-surface",
       )}
       aria-pressed={mode === m}
     >
@@ -98,16 +99,16 @@ export function LoginForm({ next, initialError }: { next: string; initialError?:
   );
 
   return (
-    <Card className="space-y-4">
+    <div className={cx(fieldCard, "space-y-4 p-4")}>
       {mode !== "forgot" ? (
-        <div className="flex gap-1 rounded-xl bg-pitch-950 p-1">
+        <div className="flex gap-1 rounded-xl bg-surface-low p-1">
           {tab("login", "Giriş yap")}
           {tab("signup", "Kayıt ol")}
         </div>
       ) : (
         <div>
-          <h2 className="font-semibold">Şifremi unuttum</h2>
-          <p className="text-sm text-muted">E-posta adresini yaz, şifreni yenilemen için bir link gönderelim.</p>
+          <h2 className="font-display font-bold">Şifremi unuttum</h2>
+          <p className="text-sm text-on-surface-variant">E-posta adresini yaz, şifreni yenilemen için bir link gönderelim.</p>
         </div>
       )}
 
@@ -150,7 +151,7 @@ export function LoginForm({ next, initialError }: { next: string; initialError?:
             />
           </label>
         )}
-        <Button className="w-full" disabled={pending}>
+        <button className={cx(primaryButton, "disabled:opacity-50")} disabled={pending}>
           {pending
             ? "Bekle…"
             : mode === "login"
@@ -158,25 +159,25 @@ export function LoginForm({ next, initialError }: { next: string; initialError?:
               : mode === "signup"
                 ? "Hesap oluştur"
                 : "Yenileme linki gönder"}
-        </Button>
+        </button>
         {mode === "login" && (
-          <button type="button" onClick={() => switchMode("forgot")} className="w-full text-center text-sm text-muted hover:text-white">
+          <button type="button" onClick={() => switchMode("forgot")} className="w-full text-center text-sm text-on-surface-variant hover:text-on-surface">
             Şifremi unuttum
           </button>
         )}
         {mode === "forgot" && (
-          <button type="button" onClick={() => switchMode("login")} className="w-full text-center text-sm text-muted hover:text-white">
+          <button type="button" onClick={() => switchMode("login")} className="w-full text-center text-sm text-on-surface-variant hover:text-on-surface">
             ← Girişe dön
           </button>
         )}
       </form>
 
-      {notice && <p className="rounded-xl bg-accent/10 p-3 text-sm text-accent">{notice}</p>}
+      {notice && <p className="rounded-xl bg-primary/10 p-3 text-sm text-primary">{notice}</p>}
       <ErrorNote message={error} />
 
       {mode !== "forgot" && (
         <>
-          <div className="flex items-center gap-3 text-xs text-muted">
+          <div className="flex items-center gap-3 text-xs text-on-surface-variant">
             <span className="h-px flex-1 bg-line" /> veya <span className="h-px flex-1 bg-line" />
           </div>
           <Button variant="secondary" className="w-full" onClick={google} type="button">
@@ -185,6 +186,6 @@ export function LoginForm({ next, initialError }: { next: string; initialError?:
           </Button>
         </>
       )}
-    </Card>
+    </div>
   );
 }
