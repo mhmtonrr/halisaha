@@ -179,7 +179,7 @@ try {
   const rm = (await admin.from("matches").select("status").eq("challenge_id", lm.challenge_id).eq("group_id", RT).maybeSingle()).data;
   check("maç rakiple bağlandı, saat karşı tekliften, rakibe toplanan maç açıldı", lm.opponent_group_id === RT && lm.time_tbd === false && rm?.status === "gathering");
   await go(PO, `${BASE}/g/${T}/m/${M3}`);
-  check("toplanma ekranında 'Rakip · Onaylandı'", (await PO.getByText("Onaylandı", { exact: true }).count()) === 1);
+  check("toplanma ekranında 'Rakip · Teklif kabul edildi' ve iki tarafın onayı bekliyor", (await PO.getByText("Teklif kabul edildi", { exact: true }).count()) === 1 && (await PO.getByText("Onay bekliyor", { exact: true }).count()) === 2);
 
   // --- Teklifler sayfasından iptal: maçlar silinmez (0059)
   await go(PO, `${BASE}/g/${T}/teklifler`);

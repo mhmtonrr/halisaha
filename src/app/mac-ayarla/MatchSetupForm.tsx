@@ -109,6 +109,7 @@ export function MatchSetupForm({
   const [rivalSource, setRivalSource] = useState<"app" | "name">("app");
   const [rivalTeam, setRivalTeam] = useState<RivalTeam | null>(isAdmin ? rival : null);
   const [rivalName, setRivalName] = useState("");
+  const [rivalMessage, setRivalMessage] = useState("");
   const [rivalSearch, setRivalSearch] = useState<RivalSearch>({ q: "", city: homeCity, district: "" });
   const [selected, setSelected] = useState<Set<string>>(new Set([meId]));
   const [friendQuery, setFriendQuery] = useState("");
@@ -237,6 +238,7 @@ export function MatchSetupForm({
       <input type="hidden" name="withMe" value={selected.has(meId) ? "1" : "0"} />
       <input type="hidden" name="announce" value={announce ? "1" : "0"} />
       {appRival && <input type="hidden" name="rivalTeam" value={appRival.id} />}
+      {appRival && <input type="hidden" name="rivalMessage" value={rivalMessage} />}
       {typedRival && <input type="hidden" name="opponent" value={typedRival} />}
       {[...selected].map((id) => (
         <input key={id} type="hidden" name="confirmed" value={id} />
@@ -366,6 +368,12 @@ export function MatchSetupForm({
             onSearch={setRivalSearch}
             canOffer={isAdmin}
           />
+        )}
+        {step === "rival" && appRival && (
+          <label className="block">
+            <Label hint="isteğe bağlı">Rakibe mesaj</Label>
+            <textarea value={rivalMessage} onChange={(e) => setRivalMessage(e.target.value)} maxLength={300} rows={2} placeholder="Örn. Kaleciler dahil, saha yarı yarıya." aria-label="Rakibe mesaj" className={textareaCls} />
+          </label>
         )}
 
         {step === "roster" && (

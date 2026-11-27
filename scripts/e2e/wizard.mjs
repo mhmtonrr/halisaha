@@ -4,9 +4,10 @@ const heading = (page, t) => page.waitForSelector(`h2:text-is("${t}")`);
 
 /**
  * day: "YYYY-AA-GG" (boşsa yarın) · time: "SS:DD" (boşsa saat belli değil) · pick: işaretlenecek üye/arkadaş adları (sen zaten işaretli)
- * opponent: uygulamada olmayan rakip adı · appRival: uygulamadaki rakibin adı · submit: false ise son adımda bekler
+ * opponent: uygulamada olmayan rakip adı · appRival: uygulamadaki rakibin adı · message: uygulamadaki rakibe mesaj
+ * announce: false ise takıma/gruba duyurulmaz · submit: false ise son adımda bekler
  */
-export async function fillSetup(page, { day, time, size, venue, fee, opponent, appRival, pick = [], guest, submit = true, shot } = {}) {
+export async function fillSetup(page, { day, time, size, venue, fee, opponent, appRival, message, announce, pick = [], guest, submit = true, shot } = {}) {
   await heading(page, "Maç bilgileri");
   await page.fill('input[aria-label="Maç günü"]', day ?? new Date(Date.now() + 3 * 3600e3 + 864e5).toISOString().slice(0, 10));
   if (!time) await page.click('button:text-is("Belli değil")');
@@ -34,6 +35,7 @@ export async function fillSetup(page, { day, time, size, venue, fee, opponent, a
         await page.click(`li button:has-text("${appRival}")`);
       }
     }
+    if (message) await page.fill('textarea[aria-label="Rakibe mesaj"]', message);
     await shot?.("2-rakip");
     await next(page);
   }
@@ -47,6 +49,7 @@ export async function fillSetup(page, { day, time, size, venue, fee, opponent, a
   await shot?.("3-gelenler");
   await next(page);
   await heading(page, "Son kontrol");
+  if (announce === false) await page.locator('label:has-text("duyur") input[type="checkbox"]').uncheck();
   await shot?.("4-son-kontrol");
   if (submit) await submitSetup(page);
 }

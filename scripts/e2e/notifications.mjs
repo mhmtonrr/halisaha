@@ -61,8 +61,13 @@ try {
 
   // 1) Teklif: rakip kaptanın AÇIK ana sayfasında rozet canlı çıkar; gönderene bildirim gitmez
   await rivP.goto(BASE + "/"); await rivP.evaluate(() => { window.__live = 1; });
-  await capP.goto(`${BASE}/g/${B}/teklif`);
-  await capP.click('button:has-text("Teklifi gönder")'); await capP.waitForURL(/teklifler\?sent=1/);
+  // "Maç teklif et" → Maç ayarla (rakip seçili); takıma duyurulmaz ki sonraki "Maç ayarlanıyor" sayımı karışmasın
+  const sendOffer = async () => {
+    await capP.goto(`${BASE}/g/${B}/teklif`);
+    await capP.waitForURL(/\/mac-ayarla\?/);
+    await fillSetup(capP, { day: trDate(3), time: "21:00", announce: false });
+  };
+  await sendOffer();
   check("teklif: rakip kaptana 'offer' bildirimi yazıldı", !!(await until(async () => (await notifs(riv, "offer")).length === 1)));
   check("teklif bildirimi doğru metin ve adres", (await notifs(riv, "offer"))[0]?.title === "🤝 Maç teklifi geldi" && (await notifs(riv, "offer"))[0]?.url === `/g/${B}/teklifler`);
   check("teklifi gönderene bildirim gitmedi", (await notifs(cap)).length === 0);
@@ -82,8 +87,7 @@ try {
   await offerBox.click();
   check("tercih kapatıldı (veritabanında offers=false)", !!(await until(async () => (await admin.from("notification_prefs").select("offers").eq("user_id", riv.id).single()).data.offers === false)));
   await rivP.screenshot({ path: `${SHOTS}/91-bildirim-ayarlari.png`, fullPage: true });
-  await capP.goto(`${BASE}/g/${B}/teklif`);
-  await capP.click('button:has-text("Teklifi gönder")'); await capP.waitForURL(/teklifler\?sent=1/);
+  await sendOffer();
   await new Promise((r) => setTimeout(r, 4000));
   check("tercih kapalıyken ikinci teklif için bildirim yazılmadı", (await notifs(riv, "offer")).length === 1);
   await offerBox.click();
@@ -200,7 +204,10 @@ try {
   // 11) Takımlar arası maç (4'te kabul edilen): skor girince rakibe, farklı skor girilince iki tarafa
   const lA = (await admin.from("matches").select("id, challenge_id").eq("group_id", A).not("challenge_id", "is", null).single()).data;
   const lB = (await admin.from("matches").select("id").eq("challenge_id", lA.challenge_id).neq("id", lA.id).single()).data;
-  await admin.from("match_players").insert([await gp(A, cap), memA].map((id) => ({ match_id: lA.id, player_id: id, team: "A" })));
+  // Kaptan sihirbazdan zaten kadroda: yalnızca eksik olan eklenir
+  await admin.from("match_players").upsert([await gp(A, cap), memA].map((id) => ({ match_id: lA.id, player_id: id, team: "A" })), { onConflict: "match_id,player_id", ignoreDuplicates: true });
+  // Kabul edilen teklifin maçları toplanır (0060); iki taraflı onay `challenges` senaryosunda, burada doğrudan kesinleştirilir
+  await admin.from("matches").update({ status: "planned" }).eq("challenge_id", lA.challenge_id);
   await capP.goto(`${BASE}/g/${A}/m/${lA.id}`);
   await capP.fill('input[name="scoreA"]', "2"); await capP.fill('input[name="scoreB"]', "1");
   await capP.click('button:has-text("Skoru kaydet")'); await capP.waitForURL(/skor=waiting/);

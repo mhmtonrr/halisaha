@@ -1,10 +1,11 @@
-// Takımlar arası maç teklifi: teklif → kabul → kadro → skor eşleşmesi → oylama → sonuç → istatistik.
+// Takımlar arası maç teklifi: teklif (Maç ayarla) → kabul → kadro → iki taraflı onay → skor eşleşmesi → oylama → sonuç → istatistik.
 // Canlı Supabase'e karşı çalışır; test kullanıcıları ve takımlarını sonunda siler.
 import { createRequire } from "module";
 import fs from "fs";
 import os from "os";
 import path from "path";
 import { removeTestUsers } from "./cleanup.mjs";
+import { fillSetup } from "./wizard.mjs";
 const PROJ = process.cwd();
 const require = createRequire(PROJ + "/package.json");
 const { createClient } = require("@supabase/supabase-js");
@@ -64,22 +65,20 @@ try {
   await X.goto(`${BASE}/g/${teamB}/teklifler`); await X.waitForURL(new RegExp(`/g/${teamB}$`));
   check("üye olmayan teklif kutusuna giremez", true);
 
-  // 2) Kartal kaptanı teklif gönderir
-  await A1.goto(`${BASE}/g/${teamB}/teklif`); await shot(A1, "30-teklif-formu");
-  await A1.selectOption('select[name="size"]', "5");
-  await A1.fill('input[name="venue"]', "Petroller Halısaha"); await A1.fill('input[name="fee"]', "Saha yarı yarıya");
-  await A1.fill('textarea[name="message"]', "Cuma akşamı 7'ye 7 yapalım mı?");
-  await A1.click('button:has-text("Teklifi gönder")'); await A1.waitForURL(/teklifler\?sent=1/);
-  check("teklif gönderildi, onay mesajı var", (await A1.locator("text=Teklif gönderildi").count()) > 0);
+  // 2) Kartal kaptanı teklif gönderir ("Maç teklif et" → Maç ayarla, rakip seçili)
+  await A1.goto(`${BASE}/g/${teamB}/teklif`); await A1.waitForURL(/\/mac-ayarla\?/);
+  await fillSetup(A1, { time: "21:00", size: 5, venue: "Petroller Halısaha", fee: 200, message: "Cuma akşamı 5'e 5 yapalım mı?" });
+  await A1.waitForLoadState("networkidle");
+  check("maç açıldı, rakip onayı bekliyor", (await A1.locator("text=Rakip onay bekliyor").count()) > 0);
+  await A1.goto(`${BASE}/g/${teamA}/teklifler`);
   check("gönderilen listede 'Yanıt bekliyor'", (await A1.locator("text=Yanıt bekliyor").count()) > 0);
   await shot(A1, "31-gonderilen");
-  // aynı takıma 4. teklif
-  const { data: ch } = await admin.from("match_challenges").select("id, status").eq("from_group_id", teamA);
-  check("tek teklif kaydı, pending", ch.length === 1 && ch[0].status === "pending");
+  const { data: ch } = await admin.from("match_challenges").select("id, status, message").eq("from_group_id", teamA);
+  check("tek teklif kaydı, pending, mesajıyla", ch.length === 1 && ch[0].status === "pending" && ch[0].message?.startsWith("Cuma akşamı"));
 
   // 3) Aslan oyuncusu teklifi görür ama yanıtlayamaz; kaptan ana sayfada kart görür
   await B2.goto(`${BASE}/g/${teamB}/teklifler`);
-  check("oyuncu gelen teklifi görür", (await B2.locator("text=E2E Kartallar").count()) > 0);
+  check("oyuncu gelen teklifi mesajıyla görür", (await B2.locator("text=E2E Kartallar").count()) > 0 && (await B2.locator("text=Cuma akşamı").count()) > 0);
   check("oyuncuda Kabul/Reddet düğmesi yok", (await B2.locator('button:has-text("Kabul et")').count()) === 0);
   await B1.goto(BASE + "/");
   check("kaptanın ana sayfasında teklif kartı", (await B1.locator("text=maç teklifi yanıtını bekliyor").count()) > 0);
@@ -94,27 +93,49 @@ try {
   check("kabulde maç ekranına yönlendi, kadro uyarısı", (await B1.locator("text=Şimdi kadronu belirle").count()) > 0);
   const { data: ms } = await admin.from("matches").select("id, group_id, kind, status, opponent_name, opponent_group_id, challenge_id, team_size").eq("challenge_id", ch[0].id);
   check("kişi sayısı (5) iki maça da yazıldı", ms.length === 2 && ms.every((m) => m.team_size === 5));
-  check("iki takımda da external maç oluştu", ms.length === 2 && ms.every((m) => m.kind === "external" && m.status === "planned"));
+  check("iki takımda da external maç oluştu", ms.length === 2 && ms.every((m) => m.kind === "external" && m.status === "gathering"));
   const mA = ms.find((m) => m.group_id === teamA).id;
   await shot(B1, "34-mac-bos-kadro");
   await B1.goto(`${BASE}/`);
   check("ana sayfada yaklaşan maç kartı (rakibe karşı, kadro 0/5)", (await B1.locator("body").innerText()).includes("0/5"));
   await shot(B1, "34b-ana-sayfa-yaklasan");
 
-  // 5) Kadrolar (her takım kendininkini "Kadro dışı" listesinden alır)
-  for (const [page, gid, mid] of [[B1, teamB, mB], [A1, teamA, mA]]) {
+  // 5) Kadrolar: üyeler "Geliyorum" der (A kaptanı sihirbazdan zaten kadroda)
+  for (const [page, gid, mid] of [[A2, teamA, mA], [B1, teamB, mB], [B2, teamB, mB]]) {
     await page.goto(`${BASE}/g/${gid}/m/${mid}`, { waitUntil: "networkidle" });
-    const add = page.locator('button:text-is("Kadroya ekle")');
-    for (let left = await add.count(); left > 0; left--) {
-      await add.first().click();
-      await page.waitForFunction((n) => [...document.querySelectorAll("button")].filter((b) => b.textContent === "Kadroya ekle").length < n, left, { timeout: 20000 });
-      // Satır iyimser güncellemeyle hemen kaybolur; sunucu kaydı bitene kadar bekle
-      await page.locator('section[aria-busy="true"]').waitFor({ state: "detached", timeout: 20000 });
-      await page.waitForLoadState("networkidle");
-    }
+    await page.click('button:has-text("Geliyorum")'); await page.waitForURL(/yanit=/); await page.waitForLoadState("networkidle");
   }
   const { data: rosters } = await admin.from("match_players").select("match_id").in("match_id", [mA, mB]);
   check("her maçta 2 oyuncu", rosters.filter((r) => r.match_id === mA).length === 2 && rosters.filter((r) => r.match_id === mB).length === 2);
+
+  // 5a) İki taraflı onay: ilk onay kesinleştirmez, geri alınabilir, ikinci onayla iki maç birden kesinleşir
+  const statuses = async () => (await admin.from("matches").select("id, status, confirmed_at").in("id", [mA, mB])).data;
+  const press = async (page, label, ok) => {
+    await page.click(`button:has-text("${label}")`); await page.waitForURL(new RegExp(`ok=${ok}(&|$)`)); await page.waitForLoadState("networkidle");
+  };
+  await A1.goto(`${BASE}/g/${teamA}/m/${mA}`, { waitUntil: "networkidle" });
+  await press(A1, "Kadromuz hazır", "onay");
+  let st = await statuses();
+  check("tek onayda iki maç da toplanıyor", st.every((m) => m.status === "gathering") && !!st.find((m) => m.id === mA).confirmed_at);
+  check("onaylayan 'Rakibin onayı bekleniyor' görür, diziliş yok", (await A1.locator("text=Rakibin onayı bekleniyor").count()) > 0 && (await A1.locator("#dizilis").count()) === 0);
+  await shot(A1, "35a-rakip-onayi-bekleniyor");
+  await B1.goto(BASE + "/");
+  check("rakip kaptanın ana sayfasında 'Rakip hazır, sıra sizde'", (await B1.locator("text=Rakip hazır, sıra sizde").count()) > 0);
+  let sideNotice = false;
+  for (let i = 0; i < 30 && !sideNotice; i++) {
+    sideNotice = (await admin.from("notifications").select("title").eq("user_id", users[2].id)).data.some((n) => n.title.includes("Rakip hazır"));
+    if (!sideNotice) await new Promise((r) => setTimeout(r, 500));
+  }
+  check("rakip kaptana 'Rakip hazır' bildirimi", sideNotice);
+  await press(A1, "Onayı geri al", "onay-geri");
+  st = await statuses();
+  check("onay geri alındı", st.every((m) => m.status === "gathering" && !m.confirmed_at));
+  await press(A1, "Kadromuz hazır", "onay");
+  await B1.goto(`${BASE}/g/${teamB}/m/${mB}`, { waitUntil: "networkidle" });
+  await shot(B1, "35b-rakip-hazir");
+  await press(B1, "Onayla ve maçı kesinleştir", "kesin");
+  st = await statuses();
+  check("ikinci onayla iki maç birden kesinleşti", st.every((m) => m.status === "planned"));
 
   const gp = async (uid, gid) => (await admin.from("group_players").select("id").eq("user_id", uid).eq("group_id", gid).single()).data.id;
   // 5b) Diziliş sahnesi: A1 fareyle sürükle-bırak, B1 dokunarak (seç + yerleştir)

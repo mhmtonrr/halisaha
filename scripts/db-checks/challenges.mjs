@@ -54,12 +54,12 @@ const myMatch = (await q(`select respond_challenge($1,true) m`, [ch]))[0].m;
 ok("karşı takımın yetkilisi kabul etti", !!myMatch);
 ok("iki takımda da birer maç oluştu", (await q(`select count(*)::int c from matches where challenge_id=$1`, [ch]))[0].c === 2);
 const ms = await q(`select id, group_id, opponent_name, opponent_group_id, kind, status from matches where challenge_id=$1 order by opponent_name`, [ch]);
-ok("maçlar external, rakip adı/takımı doğru", ms.every((m) => m.kind === "external" && m.status === "planned")
+ok("maçlar external, rakip adı/takımı doğru", ms.every((m) => m.kind === "external" && m.status === "gathering")
   && ms.find((m) => m.group_id === A).opponent_name === "Aslanlar" && ms.find((m) => m.group_id === B).opponent_group_id === A);
 ok("kabul edilmiş teklif tekrar yanıtlanamaz", await fails(`select respond_challenge($1,false)`, [ch]));
 await db.exec("reset role");
 ok("kabul kartı gönderen takımın sohbetinde, maç kartları ikisinde", (await q(`select count(*)::int c from group_messages where group_id=$1 and body like '✅%'`, [A]))[0].c === 1
-  && (await q(`select count(*)::int c from group_messages where body like '⚽%' and group_id in ($1,$2)`, [A, B]))[0].c === 2);
+  && (await q(`select count(*)::int c from group_messages where body like '📣%' and group_id in ($1,$2)`, [A, B]))[0].c === 2);
 await as(4);
 
 // --- eşleşmiş rakip karşı maçı görür; davetsiz yabancı açık maçı görmez (0058)
@@ -78,6 +78,16 @@ await as(3);
 for (const n of [3, 4, 5]) await db.query(`insert into match_players (match_id, player_id, team) values ($1,$2,'A')`, [mB, await gp(n, B)]);
 await as(1);
 ok("A kaptanı rakip kadroyu görür", (await q(`select count(*)::int c from match_players where match_id=$1`, [mB]))[0].c === 3);
+
+// --- iki taraflı onay (0060)
+const kickoff = (await q(`select played_at from matches where id=$1`, [mA]))[0].played_at;
+const planned = async () => (await q(`select count(*)::int c from matches where challenge_id=$1 and status='planned'`, [ch]))[0].c;
+await db.query(`select confirm_match($1, $2)`, [mA, kickoff]);
+ok("tek onayla maç kesinleşmez", (await planned()) === 0);
+await as(3);
+await db.query(`select confirm_match($1, $2)`, [mB, kickoff]);
+ok("ikinci onayla iki maç birden kesinleşir", (await planned()) === 2);
+await as(1);
 
 // --- skor eşleşmesi
 ok("planlanmış maçta eşleştirme yapılamaz", await fails(`select settle_linked_match($1)`, [mA]));

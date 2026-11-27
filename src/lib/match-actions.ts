@@ -82,7 +82,7 @@ export async function setupMatch(fd: FormData) {
 
   let challengeError: string | null = null;
   if (kind === "external" && UUID_RE.test(rival)) {
-    const { error: chErr } = await supabase.rpc("create_challenge_v2", { p_match: id, p_to: rival, p_message: null, p_fee: fee ? feeText(fee) : null });
+    const { error: chErr } = await supabase.rpc("create_challenge_v2", { p_match: id, p_to: rival, p_message: str(fd, "rivalMessage").slice(0, 300) || null, p_fee: fee ? feeText(fee) : null });
     if (chErr) challengeError = rpcMessage(chErr, "Teklif gönderilemedi");
   }
 

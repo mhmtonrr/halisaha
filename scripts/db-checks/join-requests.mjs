@@ -180,14 +180,10 @@ ok("sıradan üye onayı geri alamaz", await fails(`select unconfirm_match($1)`,
 await db.exec("reset role");
 const RM = (await one(`select id from matches where challenge_id=$1 and group_id=$2`, [CH, R])).id;
 // Rakip kadrosunda en az 2 kişi gerekir
-await db.query(
-  `insert into match_players (match_id, player_id, team)
-   select $1, id, 'A' from group_players where group_id=$2 and left_at is null
-     and id not in (select player_id from match_players where match_id=$1)
-   limit greatest(0, 2 - match_roster_count($1))`,
-  [RM, R],
-);
 await as(5);
+await db.query(`select respond_match($1, 'yes')`, [RM]);
+ok("rakip kadrosu 1 kişiyken onaylayamaz", await fails(`select confirm_match($1, $2)`, [RM, at]));
+await db.query(`select add_match_guest($1, 'Misafir Aslan', null)`, [RM]);
 await db.query(`select confirm_match($1, $2)`, [RM, at]);
 await db.exec("reset role");
 ok("iki taraf onaylayınca iki maç birden kesinleşir", (await q(`select 1 from matches where challenge_id=$1 and status='planned'`, [CH])).length === 2);
