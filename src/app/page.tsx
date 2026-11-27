@@ -44,7 +44,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
     groupIds.length
       ? supabase
           .from("matches")
-          .select("id, group_id, played_at, status, kind, opponent_name, venue, team_size, voting_deadline, capacity, time_tbd, open_to_members, created_by, roster_count, match_players(player_id)")
+          .select("id, group_id, played_at, status, kind, opponent_name, venue, team_size, voting_deadline, capacity, time_tbd, open_to_members, created_by, roster_count, challenge_id, confirmed_at, match_players(player_id)")
           .in("group_id", groupIds)
           .in("status", ["gathering", "planned", "played", "voting"])
           .order("played_at")
@@ -138,8 +138,19 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
   const toAnswer = matches.filter((m) => m.status === "gathering" && m.open_to_members && !entryOf.has(m.id) && !m.inRoster && notPassed(m));
   const invited = myEntries.filter((e) => e.entry === "invited");
   const waiting = myEntries.filter((e) => e.entry === "reserve" || e.entry === "pending");
-  const dueConfirm = matches.filter(
-    (m) => m.status === "gathering" && isManager(m) && ((m.capacity && m.roster_count >= m.capacity) || istanbulDate(new Date(m.played_at).getTime()) === istanbulDate(nowMs)),
+  // Bağlı maçta rakibin onayı: yönettiğim toplanan maçların karşı tarafı
+  const managedGathering = matches.filter((m) => m.status === "gathering" && isManager(m));
+  const linkedIds = managedGathering.flatMap((m) => (m.challenge_id ? [m.challenge_id as string] : []));
+  const { data: sides } = linkedIds.length
+    ? await supabase.from("matches").select("id, challenge_id, confirmed_at").in("challenge_id", linkedIds)
+    : { data: [] };
+  const rivalReady = (m: { id: string; challenge_id: string | null }) =>
+    !!m.challenge_id && (sides ?? []).some((s) => s.challenge_id === m.challenge_id && s.id !== m.id && !!s.confirmed_at);
+  const dueConfirm = managedGathering.filter(
+    (m) =>
+      (m.challenge_id && (m.confirmed_at || rivalReady(m))) ||
+      (m.capacity && m.roster_count >= m.capacity) ||
+      istanbulDate(new Date(m.played_at).getTime()) === istanbulDate(nowMs),
   );
   const listingIds = [...new Set((listingRows ?? []).map((l) => l.match_id as string))].filter((id) => !entryOf.has(id) && !matches.some((m) => m.id === id && m.inRoster));
   const { data: listingOverview } = listingIds.length ? await supabase.rpc("match_overview", { p_ids: listingIds }) : { data: [] };
@@ -225,9 +236,19 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
       node: (
         <ActionItem
           href={`/g/${m.group_id}/m/${m.id}`}
-          icon="alarm"
-          tone="amber"
-          title={m.capacity && m.roster_count >= m.capacity ? "Kadro tamam, maçı kesinleştir" : "Maç bugün, kadro eksik"}
+          icon={m.challenge_id && m.confirmed_at ? "hourglass_top" : "alarm"}
+          tone={m.challenge_id && m.confirmed_at ? "neutral" : "amber"}
+          title={
+            m.challenge_id && m.confirmed_at
+              ? "Rakibin onayı bekleniyor"
+              : rivalReady(m)
+                ? "Rakip hazır, sıra sizde"
+                : m.capacity && m.roster_count >= m.capacity
+                  ? m.challenge_id
+                    ? "Kadro tamam, onayla"
+                    : "Kadro tamam, maçı kesinleştir"
+                  : "Maç bugün, kadro eksik"
+          }
           sub={`${m.group.name} · ${m.roster_count}/${m.capacity ?? "?"} · ${matchWhen(m.played_at, m.time_tbd)}`}
         />
       ),

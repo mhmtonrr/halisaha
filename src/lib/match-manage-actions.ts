@@ -401,25 +401,65 @@ export async function respondReschedule(fd: FormData) {
   done(back, accept ? "ertelendi" : "tarih-reddedildi");
 }
 
-/** Kesinleştir: saat zorunlu (saat belli değilse burada seçilir); kendi aramızda taraflar dengelenir */
+/**
+ * Kesinleştir: saat zorunlu (saat belli değilse burada seçilir); kendi aramızda taraflar dengelenir.
+ * Uygulamadaki rakiple bağlı maçta ilk onay maçı kesinleştirmez ("waiting"); ikinci onayla iki maç birden kesinleşir.
+ */
 export async function confirmMatch(fd: FormData) {
   const { supabase, user } = await requireUser();
   const { groupId, matchId, back } = ids(fd);
   const day = str(fd, "day");
   const time = str(fd, "time");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !/^\d{2}:\d{2}$/.test(time)) fail(back, "Kesinleştirmek için gün ve saati seç");
-  const { error } = await supabase.rpc("confirm_match", { p_match: matchId, p_starts_at: new Date(`${day}T${time}:00+03:00`).toISOString() });
+  const { data: result, error } = await supabase.rpc("confirm_match", { p_match: matchId, p_starts_at: new Date(`${day}T${time}:00+03:00`).toISOString() });
   if (error) fail(back, rpcMessage(error, "Maç kesinleştirilemedi"));
+  if (result === "waiting") {
+    later(() => notifySideConfirmed(matchId, user.id));
+    done(back, "onay");
+  }
   const { data: k } = await supabase.from("matches").select("kind").eq("id", matchId).maybeSingle();
   if (k?.kind === "internal") await splitTeams(groupId, matchId);
   later(async () => {
     const admin = createAdminClient();
     const m = await matchInfo(admin, matchId);
     if (!m) return;
-    const users = await entryUsers(admin, matchId, ["in"]);
-    await notify(users, "match", text.matchConfirmed(await groupName(admin, m.group_id), m.group_id, matchId, matchWhen(m.played_at, false), m.opponent_name), { excludeUserId: user.id });
+    // Bağlı maçta iki takımın kadrosuna
+    const { data: all } = m.challenge_id
+      ? await admin.from("matches").select("id, group_id, opponent_name").eq("challenge_id", m.challenge_id)
+      : { data: [{ id: m.id, group_id: m.group_id, opponent_name: m.opponent_name }] };
+    for (const x of all ?? []) {
+      const users = await entryUsers(admin, x.id as string, ["in"]);
+      const content = text.matchConfirmed(await groupName(admin, x.group_id as string), x.group_id as string, x.id as string, matchWhen(m.played_at, false), x.opponent_name as string | null);
+      await notify(users, "match", content, { excludeUserId: user.id });
+    }
   });
   done(back, "kesin");
+}
+
+/** Bir taraf kadrosunu onayladı: rakibin yetkililerine ve maçını yönetene "sıra sizde" */
+async function notifySideConfirmed(matchId: string, actor: string) {
+  const admin = createAdminClient();
+  const m = await matchInfo(admin, matchId);
+  if (!m?.challenge_id) return;
+  const { data: o } = await admin
+    .from("matches")
+    .select("id, group_id, created_by")
+    .eq("challenge_id", m.challenge_id)
+    .neq("id", matchId)
+    .maybeSingle();
+  if (!o) return;
+  const users = await managerIds(admin, o.group_id as string, o.created_by as string | null);
+  const content = text.sideConfirmed(await groupName(admin, m.group_id), o.group_id as string, o.id as string, matchWhen(m.played_at, m.time_tbd));
+  await notify(users, "match", content, { excludeUserId: actor });
+}
+
+/** Bağlı maçta rakip henüz onaylamadıysa kendi onayını geri al */
+export async function unconfirmMatch(fd: FormData) {
+  const { supabase } = await requireUser();
+  const { matchId, back } = ids(fd);
+  const { error } = await supabase.rpc("unconfirm_match", { p_match: matchId });
+  if (error) fail(back, rpcMessage(error, "Onay geri alınamadı"));
+  done(back, "onay-geri");
 }
 
 /** Ertele: kadro korunur; bağlı maçta rakibe tarih önerisi olarak gider */

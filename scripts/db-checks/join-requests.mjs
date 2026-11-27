@@ -170,7 +170,28 @@ await as(3);
 const at = (await one(`select played_at from matches where id=$1`, [TM])).played_at;
 ok("bağlı maç farklı saatle kesinleşmez", await fails(`select confirm_match($1, $2::timestamptz + interval '1 hour')`, [TM, at]));
 await db.query(`select confirm_match($1, $2)`, [TM, at]);
-ok("bağlı maç anlaşılan saatle kesinleşir", (await one(`select status::text s from matches where id=$1`, [TM])).s === "planned");
+ok("tek tarafın onayı bağlı maçı kesinleştirmez", (await one(`select status::text s from matches where id=$1`, [TM])).s === "gathering");
+ok("aynı taraf ikinci kez onaylayamaz", await fails(`select confirm_match($1, $2)`, [TM, at]));
+await db.query(`select unconfirm_match($1)`, [TM]);
+ok("onay geri alınır", (await one(`select confirmed_at from matches where id=$1`, [TM])).confirmed_at === null);
+await db.query(`select confirm_match($1, $2)`, [TM, at]);
+await as(4);
+ok("sıradan üye onayı geri alamaz", await fails(`select unconfirm_match($1)`, [TM]));
+await db.exec("reset role");
+const RM = (await one(`select id from matches where challenge_id=$1 and group_id=$2`, [CH, R])).id;
+// Rakip kadrosunda en az 2 kişi gerekir
+await db.query(
+  `insert into match_players (match_id, player_id, team)
+   select $1, id, 'A' from group_players where group_id=$2 and left_at is null
+     and id not in (select player_id from match_players where match_id=$1)
+   limit greatest(0, 2 - match_roster_count($1))`,
+  [RM, R],
+);
+await as(5);
+await db.query(`select confirm_match($1, $2)`, [RM, at]);
+await db.exec("reset role");
+ok("iki taraf onaylayınca iki maç birden kesinleşir", (await q(`select 1 from matches where challenge_id=$1 and status='planned'`, [CH])).length === 2);
+await as(3);
 ok("bağlı maç tek taraflı ertelenemez", await fails(`select reschedule_match($1, current_date + 5, time '20:00')`, [TM]));
 ok("kesin maç saatsiz tarihe çekilemez", await fails(`select propose_reschedule($1, current_date + 5, null)`, [CH]));
 await db.query(`select propose_reschedule($1, current_date + 5, time '20:00')`, [CH]);
@@ -182,5 +203,5 @@ await db.query(`select respond_reschedule($1, true)`, [CH]);
 await db.exec("reset role");
 const both = await q(`select (played_at at time zone 'Europe/Istanbul')::time t, free_withdraw_until, status::text s from matches where challenge_id=$1`, [CH]);
 ok("onaylanınca iki maçın saati değişir", both.length === 2 && both.every((r) => r.t === "20:00:00"));
-ok("kesin maçta 24 saat serbest çekilme başlar, toplanan maçta başlamaz", both.find((r) => r.s === "planned").free_withdraw_until !== null && both.find((r) => r.s === "gathering").free_withdraw_until === null);
+ok("kesin maçta 24 saat serbest çekilme başlar", both.every((r) => r.s === "planned" && r.free_withdraw_until !== null));
 ok("bekleyen değişiklik temizlenir", (await one(`select pending_at from match_challenges where id=$1`, [CH])).pending_at === null);

@@ -19,9 +19,9 @@ import { groupMemberIds, groupName, linkedMatches, matchAccountIds } from "@/lib
 import { notifySpotOpened } from "@/lib/match-notify";
 import { announceJoin, announceRole } from "@/lib/membership-notify";
 import { balanceTeams, pickVariant, type TeamCandidate } from "@/lib/teams";
-import { formatDate, getGroupPlayers, parseLocalDateTime, POSITIONS, type Position } from "@/lib/data";
+import { formatDate, getGroupPlayers, POSITIONS, type Position } from "@/lib/data";
 import { canonicalDistrict, isProvince } from "@/lib/regions";
-import { getFormation, inferSize, isValidSize, validAssignment, type Role } from "@/lib/formations";
+import { getFormation, inferSize, validAssignment, type Role } from "@/lib/formations";
 
 const VOTING_HOURS = 24;
 
@@ -43,12 +43,6 @@ function rpcMessage(error: { message?: string; code?: string }, fallback: string
   // P0001: raise exception ile bizim yazdığımız mesaj
   return error.code === "P0001" && error.message ? error.message : fallback;
 }
-
-/** Formdan kişi sayısı (5-11); geçersizse null */
-const sizeOf = (fd: FormData, key = "size") => {
-  const n = Number(fd.get(key));
-  return isValidSize(n) ? n : null;
-};
 
 const str = (fd: FormData, key: string) => String(fd.get(key) ?? "").trim();
 const int = (fd: FormData, key: string) => {
@@ -1065,38 +1059,6 @@ function sendNotices(notices: Notice[], actorId: string) {
 // ---------------------------------------------------------------------------
 // Takımlar arası maç teklifi
 // ---------------------------------------------------------------------------
-
-/** Kendi takımımızdan (fromGroupId) karşı takıma (toGroupId) teklif gönderir */
-export async function createChallenge(fd: FormData) {
-  const { supabase, user } = await requireUser();
-  const from = str(fd, "fromGroupId");
-  const to = str(fd, "toGroupId");
-  const back = `/g/${to}/teklif`;
-  if (!from) fail(back, "Hangi takımınızla teklif göndereceğinizi seçin");
-  const when = str(fd, "playedAt");
-  if (!when) fail(back, "Maç zamanını seçin");
-  const size = sizeOf(fd);
-  if (!size) fail(`${back}?from=${from}`, "Kaç kişilik oynanacağını seçin (5-11)");
-
-  const { error } = await supabase.rpc("create_challenge", {
-    p_size: size,
-    p_from: from,
-    p_to: to,
-    p_at: parseLocalDateTime(when),
-    p_venue: str(fd, "venue").slice(0, 80),
-    p_fee: str(fd, "fee").slice(0, 120),
-    p_message: str(fd, "message").slice(0, 300),
-  });
-  if (error) fail(`${back}?from=${from}`, rpcMessage(error, "Teklif gönderilemedi"));
-  // Karşı takımın kaptan/yetkililerine "teklif geldi"
-  later(async () => {
-    const admin = createAdminClient();
-    const [ids, fromName] = await Promise.all([groupMemberIds(admin, to, { adminsOnly: true }), groupName(admin, from)]);
-    await notify(ids, "offer", text.challengeReceived(fromName, to, formatDate(parseLocalDateTime(when))), { excludeUserId: user.id });
-  });
-  revalidatePath(`/g/${from}/teklifler`);
-  redirect(`/g/${from}/teklifler?sent=1`);
-}
 
 export async function respondChallenge(fd: FormData) {
   const { supabase, user } = await requireUser();

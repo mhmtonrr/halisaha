@@ -241,14 +241,6 @@ export function parseLocalDateTime(value: string) {
   return new Date(`${value}:00+03:00`).toISOString();
 }
 
-/** Bugün (veya geçtiyse yarın) 21:00, Türkiye saati, datetime-local biçiminde */
-export function defaultKickoff() {
-  const nowTr = new Date(Date.now() + 3 * 3600 * 1000);
-  const d = new Date(Date.UTC(nowTr.getUTCFullYear(), nowTr.getUTCMonth(), nowTr.getUTCDate(), 21));
-  if (nowTr.getUTCHours() >= 21) d.setUTCDate(d.getUTCDate() + 1);
-  return d.toISOString().slice(0, 16);
-}
-
 /** ISO zamanı Türkiye saatiyle datetime-local biçimine çevirir */
 export function toLocalInput(iso: string) {
   return new Date(new Date(iso).getTime() + 3 * 3600 * 1000).toISOString().slice(0, 16);

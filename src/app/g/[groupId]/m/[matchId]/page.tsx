@@ -52,6 +52,8 @@ const OK_TEXT: Record<string, string> = {
   "tarih-reddedildi": "Tarih önerisi reddedildi.",
   ertelendi: "Maçın tarihi değişti; kadroya bildirim gitti.",
   kesin: "Maç kesinleşti; kadroya bildirim gitti.",
+  onay: "Kadron onaylandı; rakip de onaylayınca maç kesinleşir.",
+  "onay-geri": "Onayını geri aldın.",
   iptal: "Maç iptal edildi; herkese bildirim gitti.",
   "davet-iptal": "Davet geri çekildi.",
   "davet-onaylanmadi": "Davet onaylanmadı.",
@@ -160,6 +162,7 @@ interface Opponent {
     score_b: number | null;
     team_size: number | null;
     formation_a: string | null;
+    confirmed_at: string | null;
   };
   roster: RosterEntry[];
 }
@@ -173,7 +176,7 @@ async function loadOpponent(
 ): Promise<Opponent | null> {
   const { data: m } = await supabase
     .from("matches")
-    .select("id, group_id, status, score_a, score_b, team_size, formation_a")
+    .select("id, group_id, status, score_a, score_b, team_size, formation_a, confirmed_at")
     .eq("challenge_id", challengeId)
     .neq("id", myMatchId)
     .maybeSingle();
@@ -229,7 +232,7 @@ export default async function MatchPage({
   const [{ data: match }, roster, players, { data: canManage }, { data: myTeam }, { data: isAdmin }, { data: myEntry }, { data: isMember }] = await Promise.all([
     supabase
       .from("matches")
-      .select("id, played_at, venue, status, score_a, score_b, voting_deadline, kind, opponent_name, challenge_id, opponent_group_id, team_size, formation_a, formation_b, time_tbd, capacity, roster_count, reserve_count, open_to_members, cancel_reason, fee_per_person")
+      .select("id, played_at, venue, status, score_a, score_b, voting_deadline, kind, opponent_name, challenge_id, opponent_group_id, team_size, formation_a, formation_b, time_tbd, capacity, roster_count, reserve_count, open_to_members, cancel_reason, fee_per_person, confirmed_at")
       .eq("id", matchId)
       .single(),
     fetchRoster(supabase, matchId, groupId),
@@ -597,7 +600,7 @@ export default async function MatchPage({
       {kabul && (
         <p className="mb-4 flex items-start gap-1.5 rounded-xl bg-primary/10 p-3 text-sm text-primary">
           <Icon name="check_circle" fill className="mt-0.5 text-[18px]" />
-          <span>Teklif kabul edildi. Şimdi kadronu belirle. Rakip takım da kendi kadrosunu belirliyor.</span>
+          <span>Teklif kabul edildi. Şimdi kadronu belirle; iki takım da kadrosunu onaylayınca maç kesinleşir.</span>
         </p>
       )}
       {dizilis && (
@@ -608,9 +611,24 @@ export default async function MatchPage({
 
       {/* Planlanmış maçta iki takım sahnede; oylama ve sonuçta isimler maç özetinde */}
       {linked && opp && match.status === "gathering" && (
-        <SectionTitle action={<Badge tone="accent">Onaylandı</Badge>}>Rakip</SectionTitle>
+        <SectionTitle action={<Badge tone="accent">Teklif kabul edildi</Badge>}>Rakip</SectionTitle>
       )}
       {linked && opp && !planned && !summarized && <VersusCard mine={{ id: groupId, name: myTeamName, color: myTeamColor, logo: myTeam?.logo ?? null, roster }} opp={opp} />}
+      {/* Bağlı maç iki tarafın onayıyla kesinleşir */}
+      {linked && opp && match.status === "gathering" && (
+        <Card className="mb-4 space-y-2 text-sm">
+          {[
+            { name: myTeamName, ready: !!match.confirmed_at },
+            { name: opp.team.name, ready: !!opp.match.confirmed_at },
+          ].map((s, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <Icon name={s.ready ? "check_circle" : "hourglass_top"} fill={s.ready} className={cx("text-[18px]", s.ready ? "text-primary" : "text-amber-300")} />
+              <span className="min-w-0 flex-1 truncate">{s.name}</span>
+              <span className={cx("text-xs font-semibold", s.ready ? "text-primary" : "text-amber-300")}>{s.ready ? "Kadro onaylandı" : "Onay bekliyor"}</span>
+            </div>
+          ))}
+        </Card>
+      )}
 
       {summarized && (
         <MatchSummary sides={summarySides} rival={external && !opp ? { title: labels.B, score: match.score_b } : undefined} />
@@ -732,6 +750,7 @@ export default async function MatchPage({
           playedAt={match.played_at}
           timeTbd={match.time_tbd}
           linked={linked}
+          confirmed={{ mine: !!match.confirmed_at, rival: !!opp?.match.confirmed_at }}
           reschedule={
             rescheduleRow?.pending_at
               ? { challengeId: rescheduleRow.id, at: rescheduleRow.pending_at, tbd: !!rescheduleRow.pending_tbd, awaitingMe: rescheduleRow.awaiting_group_id === groupId }

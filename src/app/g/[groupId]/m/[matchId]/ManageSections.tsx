@@ -15,6 +15,7 @@ import {
   cancelInvite, decideApplication,
   rescheduleMatch,
   respondReschedule,
+  unconfirmMatch,
 } from "@/lib/match-manage-actions";
 
 // Yeniden tasarım 4b: maç ekranının yönetim bölümleri (sadece maçı yönetene; misafir işleri kaptan/yetkiliye)
@@ -251,6 +252,7 @@ export function ScheduleManage({
   playedAt,
   timeTbd,
   linked,
+  confirmed,
   reschedule,
   rosterCount,
   minPlayers,
@@ -261,6 +263,8 @@ export function ScheduleManage({
   playedAt: string;
   timeTbd: boolean;
   linked: boolean;
+  /** Bağlı maçta tarafların kadro onayı */
+  confirmed: { mine: boolean; rival: boolean };
   reschedule: { challengeId: string; at: string; tbd: boolean; awaitingMe: boolean } | null;
   rosterCount: number;
   minPlayers: number;
@@ -291,22 +295,45 @@ export function ScheduleManage({
         </Card>
       )}
 
-      {status === "gathering" && (
+      {status === "gathering" && linked && confirmed.mine && (
         <Card className="space-y-2">
-          <div className="font-semibold">Maçı kesinleştir</div>
+          <div className="font-semibold">Rakibin onayı bekleniyor</div>
+          <p className="text-xs text-muted">Kadronu onayladın. Rakip de onaylayınca maç kesinleşir ve iki kadroya bildirim gider.</p>
+          <form action={unconfirmMatch}>
+            <Hidden groupId={groupId} matchId={matchId} />
+            <SubmitButton variant="secondary" className="w-full" pendingLabel="Geri alınıyor…">
+              Onayı geri al
+            </SubmitButton>
+          </form>
+        </Card>
+      )}
+
+      {status === "gathering" && !(linked && confirmed.mine) && (
+        <Card className="space-y-2">
+          <div className="font-semibold">{linked ? "Kadro onayı" : "Maçı kesinleştir"}</div>
           <p className="text-xs text-muted">
-            {linked
-              ? "Rakiple anlaşılan saatle kesinleşir; saati değiştirmek için aşağıdan tarih öner."
-              : "Kadro eksik olsa da kesinleşir. Kadrodakilere 'Maç kesinleşti' bildirimi gider."}
+            {!linked
+              ? "Kadro eksik olsa da kesinleşir. Kadrodakilere 'Maç kesinleşti' bildirimi gider."
+              : timeTbd
+                ? "Saat belli değil: onaylamadan önce aşağıdan rakibe tarih ve saat öner."
+                : confirmed.rival
+                  ? "Rakip hazır; sen de onaylayınca maç kesinleşir. Saati değiştirmek için aşağıdan tarih öner."
+                  : "Maç iki takım da onaylayınca kesinleşir. Saati değiştirmek için aşağıdan tarih öner."}
           </p>
           <form action={confirmMatch} className="space-y-2">
             <Hidden groupId={groupId} matchId={matchId} />
             <div className="grid grid-cols-2 gap-2">
               <Input type="date" name="day" defaultValue={d.day} required aria-label="Maç günü" readOnly={linked} />
-              <Input type="time" name="time" defaultValue={timeTbd ? "" : d.time} required aria-label="Maç saati" readOnly={linked && !timeTbd} />
+              <Input type="time" name="time" defaultValue={timeTbd ? "" : d.time} required aria-label="Maç saati" readOnly={linked} />
             </div>
-            <SubmitButton className="w-full" disabled={rosterCount < minPlayers} pendingLabel="Kesinleşiyor…">
-              {rosterCount < minPlayers ? `Kesinleştirmek için en az ${minPlayers} kişi` : "Maçı kesinleştir"}
+            <SubmitButton className="w-full" disabled={rosterCount < minPlayers || (linked && timeTbd)} pendingLabel={linked ? "Onaylanıyor…" : "Kesinleşiyor…"}>
+              {rosterCount < minPlayers
+                ? `Kesinleştirmek için en az ${minPlayers} kişi`
+                : !linked
+                  ? "Maçı kesinleştir"
+                  : confirmed.rival
+                    ? "Onayla ve maçı kesinleştir"
+                    : "Kadromuz hazır"}
             </SubmitButton>
           </form>
         </Card>

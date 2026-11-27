@@ -227,6 +227,13 @@ export const text = {
     url: `/g/${groupId}/m/${matchId}`,
     tag: `match:${matchId}`,
   }),
+  /** Bağlı maçta rakip kadrosunu onayladı: diğer takımın yönetenlerine */
+  sideConfirmed: (fromTeam: string, groupId: string, matchId: string, when: string): Content => ({
+    title: "🤝 Rakip hazır, sıra sizde",
+    body: truncate(join(fromTeam, when, "siz de onaylayınca maç kesinleşir"), 300),
+    url: `/g/${groupId}/m/${matchId}`,
+    tag: `side-confirm:${matchId}`,
+  }),
   /** Maçın tarihi değişti: kadro ve yedeklere */
   matchRescheduled: (groupName: string, groupId: string, matchId: string, when: string, freeWithdraw: boolean): Content => ({
     title: "🗓️ Maç saati değişti",
