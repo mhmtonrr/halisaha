@@ -78,7 +78,7 @@ src/components/home/UpcomingMatches.tsx  Yaklaşan maç kartları (sürükle/kay
 src/components/home/  Ana sayfa parçaları: ActionItem (Yapılacaklar satırı, aciliyet rengi), HomeTabs (Takımlar/Gruplar hap sekmesi, istemci)
 src/lib/home.ts  Ana sayfa yardımcıları: seviye ilerlemesi, maça kalan gün, kadro kapasitesi (saf, testli)
 src/components/AutoOpenDetails.tsx  İlk yüklemede bir kez açılan açılır bölüm
-src/components/ProfileFields.tsx  Profil ve karşılama formlarının ortak alanları; RegionSelect.tsx bağlı il/ilçe seçimi
+src/app/hosgeldin/WelcomeWizard.tsx  İlk giriş sihirbazı (4 adım, canlı kart önizlemesi); components/RegionSelect.tsx bağlı il/ilçe seçimi
 src/components/TeamFields.tsx  Takım kurma ve takım/grup bilgileri düzenleme form alanları; TeamSizeSelect.tsx kaç kişilik (5v5…11v11); TeamBadge.tsx takım/grup logosu (görsel veya arma); Crest.tsx birleştirmeli arma SVG çizimi; LogoPicker.tsx logo seçimi (canlı önizleme); LogoUploader.tsx logo görseli kırpıp yükleme; ColorField.tsx renk seçici (açıklık alanı + ton şeridi + hex kodu; dönüşümler src/lib/color.ts)
 src/components/RosterTabs.tsx  Kadro / Misafirler sekmesi
 src/components/ShareLink.tsx  Sayfa linkini paylaş (paylaşım menüsü ya da panoya kopyala); profile/ShareButton.tsx profil için
@@ -99,7 +99,7 @@ scripts/perf/ttfb.mjs   Sayfa yanıt süresi ölçümü (geçici kullanıcıyla 
 scripts/recompute-all.ts Tüm ratingleri baştan hesaplar (vite-node ile, aşağıda)
 ```
 
-Sayfalar: `/login` (e-posta+şifre, Google, şifremi unuttum) · `/hosgeldin` (ilk giriş: ad, il/ilçe, mevki…)
+Sayfalar: `/login` (e-posta+şifre, Google, şifremi unuttum) · `/hosgeldin` (ilk giriş sihirbazı: ad/kart adı/doğum tarihi → il/ilçe → mevki ve fizik → kart fotoğrafı; sonda tek seferde kaydeder)
 · `/` ana sayfa · `/kesfet` takım sıralaması (`?sekme=oyuncu` oyuncu arama, `?sekme=mac` adam arayan maçlar) · `/profil` · `/takim-kur` · `/grup-kur` · `/sifre-yenile`
 · `/profil/ayarlar/{kisisel,futbolcu,iletisim,guvenlik,gorunurluk,engellenenler}` · `/sohbet` (genel sohbet: takım/grup/kişi; `/sohbet/[threadId]` birebir) · `/sosyal` (arkadaşlar ve istekler, takımlarım, gruplarım) · `/bildirimler` (bildirim kutusu, son 50) · `/privacy` (gizlilik) · `/yardim` · `/geri-bildirim` · `/yetenek` (yetenek değerlendirmesi) · `/oyuncu/[userId]` (başkasının profili) · `/katil` (davet koduyla takıma/gruba katıl; `?tur=takim|grup`) · `/join/[code]` · `/mac-ayarla` (Maç ayarla sihirbazı: `MatchSetupForm` + `components/RivalPicker`; `?grup=&rakip=&adim=`) · `/davet/m/[code]` (maç davet bağlantısı: özet, kadro, Başvur) · `/g/[id]` grup/takım · `/g/[id]/{players,kadro,sohbet,cagri/[pollId],m/[matchId],p/[playerId]}` (`matches/new` ve `cagri/yeni` → `/mac-ayarla`)
 · takımlara özel: `/g/[id]/teklif` (bu takıma maç teklif et) · `/g/[id]/teklifler` (gelen/giden/kabul edilen) · `/g/[id]/istatistik` (herkese açık)

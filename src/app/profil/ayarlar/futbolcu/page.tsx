@@ -3,14 +3,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { loadPerson } from "@/lib/profile-data";
 import { updateFootballer } from "@/lib/actions";
 import { SubScreen } from "@/components/settings/SubScreen";
-import { primaryButton } from "@/components/settings/blocks";
+import { chip, primaryButton, textareaClass } from "@/components/settings/blocks";
 import { CardPhotoUploader } from "@/components/CardPhotoUploader";
 import { Input, Label } from "@/components/ui";
 import { FOOT_NAME, POSITION_NAME, POSITIONS, type Foot } from "@/lib/data";
 import { cardSkills } from "@/lib/skills";
-
-const chip =
-  "flex min-h-11 cursor-pointer items-center justify-center rounded-xl bg-surface-high px-1 text-center text-[13px] leading-tight text-on-surface-variant has-checked:bg-primary has-checked:font-semibold has-checked:text-on-primary";
 
 export default async function FootballerPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string }> }) {
   const { error, saved } = await searchParams;
@@ -99,7 +96,7 @@ export default async function FootballerPage({ searchParams }: { searchParams: P
               rows={2}
               defaultValue={p.bio ?? ""}
               placeholder="Örn. Sol kanattan bindiren, şutu sert bir oyuncu"
-              className="w-full rounded-xl border border-line bg-pitch-950 p-3 text-sm outline-none placeholder:text-muted/60 focus:border-accent"
+              className={textareaClass}
             />
           </label>
         </div>

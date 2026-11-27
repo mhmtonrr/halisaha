@@ -60,48 +60,10 @@ const int = (fd: FormData, key: string) => {
 // Profil
 // ---------------------------------------------------------------------------
 
-function profileArgs(fd: FormData) {
-  const position = asPosition(str(fd, "position"));
-  const secondary = fd
-    .getAll("secondary")
-    .map(String)
-    .filter((p) => asPosition(p) && p !== position);
-  const foot = ["L", "R", "B"].includes(str(fd, "foot")) ? str(fd, "foot") : null;
-  const num = (key: string, lo: number, hi: number) => {
-    const n = Number(str(fd, key));
-    return str(fd, key) && Number.isInteger(n) && n >= lo && n <= hi ? n : null;
-  };
-  const city = str(fd, "city");
-  return {
-    p_display_name: str(fd, "name"),
-    p_position: position,
-    p_secondary: secondary,
-    p_foot: foot,
-    p_shirt: num("shirt", 1, 99),
-    p_bio: str(fd, "bio").slice(0, 160),
-    p_city: isProvince(city) ? city : "",
-    // Sadece seçilen ile ait bir ilçe kabul edilir
-    p_district: canonicalDistrict(city, str(fd, "district")) ?? "",
-    p_birth_year: num("birthYear", 1940, new Date().getFullYear() - 8),
-  };
-}
-
 /** Kartta görünen adı kaydeder (doğrulanmış değer); group_players kopyasını veritabanı tetikleyicisi eşitler */
 async function saveCardName(supabase: Awaited<ReturnType<typeof requireUser>>["supabase"], userId: string, value: string | null, back: string) {
   const { error } = await supabase.from("profiles").update({ card_name: value }).eq("id", userId);
   if (error) fail(back, "Kartta görünen ad kaydedilemedi");
-}
-
-export async function updateProfile(fd: FormData) {
-  const { supabase, user } = await requireUser();
-  const back = "/profil?sekme=ayarlar";
-  const card = validateCardName(str(fd, "cardName"));
-  if (!card.ok) fail(back, card.error);
-  const { error } = await supabase.rpc("update_my_profile", profileArgs(fd));
-  if (error) fail(back, error.message);
-  await saveCardName(supabase, user.id, card.ok ? card.value : null, back);
-  revalidatePath("/", "layout");
-  redirect("/profil?sekme=ayarlar&saved=1");
 }
 
 /**
@@ -177,6 +139,14 @@ async function currentProfileArgs(supabase: Awaited<ReturnType<typeof requireUse
 const PERSONAL = "/profil/ayarlar/kisisel";
 const FOOTBALLER = "/profil/ayarlar/futbolcu";
 
+/** Boş = girilmedi (geçerli); doluysa 1940 ile "en az 8 yaş" arasında gerçek bir tarih olmalı */
+function validBirthDate(birth: string) {
+  if (!birth) return true;
+  const d = new Date(`${birth}T00:00:00Z`);
+  const y = d.getUTCFullYear();
+  return /^d{4}-d{2}-d{2}$/.test(birth) && !Number.isNaN(d.getTime()) && y >= 1940 && y <= new Date().getFullYear() - 8;
+}
+
 /** Kişisel bilgiler: ad soyad, kartta görünen ad, il/ilçe, doğum tarihi (özel) */
 export async function updatePersonal(fd: FormData) {
   const { supabase, user } = await requireUser();
@@ -187,11 +157,7 @@ export async function updatePersonal(fd: FormData) {
   const city = str(fd, "city");
   if (!isProvince(city)) fail(PERSONAL, "İlini seç");
   const birth = str(fd, "birthDate");
-  if (birth) {
-    const d = new Date(`${birth}T00:00:00Z`);
-    const y = d.getUTCFullYear();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(birth) || Number.isNaN(d.getTime()) || y < 1940 || y > new Date().getFullYear() - 8) fail(PERSONAL, "Geçerli bir doğum tarihi gir");
-  }
+  if (!validBirthDate(birth)) fail(PERSONAL, "Geçerli bir doğum tarihi gir");
   const base = await currentProfileArgs(supabase, user.id, PERSONAL);
   const { error } = await supabase.rpc("update_my_profile", {
     ...base,
@@ -325,20 +291,53 @@ export async function sendFeedback(fd: FormData) {
   redirect(`${back}?saved=1`);
 }
 
-/** İlk girişteki karşılama formu */
-export async function completeOnboarding(fd: FormData) {
+/** İlk girişteki karşılama sihirbazı; başarılıysa yönlendirir, hata sihirbazda gösterilir */
+export async function completeOnboarding(fd: FormData): Promise<{ error: string }> {
   const { supabase, user } = await requireUser({ allowIncomplete: true });
   const rawNext = str(fd, "next");
   const next = rawNext.startsWith("/") && !rawNext.startsWith("//") && !rawNext.startsWith("/hosgeldin") ? rawNext : "/";
-  const args = profileArgs(fd);
-  const back = `/hosgeldin?next=${encodeURIComponent(next)}`;
-  if (!args.p_city) fail(back, "İlini seç");
-  if (!args.p_position) fail(back, "Ana mevkini seç");
+
+  const name = str(fd, "name");
+  if (name.length < 2) return { error: "Ad soyad en az 2 karakter olmalı" };
   const card = validateCardName(str(fd, "cardName"));
-  if (!card.ok) fail(back, card.error);
-  const { error } = await supabase.rpc("update_my_profile", { ...args, p_complete_onboarding: true });
-  if (error) fail(back, error.message);
-  await saveCardName(supabase, user.id, card.ok ? card.value : null, back);
+  if (!card.ok) return { error: card.error };
+  const birth = str(fd, "birthDate");
+  if (!validBirthDate(birth)) return { error: "Geçerli bir doğum tarihi gir" };
+  const city = str(fd, "city");
+  if (!isProvince(city)) return { error: "İlini seç" };
+  const position = asPosition(str(fd, "position"));
+  if (!position) return { error: "Ana mevkini seç" };
+  const secondary = fd.getAll("secondary").map(String).filter((p) => asPosition(p) && p !== position);
+  const foot = ["L", "R", "B"].includes(str(fd, "foot")) ? str(fd, "foot") : null;
+  const num = (key: string, lo: number, hi: number) => {
+    const n = Number(str(fd, key));
+    return str(fd, key) && Number.isInteger(n) && n >= lo && n <= hi ? n : null;
+  };
+
+  // Karşılama en son tamamlanır: önceki bir kayıt hata verirse kullanıcı sihirbazda kalıp tekrar dener
+  const { error: bodyErr } = await supabase
+    .from("profiles")
+    .update({ card_name: card.value, height_cm: num("height", 120, 230), weight_kg: num("weight", 30, 200) })
+    .eq("id", user.id);
+  if (bodyErr) return { error: "Bilgiler kaydedilemedi, tekrar dene" };
+  if (birth) {
+    const { error } = await supabase.from("profile_private").upsert({ user_id: user.id, birth_date: birth }, { onConflict: "user_id" });
+    if (error) return { error: "Doğum tarihi kaydedilemedi" };
+  }
+  const { error } = await supabase.rpc("update_my_profile", {
+    p_display_name: name,
+    p_position: position,
+    p_secondary: secondary,
+    p_foot: foot,
+    p_shirt: num("shirt", 1, 99),
+    p_bio: str(fd, "bio").slice(0, 160),
+    p_city: city,
+    // Sadece seçilen ile ait bir ilçe kabul edilir
+    p_district: canonicalDistrict(city, str(fd, "district")) ?? "",
+    p_birth_year: birth ? Number(birth.slice(0, 4)) : null,
+    p_complete_onboarding: true,
+  });
+  if (error) return { error: error.message };
   revalidatePath("/", "layout");
   redirect(next);
 }

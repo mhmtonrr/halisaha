@@ -76,6 +76,12 @@ export function SettingsLink({
   );
 }
 
+/** Seçim kutucuğu (içindeki radio/checkbox seçiliyse yeşil) ve çok satırlı metin alanı */
+export const chip =
+  "flex min-h-11 cursor-pointer items-center justify-center rounded-xl bg-surface-high px-1 text-center text-[13px] leading-tight text-on-surface-variant has-checked:bg-primary has-checked:font-semibold has-checked:text-on-primary";
+export const textareaClass =
+  "w-full rounded-xl border border-line bg-surface-low p-3 text-sm text-on-surface outline-none placeholder:text-muted/60 focus:border-primary";
+
 /** Alt ekran iskeleti için form alanı/kart stilleri */
 export const fieldCard = "rounded-xl bg-surface-container p-3.5 shadow-sm";
 export const primaryButton = "flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary font-display font-bold text-on-primary shadow-[0_0_16px_rgba(75,226,119,0.3)] active:scale-[0.99]";

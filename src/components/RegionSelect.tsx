@@ -5,7 +5,7 @@ import { PROVINCES, canonicalDistrict, districtsOf } from "@/lib/regions";
 import { Label, cx } from "./ui";
 
 const select =
-  "min-h-11 w-full rounded-xl border border-line bg-pitch-950 px-3 text-sm outline-none focus:border-accent disabled:opacity-50";
+  "min-h-11 w-full rounded-xl border border-line bg-surface-low px-3 text-sm text-on-surface outline-none focus:border-primary disabled:opacity-50";
 
 /**
  * Bağlı il/ilçe seçimi: il değişince ilçe listesi o ilin ilçeleriyle yenilenir.
