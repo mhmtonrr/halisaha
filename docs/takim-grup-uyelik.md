@@ -11,7 +11,7 @@
 | Maç türü | sadece **kendi aramızda** (internal, dengeli A/B) | sadece **rakibe karşı** (external; teklifle ortak maç veya uygulamada olmayan rakip) |
 | Zorunluluk | `enforce_match_kind` tetikleyicisi (0013, sadece yeni kayıtlar; eski maçlar kalır) + `createMatch` türü gruptan alır | aynı |
 | Rating etkisi | yarım (`CONFIG.CASUAL_IMPORTANCE = 0.5`) | rakip maçı tam; iç/antrenman maçı (eski veri) yarım |
-| Görünürlük | özel | herkese açık; teklif, istatistik, diziliş, çapraz oylama sadece takımda |
+| Görünürlük | özel | herkese açık (açık maçlar hariç, 0058); teklif, istatistik, diziliş, çapraz oylama sadece takımda |
 
 **Ödünç oyuncu (0015; 0035'ten beri ilan yerine çağrı)**: takım maçına topluluktan veya dışarıdan gelen oyuncu takıma `group_players.is_loan = true` olarak yazılır
 (`ensure_match_player`: kesinleştirmede "rakibe karşı" seçilince veya "adam ara" başvurusu kabul edilince; ayrılmış eski üye de ödünç olarak yeniden açılır) ve o maçın
