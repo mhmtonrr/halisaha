@@ -12,6 +12,7 @@ src/lib/formations.ts    Sabit dizilişler (5-11 kişilik, slot koordinatları),
 src/lib/call-rules.ts    Birleşik çağrı: varsayılan seçim, yedek/başvuru sırası, karar zamanı, gün/saat metinleri (saf, testli)
 src/lib/match-actions.ts Yeni maç yapısı Server Action'ları: Maç ayarla (setupMatch), Geliyorum/Gelemem (respondMatch) + bildirimler
 src/lib/match-manage-actions.ts  Maç ekranı yönetimi (4b): kadro/yedek/başvuru, ilan, bağlantı kodu, rakip/teklif/karşı teklif, kesinleştir/ertele/iptal + bildirimler
+src/app/g/[groupId]/m/[matchId]/DropRival.tsx  Kesinleşmemiş bağlı maçta "Rakibi bırak"
 src/app/g/[groupId]/m/[matchId]/ManageSections.tsx  Maç ekranı yönetim bölümleri (başvurular, adam ara, kesinleştir/ertele/iptal) + CounterForm
 src/app/g/[groupId]/m/[matchId]/LineupStage.tsx  Diziliş sahnesi (sürükle-bırak, kulübe, karşılaşma görünümü); StageField.tsx perspektifli saha zemini
 src/app/g/[groupId]/m/[matchId]/MatchSummary.tsx  Maç özeti (oylamada ve sonrasında): skor + gol/asist/kurtarış

@@ -1027,7 +1027,17 @@ async function prepareCancelNotices(challengeId: string): Promise<Notice[]> {
       const ids = await groupMemberIds(admin, c.to_group_id as string, { adminsOnly: true });
       return [{ ids, type: "offer", content: text.challengeWithdrawn(await groupName(admin, c.from_group_id as string), c.to_group_id as string) }];
     }
-    const { data: ms } = await admin.from("matches").select("id, group_id, played_at, opponent_name").eq("challenge_id", challengeId);
+    const { data: ms } = await admin.from("matches").select("id, group_id, status, played_at, opponent_name").eq("challenge_id", challengeId);
+    // Toplanan maçta iptal değil, rakibi bırakma: yetkililere haber
+    if ((ms ?? []).some((m) => m.status === "gathering")) {
+      return await Promise.all(
+        (ms ?? []).map(async (m) => {
+          const otherGroup = (m.group_id === c.from_group_id ? c.to_group_id : c.from_group_id) as string;
+          const [admins, name] = await Promise.all([groupMemberIds(admin, m.group_id as string, { adminsOnly: true }), groupName(admin, otherGroup)]);
+          return { ids: admins, type: "match" as const, content: text.rivalDropped(name, m.group_id as string, m.id as string) };
+        }),
+      );
+    }
     return await Promise.all(
       (ms ?? []).map(async (m) => {
         const [roster, entries, admins, name] = await Promise.all([
@@ -1065,11 +1075,35 @@ export async function respondChallenge(fd: FormData) {
   const groupId = str(fd, "groupId");
   const back = `/g/${groupId}/teklifler`;
   const accept = str(fd, "answer") === "accept";
+  // Kabulde aynı maçın diğer bekleyen teklifleri geri çekilir: haber verilecek takımlar önceden okunur
+  let others: { to_group_id: string; from_group_id: string }[] = [];
+  if (accept) {
+    const admin = createAdminClient();
+    const { data: c } = await admin.from("match_challenges").select("from_match_id").eq("id", str(fd, "challengeId")).maybeSingle();
+    if (c?.from_match_id) {
+      const { data } = await admin
+        .from("match_challenges")
+        .select("to_group_id, from_group_id")
+        .eq("from_match_id", c.from_match_id)
+        .eq("status", "pending")
+        .neq("id", str(fd, "challengeId"));
+      others = (data ?? []) as typeof others;
+    }
+  }
   const { data: matchId, error } = await supabase.rpc("respond_challenge", {
     p_challenge_id: str(fd, "challengeId"),
     p_accept: accept,
   });
   if (error) fail(back, rpcMessage(error, "Teklif yanıtlanamadı"));
+  if (others.length) {
+    later(async () => {
+      const admin = createAdminClient();
+      for (const o of others) {
+        const ids = await groupMemberIds(admin, o.to_group_id, { adminsOnly: true });
+        await notify(ids, "offer", text.challengeWithdrawn(await groupName(admin, o.from_group_id), o.to_group_id), { excludeUserId: user.id });
+      }
+    });
+  }
   // Teklifi gönderen takımın kaptan/yetkililerine yanıt
   later(async () => {
     const admin = createAdminClient();

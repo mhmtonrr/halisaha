@@ -375,7 +375,7 @@ export function ScheduleManage({
           <Hidden groupId={groupId} matchId={matchId} />
           <Input name="reason" maxLength={200} placeholder="Sebep (isteğe bağlı): örn. saha kapalı" aria-label="İptal sebebi" />
           <p className="text-xs text-muted">
-            Maç silinmez, &quot;İptal edildi&quot; olarak kalır. Kadro, yedek ve davetlilere bildirim gider{linked ? "; rakip takımın maçı da iptal olur" : ""}.
+            Maç silinmez, &quot;İptal edildi&quot; olarak kalır. Kadro, yedek ve davetlilere bildirim gider{!linked ? "" : status === "planned" ? "; rakip takımın maçı da iptal olur" : "; rakibin maçı iptal olmaz, rakipsiz toplanmaya devam eder"}.
           </p>
           <SubmitButton variant="secondary" className="w-full border-red-500/40 text-red-300" pendingLabel="İptal ediliyor…">
             İptal et

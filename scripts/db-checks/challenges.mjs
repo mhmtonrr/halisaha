@@ -126,8 +126,53 @@ ok("gönderen bekleyen teklifi geri çekti", (await q(`select status from match_
 const ch4 = (await q(`select create_challenge($1,$2,${future},null,null,null) id`, [A, B]))[0].id;
 await as(4); await db.query(`select respond_challenge($1,true)`, [ch4]);
 await as(1); await db.query(`select cancel_challenge($1)`, [ch4]);
-ok("kabul edilmiş teklif iptali iki maçı da silmeden iptal eder (0059)", (await q(`select count(*)::int c from matches where challenge_id=$1 and status='cancelled'`, [ch4]))[0].c === 2
-  && (await q(`select status from match_challenges where id=$1`, [ch4]))[0].status === "cancelled");
+await db.exec("reset role");
+ok("toplanan maçta iptal rakibi bırakır, maçlar kalır (0062)", (await q(`select count(*)::int c from matches where challenge_id=$1`, [ch4]))[0].c === 0);
+await as(1);
+const ch5 = (await q(`select create_challenge($1,$2,${future},null,null,null) id`, [A, B]))[0].id;
+await as(4); await db.query(`select respond_challenge($1,true)`, [ch5]);
+await db.exec(`reset role; update matches set status='planned' where challenge_id='${ch5}'`);
+await as(1); await db.query(`select cancel_challenge($1)`, [ch5]);
+ok("kesin maçta teklif iptali iki maçı da silmeden iptal eder (0059)", (await q(`select count(*)::int c from matches where challenge_id=$1 and status='cancelled'`, [ch5]))[0].c === 2
+  && (await q(`select status from match_challenges where id=$1`, [ch5]))[0].status === "cancelled");
+
+// --- birden fazla teklif, rakibi bırakma, yalnızca kendi maçını iptal (0062)
+await db.exec("reset role");
+const mkTeam = async (n, name) => {
+  await as(n);
+  return (await q(`insert into groups (name, created_by, kind, city) values ($1,$2,'team','İstanbul') returning id`, [name, U(n)]))[0].id;
+};
+const T1 = await mkTeam(6, "Çoklu 1"), T2 = await mkTeam(6, "Çoklu 2"), T3 = await mkTeam(6, "Çoklu 3");
+await as(1);
+const M = (await q(`select create_match_v2($1, current_date + 6, time '20:00', 7::smallint, 'external', null, null, null, null, true) id`, [A]))[0].id;
+const offer = async (to) => (await q(`select create_challenge_v2($1,$2) id`, [M, to]))[0].id;
+const o1 = await offer(B);
+const o2 = await offer(T1);
+await offer(T2);
+ok("aynı maçtan aynı takıma ikinci teklif olmaz", await fails(`select create_challenge_v2($1,$2)`, [M, B]));
+ok("aynı anda 4. takıma teklif olmaz", await fails(`select create_challenge_v2($1,$2)`, [M, T3]));
+ok("bekleyen rakipler tek satırda", (await q(`select name from match_pending_rivals(array[$1::uuid])`, [M]))[0].name.endsWith("+2"));
+await as(6); await db.query(`select respond_challenge($1,true)`, [o2]);
+await db.exec("reset role");
+ok("ilk kabul eden rakip olur, diğer teklifler geri çekilir", (await q(`select count(*)::int c from match_challenges where from_match_id=$1 and status='cancelled'`, [M]))[0].c === 2);
+await as(4);
+ok("geri çekilen teklif kabul edilemez", await fails(`select respond_challenge($1,true)`, [o1]));
+await as(2);
+ok("sıradan üye rakibi bırakamaz", await fails(`select drop_rival($1)`, [M]));
+await as(1); await db.query(`select drop_rival($1)`, [M]);
+await db.exec("reset role");
+const after = (await q(`select status::text s, challenge_id, opponent_name from matches where id=$1`, [M]))[0];
+ok("rakip bırakılınca maç rakipsiz toplanmaya döner", after.s === "gathering" && after.challenge_id === null && after.opponent_name === null);
+await as(1);
+const o3 = await offer(T1);
+await as(6); await db.query(`select respond_challenge($1,true)`, [o3]);
+await db.exec("reset role");
+const R3 = (await q(`select id from matches where challenge_id=$1 and group_id=$2`, [o3, T1]))[0].id;
+await as(1); await db.query(`select cancel_match($1)`, [M]);
+await db.exec("reset role");
+ok("toplanan bağlı maçı iptal yalnızca kendi maçını iptal eder", (await q(`select status::text s from matches where id=$1`, [M]))[0].s === "cancelled"
+  && (await q(`select status::text s, challenge_id from matches where id=$1`, [R3]))[0].s === "gathering");
+await as(1);
 
 // --- spam sınırı
 for (let i = 0; i < 3; i++) await db.query(`select create_challenge($1,$2,${future},null,null,null)`, [A, B]);

@@ -195,7 +195,7 @@ function ChallengeCard({
           <input type="hidden" name="groupId" value={groupId} />
           <input type="hidden" name="challengeId" value={c.id} />
           <button className="text-xs text-muted hover:text-red-300">
-            {c.status === "accepted" ? "Maçı iptal et (iki takımda da iptal olur)" : "Teklifi geri çek"}
+            {c.status !== "accepted" ? "Teklifi geri çek" : c.matchStatus === "gathering" ? "Rakibi bırak (iki takımın maçı da kalır)" : "Maçı iptal et (iki takımda da iptal olur)"}
           </button>
         </form>
       )}

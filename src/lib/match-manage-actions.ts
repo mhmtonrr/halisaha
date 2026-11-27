@@ -316,7 +316,7 @@ export async function withdrawChallenge(fd: FormData) {
   const { supabase, user } = await requireUser();
   const { groupId, matchId, back } = ids(fd);
   const challengeId = str(fd, "challengeId");
-  // cancel_challenge kabul edilmiş teklifte maçları siler: bu arada kabul edildiyse dokunma
+  // cancel_challenge kabul edilmiş teklifte rakibi bırakır/maçı iptal eder: bu arada kabul edildiyse dokunma
   const { data: c } = await supabase.from("match_challenges").select("status, to_group_id").eq("id", challengeId).eq("from_match_id", matchId).maybeSingle();
   if (c?.status !== "pending") fail(back, "Bu teklif artık bekleyen değil");
   const { error } = await supabase.rpc("cancel_challenge", { p_challenge_id: challengeId });
@@ -478,17 +478,46 @@ export async function rescheduleMatch(fd: FormData) {
   done(back, "ertelendi");
 }
 
-/** İptal (silinmez): kadro, yedek, davetli ve başvuranlara; bağlı maçta iki takıma */
+/** Bağlı maçın karşı tarafındaki maç (bağ koparılmadan önce okunur) */
+async function otherSide(admin: Admin, challengeId: string, matchId: string) {
+  const { data } = await admin.from("matches").select("id, group_id, created_by").eq("challenge_id", challengeId).neq("id", matchId).maybeSingle();
+  return data as { id: string; group_id: string; created_by: string | null } | null;
+}
+async function notifyRivalDropped(other: { id: string; group_id: string; created_by: string | null }, fromGroupId: string, actor: string) {
+  const admin = createAdminClient();
+  const users = await managerIds(admin, other.group_id, other.created_by);
+  await notify(users, "match", text.rivalDropped(await groupName(admin, fromGroupId), other.group_id, other.id), { excludeUserId: actor });
+}
+
+/** Kesinleşmeden rakibi bırak: iki maç da kadrosuyla "rakipsiz toplanıyor" kalır */
+export async function dropRival(fd: FormData) {
+  const { supabase, user } = await requireUser();
+  const { groupId, matchId, back } = ids(fd);
+  const admin = createAdminClient();
+  const before = await matchInfo(admin, matchId);
+  const other = before?.challenge_id ? await otherSide(admin, before.challenge_id, matchId) : null;
+  const { error } = await supabase.rpc("drop_rival", { p_match: matchId });
+  if (error) fail(back, rpcMessage(error, "Rakip bırakılamadı"));
+  if (other) later(() => notifyRivalDropped(other, groupId, user.id));
+  revalidatePath(`/g/${groupId}`);
+  revalidatePath("/");
+  done(back, "rakip-birakildi");
+}
+
+/** İptal (silinmez): kadro, yedek, davetli ve başvuranlara; kesinleşmiş bağlı maçta iki takıma */
 export async function cancelMatch(fd: FormData) {
   const { supabase, user } = await requireUser();
   const { groupId, matchId, back } = ids(fd);
   const admin = createAdminClient();
   const before = await matchInfo(admin, matchId);
+  // Toplanan bağlı maçta yalnızca bizimki iptal olur; rakip eşleşmeden ayrılmış sayılır
+  const other = before?.challenge_id && before.status === "gathering" ? await otherSide(admin, before.challenge_id, matchId) : null;
   const { error } = await supabase.rpc("cancel_match", { p_match: matchId, p_reason: str(fd, "reason").slice(0, 200) || null });
   if (error) fail(back, rpcMessage(error, "Maç iptal edilemedi"));
+  if (other) later(() => notifyRivalDropped(other, groupId, user.id));
   later(async () => {
     if (!before) return;
-    const { data: all } = before.challenge_id
+    const { data: all } = before.challenge_id && !other
       ? await admin.from("matches").select("id, group_id, opponent_name").eq("challenge_id", before.challenge_id)
       : { data: [{ id: before.id, group_id: before.group_id, opponent_name: before.opponent_name }] };
     for (const x of all ?? []) {

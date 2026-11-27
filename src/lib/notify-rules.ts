@@ -351,6 +351,13 @@ export const text = {
     url: `/g/${groupId}/m/${matchId}`,
     tag: `score:${matchId}`,
   }),
+  /** Kesinleşmeden rakip bağı koptu: maç ve kadro durur */
+  rivalDropped: (fromTeam: string, groupId: string, matchId: string): Content => ({
+    title: "Rakip eşleşmeden ayrıldı",
+    body: truncate(join(fromTeam, "maçın ve kadron duruyor; yeni rakip seçebilirsin"), 300),
+    url: `/g/${groupId}/m/${matchId}`,
+    tag: `rival-drop:${matchId}`,
+  }),
   /** Bekleyen teklif gönderen takımca geri çekildi */
   challengeWithdrawn: (fromTeam: string, toGroupId: string): Content => ({
     title: "Maç teklifi geri çekildi",

@@ -31,6 +31,7 @@ import { VoteForm, VoteHeader } from "./VoteForm";
 import { MatchSummary, type SummarySide } from "./MatchSummary";
 import { ResultsView } from "./ResultsView";
 import { WithdrawalSection, type WithdrawalRow } from "./WithdrawalSection";
+import { DropRival } from "./DropRival";
 
 type Team = "A" | "B";
 
@@ -47,7 +48,8 @@ const OK_TEXT: Record<string, string> = {
   kod: "Bağlantı yenilendi; eski bağlantı artık çalışmaz.",
   rakip: "Rakip kaydedildi.",
   teklif: "Teklif gönderildi; rakibin yanıtı bekleniyor.",
-  "teklif-geri": "Teklif geri çekildi; yeni rakip seçebilirsin.",
+  "teklif-geri": "Teklif geri çekildi.",
+  "rakip-birakildi": "Rakip bırakıldı; kadron duruyor, yeni rakip seçebilirsin.",
   "tarih-onerildi": "Tarih önerisi rakibe gitti.",
   "tarih-reddedildi": "Tarih önerisi reddedildi.",
   ertelendi: "Maçın tarihi değişti; kadroya bildirim gitti.",
@@ -251,7 +253,7 @@ export default async function MatchPage({
   const open = match.status === "gathering" || planned;
   const manage = open && !!canManage;
   // Yönetim verisi (yeniden tasarım 4b): kayıtlar, ilanlar, bağlantı kodu, hedef gruplar, rakip teklifi
-  const [entryRows, listingRows, code, targetRows, lastChallenge, applyListing] = await Promise.all([
+  const [entryRows, listingRows, code, targetRows, offerRows, applyListing] = await Promise.all([
     open
       ? supabase.from("match_entries").select("user_id, player_id, status, source, position, note, queued_at, created_at, profiles!match_entries_user_id_fkey(display_name), group_players(display_name, position)").eq("match_id", matchId).then((r) => r.data ?? [])
       : Promise.resolve([]),
@@ -262,18 +264,18 @@ export default async function MatchPage({
     manage
       ? supabase.from("group_players").select("groups(id, name)").eq("user_id", user.id).is("left_at", null).eq("is_loan", false).neq("group_id", groupId).then((r) => r.data ?? [])
       : Promise.resolve([]),
-    // Bu maçtan giden son teklif (RLS: iki takımın üyeleri okur); geri çekilen sayılmaz
+    // Bu maçtan giden teklifler, en yeni önce (RLS: iki takımın üyeleri okur); geri çekilen sayılmaz
     open && match.kind === "external" && !match.challenge_id
-      ? supabase.from("match_challenges").select("id, status, to_group_id, awaiting_group_id, proposed_at, proposed_tbd").eq("from_match_id", matchId).in("status", ["pending", "declined"]).order("created_at", { ascending: false }).limit(1).maybeSingle().then((r) => r.data)
-      : Promise.resolve(null),
+      ? supabase.from("match_challenges").select("id, status, to_group_id, awaiting_group_id, proposed_at, proposed_tbd").eq("from_match_id", matchId).in("status", ["pending", "declined"]).order("created_at", { ascending: false }).limit(20).then((r) => r.data ?? [])
+      : Promise.resolve([]),
     // Üye olmayan, kaydı olmayan ama maçı bir ilandan görüyor: "Başvur"
     open && !isMember && (!myEntry || myEntry.status === "left")
       ? supabase.from("match_listings").select("id").eq("match_id", matchId).eq("status", "active").limit(1).maybeSingle().then((r) => r.data?.id as string | undefined)
       : Promise.resolve(undefined),
   ]);
-  const challengeTeam = lastChallenge
-    ? (await supabase.from("groups").select("id, name, color, logo").eq("id", lastChallenge.to_group_id).maybeSingle()).data
-    : null;
+  const offerTeams = offerRows.length
+    ? ((await supabase.from("groups").select("id, name, color, logo").in("id", offerRows.map((o) => o.to_group_id))).data ?? [])
+    : [];
   const { data: rescheduleRow } =
     open && canManage && match.challenge_id
       ? await supabase.from("match_challenges").select("id, pending_at, pending_tbd, awaiting_group_id").eq("id", match.challenge_id).maybeSingle()
@@ -331,18 +333,20 @@ export default async function MatchPage({
       ? (((await supabase.rpc("match_pending_rivals", { p_ids: [matchId] })).data ?? []) as { name: string }[])[0]?.name ?? null
       : null;
 
-  const rivalOffer: RivalOffer | null = lastChallenge
-    ? {
-        id: lastChallenge.id,
-        status: lastChallenge.status as RivalOffer["status"],
-        team: challengeTeam ?? { id: null, name: "Rakip", color: null, logo: null },
-        at: lastChallenge.proposed_at,
-        tbd: !!lastChallenge.proposed_tbd,
-        ours: lastChallenge.awaiting_group_id === groupId,
-      }
-    : pendingRival
-      ? { id: "", status: "pending", team: { id: null, name: pendingRival, color: null, logo: null }, at: null, tbd: false, ours: false }
-      : null;
+  // Takım başına en yeni teklif: bekleyenler ve (bekleyeni olmayan takımların) reddettikleri
+  const latest = offerRows.filter((o, i) => offerRows.findIndex((x) => x.to_group_id === o.to_group_id) === i);
+  const rivalOffers: RivalOffer[] = latest.map((o) => ({
+    id: o.id,
+    status: o.status as RivalOffer["status"],
+    team: offerTeams.find((t) => t.id === o.to_group_id) ?? { id: null, name: "Rakip", color: null, logo: null },
+    at: o.proposed_at,
+    tbd: !!o.proposed_tbd,
+    ours: o.awaiting_group_id === groupId,
+  }));
+  // Teklifi okuyamayan kişide bekleyen rakibin yalnızca adı vardır
+  if (!rivalOffers.length && pendingRival) {
+    rivalOffers.push({ id: "", status: "pending", team: { id: null, name: pendingRival, color: null, logo: null }, at: null, tbd: false, ours: false });
+  }
   // Toplanırken rakibin her durumu; kesin maçta yalnızca rakip henüz yoksa
   const showRival = open && external && !linked && (match.status === "gathering" || !match.opponent_name);
 
@@ -592,7 +596,7 @@ export default async function MatchPage({
           matchId={matchId}
           homeCity={myTeam?.city ?? ""}
           opponentName={match.opponent_name}
-          offer={rivalOffer}
+          offers={rivalOffers}
           canManage={manage}
           canOffer={manage && !!isAdmin}
         />
@@ -621,6 +625,7 @@ export default async function MatchPage({
           ready={match.status === "gathering" ? [!!match.confirmed_at, !!opp.match.confirmed_at] : undefined}
         />
       )}
+      {linked && opp && match.status === "gathering" && manage && isAdmin && <DropRival groupId={groupId} matchId={matchId} rivalName={opp.team.name} />}
 
       {summarized && (
         <MatchSummary sides={summarySides} rival={external && !opp ? { title: labels.B, score: match.score_b } : undefined} />

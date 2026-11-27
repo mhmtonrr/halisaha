@@ -181,13 +181,11 @@ try {
   await go(PO, `${BASE}/g/${T}/m/${M3}`);
   check("toplanma ekranında 'Rakip · Teklif kabul edildi' ve iki tarafın onayı bekliyor", (await PO.getByText("Teklif kabul edildi", { exact: true }).count()) === 1 && (await PO.getByText("Onay bekliyor", { exact: true }).count()) === 2);
 
-  // --- Teklifler sayfasından iptal: maçlar silinmez (0059)
-  await go(PO, `${BASE}/g/${T}/teklifler`);
-  await PO.click('button:has-text("Maçı iptal et")');
-  const linkedStatuses = async () => (await admin.from("matches").select("status").eq("challenge_id", lm.challenge_id)).data.map((x) => x.status);
-  await until(async () => (await linkedStatuses()).every((s) => s === "cancelled"));
-  const ls = await linkedStatuses();
-  check("teklifler sayfasından iptal: iki maç da duruyor ve iptal", ls.length === 2 && ls.every((s) => s === "cancelled"));
+  // --- Rakibi bırak (0062): iki maç da rakipsiz toplanmaya döner
+  await PO.click("summary:has-text('Rakibi bırak')");
+  await PO.click('button:text-is("Evet, rakibi bırak")'); await PO.waitForURL(/ok=rakip-birakildi/); await PO.waitForLoadState("networkidle");
+  const both = (await admin.from("matches").select("status, challenge_id, opponent_name").in("group_id", [T, RT]).eq("played_at", (await admin.from("matches").select("played_at").eq("id", M3).single()).data.played_at)).data;
+  check("rakip bırakıldı: iki maç da toplanıyor ve rakipsiz", both.length === 2 && both.every((m) => m.status === "gathering" && !m.challenge_id && !m.opponent_name));
 
   // --- Red → yeni teklif → geri çekme
   const M4 = await mk(5);

@@ -7,6 +7,9 @@ import { matchWhen } from "@/lib/match-rules";
 import { withdrawChallenge } from "@/lib/match-manage-actions";
 import { RivalChooser } from "./RivalChooser";
 
+/** Bir maçtan aynı anda gönderilebilen teklif sayısı (create_challenge_v2 ile aynı) */
+const MAX_OFFERS = 3;
+
 export interface RivalOffer {
   id: string;
   status: "pending" | "declined";
@@ -19,15 +22,15 @@ export interface RivalOffer {
 }
 
 /**
- * Açık maçta rakibin durumu: seçilmedi / teklif onay bekliyor / reddedildi / uygulama dışı takım.
- * Rakip onaylayınca (bağlı maç) bu bölüm yerine karşılaşma kartı görünür.
+ * Açık maçta rakibin durumu: seçilmedi / teklifler onay bekliyor (aynı anda en fazla 3) / reddedildi / uygulama dışı takım.
+ * Bir rakip kabul edince (bağlı maç) bu bölüm yerine karşılaşma kartı görünür.
  */
 export function RivalSection({
   groupId,
   matchId,
   homeCity,
   opponentName,
-  offer,
+  offers,
   canManage,
   canOffer,
 }: {
@@ -35,48 +38,71 @@ export function RivalSection({
   matchId: string;
   homeCity: string;
   opponentName: string | null;
-  offer: RivalOffer | null;
+  offers: RivalOffer[];
   canManage: boolean;
   /** Kaptan/yetkili: teklifi gönderir, yanıtlar ve geri çeker */
   canOffer: boolean;
 }) {
-  const pending = offer?.status === "pending" ? offer : null;
-  const declined = !opponentName && offer?.status === "declined" ? offer : null;
+  const pending = offers.filter((o) => o.status === "pending");
+  const declined = opponentName ? [] : offers.filter((o) => o.status === "declined");
   const chooser = <RivalChooser groupId={groupId} matchId={matchId} opponentName={opponentName} homeCity={homeCity} canOffer={canOffer} />;
 
   return (
     <section id="rakip" className="mb-4 space-y-2">
-      <SectionTitle>{canManage && !pending && !opponentName ? "Rakip seç" : "Rakip"}</SectionTitle>
+      <SectionTitle>{canManage && !pending.length && !opponentName ? "Rakip seç" : "Rakip"}</SectionTitle>
 
-      {pending ? (
-        <Card className="space-y-3 border-amber-400/40">
-          <TeamRow team={pending.team} sub={pending.at ? `Teklif: ${matchWhen(pending.at, pending.tbd)}` : "Teklif gönderildi"}>
-            <Badge tone="warn">Onay bekliyor</Badge>
+      {declined.map((o) => (
+        <Card key={o.id} className="border-red-400/40">
+          <TeamRow team={o.team} sub={o.ours ? "Karşı teklifi reddettin" : canManage ? "Teklifini reddetti" : "Teklifi reddetti"}>
+            <Badge>Reddedildi</Badge>
           </TeamRow>
-          {canOffer && pending.ours ? (
-            <Link href={`/g/${groupId}/teklifler`} className="flex min-h-11 items-center gap-2 rounded-xl bg-amber-400/10 px-3 text-sm">
-              <span className="min-w-0 flex-1">Karşı teklif geldi; yanıtın bekleniyor.</span>
-              <span className="shrink-0 font-semibold text-primary">Yanıtla</span>
-              <Icon name="chevron_right" className="text-[20px] text-muted" />
-            </Link>
-          ) : (
-            canManage && (
-              <p className="text-xs text-muted">
-                {canOffer ? "Yanıt gelince haber veririz. Başka takım aramak için teklifi geri çek." : "Teklifi takımın kaptanı veya yetkilisi yönetir."}
-              </p>
-            )
-          )}
-          {canOffer && (
-            <form action={withdrawChallenge}>
-              <input type="hidden" name="groupId" value={groupId} />
-              <input type="hidden" name="matchId" value={matchId} />
-              <input type="hidden" name="challengeId" value={pending.id} />
-              <SubmitButton variant="secondary" className="w-full" pendingLabel="Geri çekiliyor…">
-                Teklifi geri çek
-              </SubmitButton>
-            </form>
-          )}
         </Card>
+      ))}
+
+      {pending.length ? (
+        <>
+          {pending.map((o) => (
+            <Card key={o.id} className="space-y-3 border-amber-400/40">
+              <TeamRow team={o.team} sub={o.at ? `Teklif: ${matchWhen(o.at, o.tbd)}` : "Teklif gönderildi"}>
+                <Badge tone="warn">Onay bekliyor</Badge>
+              </TeamRow>
+              {canOffer && o.ours && (
+                <Link href={`/g/${groupId}/teklifler`} className="flex min-h-11 items-center gap-2 rounded-xl bg-amber-400/10 px-3 text-sm">
+                  <span className="min-w-0 flex-1">Karşı teklif geldi; yanıtın bekleniyor.</span>
+                  <span className="shrink-0 font-semibold text-primary">Yanıtla</span>
+                  <Icon name="chevron_right" className="text-[20px] text-muted" />
+                </Link>
+              )}
+              {canOffer && (
+                <form action={withdrawChallenge}>
+                  <input type="hidden" name="groupId" value={groupId} />
+                  <input type="hidden" name="matchId" value={matchId} />
+                  <input type="hidden" name="challengeId" value={o.id} />
+                  <SubmitButton variant="secondary" className="w-full" pendingLabel="Geri çekiliyor…">
+                    Teklifi geri çek
+                  </SubmitButton>
+                </form>
+              )}
+            </Card>
+          ))}
+          {canManage && !canOffer && <p className="px-1 text-xs text-muted">Teklifi takımın kaptanı veya yetkilisi yönetir.</p>}
+          {canOffer && (
+            <>
+              <p className="px-1 text-xs text-muted">
+                İlk kabul eden rakibin olur, diğer teklifler geri çekilir.{pending.length >= MAX_OFFERS ? " Yeni teklif için birini geri çek." : ""}
+              </p>
+              {pending.length < MAX_OFFERS && (
+                <details className="rounded-2xl border border-line bg-surface-container px-3">
+                  <summary className="flex min-h-12 cursor-pointer items-center gap-2 text-sm font-semibold text-primary">
+                    <Icon name="add" className="text-[20px]" />
+                    Başka takıma da teklif gönder
+                  </summary>
+                  <div className="pb-3">{chooser}</div>
+                </details>
+              )}
+            </>
+          )}
+        </>
       ) : opponentName ? (
         <Card className="space-y-3">
           <TeamRow team={{ id: null, name: opponentName, color: null, logo: null }} sub="Uygulamada olmayan takım" />
@@ -92,16 +118,6 @@ export function RivalSection({
         </Card>
       ) : (
         <>
-          {declined && (
-            <Card className="border-red-400/40">
-              <TeamRow
-                team={declined.team}
-                sub={declined.ours ? "Karşı teklifi reddettin" : canManage ? "Teklifini reddetti; yeni rakip seçebilirsin" : "Teklifi reddetti"}
-              >
-                <Badge>Reddedildi</Badge>
-              </TeamRow>
-            </Card>
-          )}
           <Card className="space-y-3">
             {canManage ? (
               <>
