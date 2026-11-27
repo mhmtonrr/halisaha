@@ -49,7 +49,7 @@ try {
   await settle(P, BASE + "/");
 
   // Sunucu doğrulaması: tarayıcı atlatılıp İstanbul'a Çankaya gönderilirse kabul edilmemeli (il/ilçe Ayarlar > Kişisel bilgiler'de, 0028)
-  await P.goto(BASE + "/profil/ayarlar/kisisel");
+  await P.goto(BASE + "/profil/ayarlar/kisisel", { waitUntil: "networkidle" }); // canlanmadan eklenen seçenek silinir
   await P.evaluate(() => { const s = document.querySelector('select[name="district"]'); const o = document.createElement("option"); o.value = "Çankaya"; s.appendChild(o); s.value = "Çankaya"; });
   await P.click('button:has-text("Kaydet")'); await P.waitForURL(/saved=1/);
   const { data: prof } = await admin.from("profiles").select("city, district").eq("id", users[0].id).single();
@@ -74,7 +74,7 @@ try {
   await B.click('button:has-text("Devam et")'); await B.click('button:has-text("Bitir")'); await settle(B, BASE + "/");
   await B.goto(`${BASE}/join/${g.invite_code}`); await B.waitForURL(/\/g\//);
   await P.goto(`${BASE}/g/${gid}`); await shot(P, "33-topluluk-sayfasi");
-  log("topluluk sayfası:", (await P.getByText("Topluluk", { exact: true }).count()) ? "✓ Topluluk etiketi" : "HATA", "|", (await P.locator("text=2 üye").count()) ? "✓ üye şeridi" : "HATA");
+  log("topluluk sayfası:", (await P.locator("main div.t-label-caps", { hasText: "Topluluk" }).count()) ? "✓ Topluluk etiketi" : "HATA", "|", (await P.locator("text=2 üye").count()) ? "✓ üye şeridi" : "HATA");
 
   // Grubu yönet: kurucu adı/açıklamayı değiştirir; profil kısayolu kaldırıldı; üye formu görmez
   await P.goto(`${BASE}/g/${gid}/players?bolum=bilgiler`);
