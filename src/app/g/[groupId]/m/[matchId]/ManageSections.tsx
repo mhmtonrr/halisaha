@@ -6,7 +6,6 @@ import { OvrBadge, PositionChip } from "@/components/PlayerCard";
 import { POSITION_NAME, POSITIONS, type Position } from "@/lib/data";
 import { matchWhen } from "@/lib/match-rules";
 import { InviteBox } from "./InviteBox";
-import { RivalChooser } from "./RivalChooser";
 import {
   cancelMatch,
   closeListing,
@@ -216,19 +215,6 @@ export function ListingManage({
           </form>
         )}
         {code && <InviteBox groupId={groupId} matchId={matchId} code={code} />}
-      </Card>
-    </section>
-  );
-}
-
-/** Rakibi olmayan maçta (teklif reddedildi / geri çekildi) yeni rakip seçimi */
-export function RivalMissing({ groupId, matchId, homeCity }: { groupId: string; matchId: string; homeCity: string }) {
-  return (
-    <section className="mb-4 space-y-2">
-      <SectionTitle>Rakip seç</SectionTitle>
-      <Card className="space-y-3">
-        <p className="text-sm text-amber-300">Bu maçın rakibi yok; kesinleştirmek için rakip seçmen gerekiyor.</p>
-        <RivalChooser groupId={groupId} matchId={matchId} opponentName={null} homeCity={homeCity} />
       </Card>
     </section>
   );

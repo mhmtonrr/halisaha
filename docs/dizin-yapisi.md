@@ -12,7 +12,7 @@ src/lib/formations.ts    Sabit dizilişler (5-11 kişilik, slot koordinatları),
 src/lib/call-rules.ts    Birleşik çağrı: varsayılan seçim, yedek/başvuru sırası, karar zamanı, gün/saat metinleri (saf, testli)
 src/lib/match-actions.ts Yeni maç yapısı Server Action'ları: Maç ayarla (setupMatch), Geliyorum/Gelemem (respondMatch) + bildirimler
 src/lib/match-manage-actions.ts  Maç ekranı yönetimi (4b): kadro/yedek/başvuru, ilan, bağlantı kodu, rakip/teklif/karşı teklif, kesinleştir/ertele/iptal + bildirimler
-src/app/g/[groupId]/m/[matchId]/ManageSections.tsx  Maç ekranı yönetim bölümleri (başvurular, adam ara, rakip seç, kesinleştir/ertele/iptal) + CounterForm
+src/app/g/[groupId]/m/[matchId]/ManageSections.tsx  Maç ekranı yönetim bölümleri (başvurular, adam ara, kesinleştir/ertele/iptal) + CounterForm
 src/app/g/[groupId]/m/[matchId]/LineupStage.tsx  Diziliş sahnesi (sürükle-bırak, kulübe, karşılaşma görünümü); StageField.tsx perspektifli saha zemini
 src/app/g/[groupId]/m/[matchId]/MatchSummary.tsx  Maç özeti (oylamada ve sonrasında): skor + gol/asist/kurtarış
 src/app/g/[groupId]/m/[matchId]/ResultsView.tsx  Maç sonuçları (maçın adamı, senin sonucun, performans sıralaması); ResultTabs.tsx sekmeler
@@ -20,7 +20,7 @@ src/components/NoMatchAccess.tsx  "Bu maça erişimin yok" ekranı (maç sayfas�
 src/components/team/TeamTable.tsx  Takım puan tablosu verisi (sonuç ekranı + takım istatistikleri); LeagueTable.tsx tablo görünümü
 src/app/g/[groupId]/m/[matchId]/RosterBoard.tsx  Kadro panosu: toplanırken Kadromuz / Yedekler / Kadro dışı (sürükle-bırak); planlanmış maçta yalnızca Kadro dışı
 src/app/g/[groupId]/m/[matchId]/AddPlayer.tsx  Oyuncu ekle: arkadaşlardan / uygulamada arayarak davet, misafir (GuestForm)
-src/app/g/[groupId]/m/[matchId]/InviteBox.tsx  Davet bağlantısı kutusu; RivalChooser.tsx maç ekranında rakip seçimi (components/RivalPicker.tsx: Maç ayarla ile ortak)
+src/app/g/[groupId]/m/[matchId]/InviteBox.tsx  Davet bağlantısı kutusu; RivalSection.tsx açık maçta rakip durumu; RivalChooser.tsx maç ekranında rakip seçimi (components/RivalPicker.tsx: Maç ayarla ile ortak)
 src/app/g/[groupId]/m/[matchId]/GatheringPanel.tsx  Toplanan/kesin maç şeridi: sayaç, benim durumum, Geliyorum/Gelemem
 src/lib/listings-data.ts Maç özeti (match_overview) ve Keşfet "Adam arayan" ilanları (open_listings, engellenen süzülür)
 src/lib/match-rules.ts   Maç kuralları (saf, testli): varsayılan kadro, saat belli değil metni, direkt kesin mi

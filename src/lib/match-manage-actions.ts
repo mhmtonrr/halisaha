@@ -311,6 +311,25 @@ export async function sendChallenge(fd: FormData) {
   done(back, "teklif");
 }
 
+/** Maç ekranından bekleyen teklifi geri çek (yeni rakip seçebilmek için) */
+export async function withdrawChallenge(fd: FormData) {
+  const { supabase, user } = await requireUser();
+  const { groupId, matchId, back } = ids(fd);
+  const challengeId = str(fd, "challengeId");
+  // cancel_challenge kabul edilmiş teklifte maçları siler: bu arada kabul edildiyse dokunma
+  const { data: c } = await supabase.from("match_challenges").select("status, to_group_id").eq("id", challengeId).eq("from_match_id", matchId).maybeSingle();
+  if (c?.status !== "pending") fail(back, "Bu teklif artık bekleyen değil");
+  const { error } = await supabase.rpc("cancel_challenge", { p_challenge_id: challengeId });
+  if (error) fail(back, rpcMessage(error, "Teklif geri çekilemedi"));
+  const to = c.to_group_id as string;
+  later(async () => {
+    const admin = createAdminClient();
+    const admins = await groupMemberIds(admin, to, { adminsOnly: true });
+    await notify(admins, "offer", text.challengeWithdrawn(await groupName(admin, groupId), to), { excludeUserId: user.id });
+  });
+  done(back, "teklif-geri");
+}
+
 /** Bekleyen teklifte sırası gelen: tarih/saha değiştirip geri yollar (maç ekranı veya teklifler sayfası) */
 export async function counterChallenge(fd: FormData) {
   const { supabase } = await requireUser();

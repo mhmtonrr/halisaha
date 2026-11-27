@@ -16,7 +16,8 @@ import type { PitchPlayer } from "@/components/LineupPitch";
 import { LineupStage, type StageSide } from "./LineupStage";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { AddPlayer, type Person } from "./AddPlayer";
-import { Applications, Invitees, ListingManage, RivalMissing, ScheduleManage, type EntryRow } from "./ManageSections";
+import { Applications, Invitees, ListingManage, ScheduleManage, type EntryRow } from "./ManageSections";
+import { RivalSection, type RivalOffer } from "./RivalSection";
 import { RosterBoard, type BoardPerson } from "./RosterBoard";
 import { AutoOpenDetails } from "@/components/AutoOpenDetails";
 import { applyMatch, cancelApplication } from "@/lib/match-manage-actions";
@@ -46,6 +47,7 @@ const OK_TEXT: Record<string, string> = {
   kod: "Bağlantı yenilendi; eski bağlantı artık çalışmaz.",
   rakip: "Rakip kaydedildi.",
   teklif: "Teklif gönderildi; rakibin yanıtı bekleniyor.",
+  "teklif-geri": "Teklif geri çekildi; yeni rakip seçebilirsin.",
   "tarih-onerildi": "Tarih önerisi rakibe gitti.",
   "tarih-reddedildi": "Tarih önerisi reddedildi.",
   ertelendi: "Maçın tarihi değişti; kadroya bildirim gitti.",
@@ -246,7 +248,7 @@ export default async function MatchPage({
   const open = match.status === "gathering" || planned;
   const manage = open && !!canManage;
   // Yönetim verisi (yeniden tasarım 4b): kayıtlar, ilanlar, bağlantı kodu, hedef gruplar, rakip teklifi
-  const [entryRows, listingRows, code, targetRows, pendingChallenge, applyListing] = await Promise.all([
+  const [entryRows, listingRows, code, targetRows, lastChallenge, applyListing] = await Promise.all([
     open
       ? supabase.from("match_entries").select("user_id, player_id, status, source, position, note, queued_at, created_at, profiles!match_entries_user_id_fkey(display_name), group_players(display_name, position)").eq("match_id", matchId).then((r) => r.data ?? [])
       : Promise.resolve([]),
@@ -257,16 +259,17 @@ export default async function MatchPage({
     manage
       ? supabase.from("group_players").select("groups(id, name)").eq("user_id", user.id).is("left_at", null).eq("is_loan", false).neq("group_id", groupId).then((r) => r.data ?? [])
       : Promise.resolve([]),
-    manage && match.kind === "external" && !match.challenge_id
-      ? supabase.from("match_challenges").select("id, to_group_id, awaiting_group_id, proposed_at, proposed_tbd, venue").eq("from_match_id", matchId).eq("status", "pending").maybeSingle().then((r) => r.data)
+    // Bu maçtan giden son teklif (RLS: iki takımın üyeleri okur); geri çekilen sayılmaz
+    open && match.kind === "external" && !match.challenge_id
+      ? supabase.from("match_challenges").select("id, status, to_group_id, awaiting_group_id, proposed_at, proposed_tbd").eq("from_match_id", matchId).in("status", ["pending", "declined"]).order("created_at", { ascending: false }).limit(1).maybeSingle().then((r) => r.data)
       : Promise.resolve(null),
     // Üye olmayan, kaydı olmayan ama maçı bir ilandan görüyor: "Başvur"
     open && !isMember && (!myEntry || myEntry.status === "left")
       ? supabase.from("match_listings").select("id").eq("match_id", matchId).eq("status", "active").limit(1).maybeSingle().then((r) => r.data?.id as string | undefined)
       : Promise.resolve(undefined),
   ]);
-  const challengeTo = pendingChallenge
-    ? (await supabase.from("groups").select("name").eq("id", pendingChallenge.to_group_id).maybeSingle()).data?.name ?? "Rakip"
+  const challengeTeam = lastChallenge
+    ? (await supabase.from("groups").select("id, name, color, logo").eq("id", lastChallenge.to_group_id).maybeSingle()).data
     : null;
   const { data: rescheduleRow } =
     open && canManage && match.challenge_id
@@ -324,6 +327,21 @@ export default async function MatchPage({
     open && external && !oppName && !linked
       ? (((await supabase.rpc("match_pending_rivals", { p_ids: [matchId] })).data ?? []) as { name: string }[])[0]?.name ?? null
       : null;
+
+  const rivalOffer: RivalOffer | null = lastChallenge
+    ? {
+        id: lastChallenge.id,
+        status: lastChallenge.status as RivalOffer["status"],
+        team: challengeTeam ?? { id: null, name: "Rakip", color: null, logo: null },
+        at: lastChallenge.proposed_at,
+        tbd: !!lastChallenge.proposed_tbd,
+        ours: lastChallenge.awaiting_group_id === groupId,
+      }
+    : pendingRival
+      ? { id: "", status: "pending", team: { id: null, name: pendingRival, color: null, logo: null }, at: null, tbd: false, ours: false }
+      : null;
+  // Toplanırken rakibin her durumu; kesin maçta yalnızca rakip henüz yoksa
+  const showRival = open && external && !linked && (match.status === "gathering" || !match.opponent_name);
 
   const matchTitle = external ? (oppName || pendingRival ? `vs ${oppName ?? pendingRival}` : "Rakip belli değil") : "Kendi aramızda";
 
@@ -565,15 +583,16 @@ export default async function MatchPage({
           {OK_TEXT[ok]}
         </p>
       )}
-      {manage && match.kind === "external" && !match.challenge_id && !match.opponent_name && !pendingChallenge && (
-        <RivalMissing groupId={groupId} matchId={matchId} homeCity={myTeam?.city ?? ""} />
-      )}
-      {manage && pendingChallenge?.awaiting_group_id === groupId && (
-        <Link href={`/g/${groupId}/teklifler`} className="mb-4 flex items-center gap-2 rounded-xl border border-amber-400/40 bg-amber-400/10 p-3 text-sm">
-          <Icon name="swords" className="text-[20px] text-amber-300" />
-          <span className="min-w-0 flex-1">{challengeTo} karşı teklif yaptı; yanıtın bekleniyor.</span>
-          <Icon name="chevron_right" className="text-[20px] text-muted" />
-        </Link>
+      {showRival && (
+        <RivalSection
+          groupId={groupId}
+          matchId={matchId}
+          homeCity={myTeam?.city ?? ""}
+          opponentName={match.opponent_name}
+          offer={rivalOffer}
+          canManage={manage}
+          canOffer={manage && !!isAdmin}
+        />
       )}
       {kabul && (
         <p className="mb-4 flex items-start gap-1.5 rounded-xl bg-primary/10 p-3 text-sm text-primary">
@@ -588,6 +607,9 @@ export default async function MatchPage({
       {planned && stage}
 
       {/* Planlanmış maçta iki takım sahnede; oylama ve sonuçta isimler maç özetinde */}
+      {linked && opp && match.status === "gathering" && (
+        <SectionTitle action={<Badge tone="accent">Onaylandı</Badge>}>Rakip</SectionTitle>
+      )}
       {linked && opp && !planned && !summarized && <VersusCard mine={{ id: groupId, name: myTeamName, color: myTeamColor, logo: myTeam?.logo ?? null, roster }} opp={opp} />}
 
       {summarized && (
