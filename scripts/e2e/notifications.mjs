@@ -132,6 +132,8 @@ try {
   }
 
   // 6b) Oylama süresi dolunca kapanır → kadroya "Sonuçlar açıklandı" (cron varsa cron kapatır, yoksa maç sayfası açılınca)
+  // Açık sayfalar (canlı yenileme) oylamayı cron'dan önce kapatmasın
+  for (const p of [capP, memP, rivP, aplP]) await p.goto("about:blank");
   await admin.from("matches").update({ voting_deadline: new Date(Date.now() - 60e3).toISOString() }).eq("id", mid);
   const cron = await fetch(`${BASE}/api/cron/vote-reminders`, { headers: { authorization: `Bearer ${env.CRON_SECRET}` } });
   if (cron.status === 200) {
