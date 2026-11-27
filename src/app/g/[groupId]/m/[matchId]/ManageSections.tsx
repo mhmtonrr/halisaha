@@ -13,7 +13,7 @@ import {
   confirmMatch,
   counterChallenge,
   createListing,
-  decideApplication,
+  cancelInvite, decideApplication,
   rescheduleMatch,
   respondReschedule,
 } from "@/lib/match-manage-actions";
@@ -98,6 +98,38 @@ export function Applications({ groupId, matchId, entries, full }: { groupId: str
       )}
 
     </>
+  );
+}
+
+/** Takım dışından davet edilenler: yanıt bekleyen ve "gelemem" diyen; davet geri çekilince maçı göremez */
+export function Invitees({ groupId, matchId, entries }: { groupId: string; matchId: string; entries: EntryRow[] }) {
+  if (!entries.length) return null;
+  return (
+    <section className="mb-4">
+      <SectionTitle>Davetliler · {entries.length}</SectionTitle>
+      <Card className="p-0">
+        <ul className="divide-y divide-line">
+          {entries.map((e) => (
+            <li key={e.userId} className="flex min-h-14 items-center gap-2.5 px-3 py-2">
+              <Link href={`/oyuncu/${e.userId}`} className="flex min-w-0 flex-1 items-center gap-2.5">
+                <OvrBadge overall={e.overall} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium">{e.name}</span>
+                  <span className="block truncate text-xs text-muted">{e.status === "declined" ? "Gelemem dedi" : "Yanıt bekleniyor"}</span>
+                </span>
+              </Link>
+              <form action={cancelInvite}>
+                <Hidden groupId={groupId} matchId={matchId} />
+                <input type="hidden" name="userId" value={e.userId ?? ""} />
+                <SubmitButton variant="secondary" pendingLabel="…">
+                  Daveti geri çek
+                </SubmitButton>
+              </form>
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </section>
   );
 }
 

@@ -179,6 +179,13 @@ export const text = {
     url: `/g/${groupId}/m/${matchId}`,
     tag: `spot:${matchId}`,
   }),
+  /** Davetli "gelemem" dedi: maçı yönetenlere */
+  inviteDeclined: (who: string, groupName: string, groupId: string, matchId: string): Content => ({
+    title: "Davete olumsuz yanıt",
+    body: truncate(join(`${who} gelemeyeceğini bildirdi`, groupName), 300),
+    url: `/g/${groupId}/m/${matchId}`,
+    tag: `invite-declined:${matchId}`,
+  }),
   matchCreated: (groupName: string, groupId: string, matchId: string, when: string, opponent?: string | null): Content => ({
     title: "⚽ Maç kuruldu",
     body: truncate(join(groupName, opponent ? `vs ${opponent}` : null, when), 300),
@@ -311,10 +318,10 @@ export const text = {
     url: `/g/${groupId}/m/${matchId}`,
     tag: `match:${matchId}`,
   }),
-  removedFromMatch: (groupName: string, groupId: string, matchId: string, when: string): Content => ({
+  removedFromMatch: (groupName: string, groupId: string, matchId: string, when: string, outsider = false): Content => ({
     title: "Maç kadrosundan çıkarıldın",
     body: truncate(join(groupName, when), 300),
-    url: `/g/${groupId}/m/${matchId}`,
+    url: outsider ? "/sohbet" : `/g/${groupId}/m/${matchId}`,
     tag: `match:${matchId}`,
   }),
   /** Bağlı maçta rakip skoru girdi; skor alıcı takımın açısından (kendi-rakip) */

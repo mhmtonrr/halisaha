@@ -3,7 +3,7 @@ import { respondMatch } from "@/lib/match-actions";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Card, cx } from "@/components/ui";
 
-export type EntryStatus = "in" | "reserve" | "declined" | "left" | "invited" | "pending" | "rejected" | null;
+export type EntryStatus = "in" | "reserve" | "declined" | "left" | "invited" | "pending" | "rejected" | "removed" | null;
 
 const MY_STATUS: Partial<Record<NonNullable<EntryStatus>, { text: string; tone: string }>> = {
   in: { text: "Kadrodasın", tone: "text-primary" },
@@ -45,8 +45,8 @@ export function GatheringPanel({
   const mine = myStatus ? MY_STATUS[myStatus] : undefined;
   const waiting = myStatus === "pending" || myStatus === "rejected";
   const inRoster = myStatus === "in";
-  // Kesin maçta kadrodan çıkış çekilme isteğiyle (aşağıdaki bölüm); burada sadece katılma
-  const showNo = status === "gathering" && (inRoster || myStatus === "reserve" || myStatus === "invited" || myStatus === null);
+  // Kesin maçta kadrodan çıkış çekilme isteğiyle (aşağıdaki bölüm); davetli ise her iki aşamada da reddedebilir
+  const showNo = myStatus === "invited" || (status === "gathering" && (inRoster || myStatus === "reserve" || myStatus === null));
   const showYes = !inRoster && myStatus !== "reserve";
 
   return (

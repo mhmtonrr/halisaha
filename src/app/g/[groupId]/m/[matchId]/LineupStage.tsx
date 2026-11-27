@@ -21,6 +21,8 @@ export interface StagePlayer extends PitchPlayer {
   userId: string | null;
   /** Yetkim varsa kadro dışı bırakabilir miyim (misafir sadece kaptan/yetkili) */
   movable: boolean;
+  /** Misafir veya takım dışından: kadrodan alınınca maçtan tamamen çıkar */
+  leaves: boolean;
 }
 
 /** Yedek sırasındaki kişi: maç kadrosunda değil, kulübede bekler */
@@ -33,6 +35,7 @@ export interface StageReserve {
   overall: number;
   photoUrl: string | null;
   movable: boolean;
+  leaves: boolean;
 }
 
 export interface StageSide {
@@ -228,7 +231,8 @@ function SideStage({
   const draftOnly = !isSaved(side) && players.length > 0;
 
   /** Kadroya al / kadro dışı bırak: hemen kaydedilir (kapasiteyi sunucu denetler) */
-  function move(who: { userId: string | null; playerId: string | null }, to: "in" | "out") {
+  function move(who: { userId: string | null; playerId: string | null; name: string; leaves: boolean }, to: "in" | "out") {
+    if (to === "out" && who.leaves && !window.confirm(`${who.name} maçtan çıkarılsın mı?`)) return;
     setSelected(null);
     setError(null);
     startTransition(async () => {
@@ -471,7 +475,7 @@ function SideStage({
                 Kadroya al
               </button>
               <button type="button" disabled={pending} onClick={() => move(pickedReserve, "out")} className="min-h-9 rounded-full border border-red-300/40 px-3 font-semibold text-red-300 disabled:opacity-40">
-                Kadro dışı bırak
+                {pickedReserve.leaves ? "Maçtan çıkar" : "Kadro dışı bırak"}
               </button>
             </>
           )}
@@ -495,8 +499,8 @@ function SideStage({
             </button>
           )}
           {picked.movable && (
-            <button type="button" disabled={pending} onClick={() => move({ userId: picked.userId, playerId: picked.id }, "out")} className="min-h-9 rounded-full border border-red-300/40 px-3 font-semibold text-red-300 disabled:opacity-40">
-              Kadro dışı bırak
+            <button type="button" disabled={pending} onClick={() => move({ userId: picked.userId, playerId: picked.id, name: picked.name, leaves: picked.leaves }, "out")} className="min-h-9 rounded-full border border-red-300/40 px-3 font-semibold text-red-300 disabled:opacity-40">
+              {picked.leaves ? "Maçtan çıkar" : "Kadro dışı bırak"}
             </button>
           )}
           {canSwitchTeam &&

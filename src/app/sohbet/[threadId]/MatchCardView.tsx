@@ -35,15 +35,16 @@ export interface LiveMatch {
   fee?: number | null;
   color?: string | null;
   logo?: string | null;
+  /** Görüntüleyen, karşı tarafın bu maçtaki davetini geri çekebilir */
+  canWithdraw?: boolean;
 }
 
 const MY: Record<string, string> = {
   in: "Kadrodasın",
   reserve: "Yedektesin",
-  invited: "Davetlisin: Taktik Odası'ndan 'Geliyorum' de",
+  invited: "Davetlisin",
   pending: "Katılma isteğin onay bekliyor",
   declined: "Gelemem dedin",
-  rejected: "Bu maça alınmadın",
 };
 
 const when = (iso: string, dayOnly?: boolean) =>
@@ -51,44 +52,50 @@ const when = (iso: string, dayOnly?: boolean) =>
     ? `${new Date(iso).toLocaleDateString("tr-TR", { timeZone: "Europe/Istanbul", weekday: "long", day: "numeric", month: "long" })} · saat belli değil`
     : new Date(iso).toLocaleString("tr-TR", { timeZone: "Europe/Istanbul", weekday: "short", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
 
-/** Maça davet kartı: çağrı (toplama / adam ara) veya planlı maç. Alıcı karttan ilgili sayfaya gider; çağrı kartı davet sayılır (üye olmayan da yanıt verir), maç kartında özel grup üye olmayana açılmaz. */
+/** Kişiye özel maç daveti: alıcı karttan yanıtlar ve maça gider, gönderen daveti geri çeker; iptal edilen kart bağlantısız kalır (0056) */
 export function MatchCardView({
   card,
   refId,
   status,
-  isMember,
   mine,
   time,
   live,
+  revoked,
+  busy,
+  onAnswer,
+  onWithdraw,
 }: {
   card: MatchCard;
   /** Grup/çağrı/maç silindiyse null */
   refId: string | null;
   /** Güncel durum (bilinmiyorsa undefined) */
   status?: string;
-  isMember: boolean;
   mine: boolean;
   time: string;
   /** Maç kartında güncel bilgi (yoksa kart gönderim anındaki kopyayla çizilir) */
   live?: LiveMatch;
+  revoked: boolean;
+  busy: boolean;
+  onAnswer: (accept: boolean) => void;
+  onWithdraw: () => void;
 }) {
   const closed = status !== undefined && !["planned", "gathering"].includes(status);
   const cancelled = status === "cancelled";
   // Saati belli olmayan çağrı gün bitene kadar geçerli
-  const expired = new Date(card.starts_at).getTime() + (card.time_tbd ? 24 * 3600_000 : 0) < Date.now();
-  const inactive = closed || expired || !refId;
+  const expired = new Date(live?.playedAt ?? card.starts_at).getTime() + ((live?.timeTbd ?? card.time_tbd) ? 24 * 3600_000 : 0) < Date.now();
+  const inactive = revoked || closed || expired || !refId;
+  const my = !mine && !inactive ? live?.myStatus : undefined;
 
   let href: string | null = null;
   let label = "";
   let note = "";
   if (!refId) {
     note = "Bu maç artık yok.";
-  } else {
-    // 0043: kişiye özel davetli üye olmasa da maçı ve kadroyu görür, oradan "Geliyorum" der
+  } else if (!revoked) {
+    // Davetli üye olmasa da maçı ve kadroyu görür
     href = `/g/${card.group_id}/m/${refId}`;
-    label = live?.myStatus === "invited" && !mine ? "Maça bak ve yanıtla" : "Maça bak";
+    label = "Maça bak";
   }
-  void isMember;
 
   const details = [
     // Güncel bilgi varsa o; yoksa gönderim anındaki rakip
@@ -103,7 +110,7 @@ export function MatchCardView({
         <div className="flex items-center gap-2 bg-accent/10 px-3 py-2">
           <Icon name="sports_soccer" fill className="text-[18px] text-primary" />
           <span className="flex-1 text-xs font-bold uppercase tracking-wide text-accent">{title()}</span>
-          {inactive && <span className="rounded-full bg-pitch-800 px-2 py-0.5 text-[10px] text-muted">{cancelled ? "İptal edildi" : closed ? "Kapandı" : "Geçti"}</span>}
+          {inactive && <span className="rounded-full bg-pitch-800 px-2 py-0.5 text-[10px] text-muted">{revoked ? "Davet iptal edildi" : cancelled ? "İptal edildi" : closed ? "Kapandı" : "Geçti"}</span>}
         </div>
         <div className="space-y-2 px-3 py-3">
           <div className="flex items-center gap-2.5">
@@ -135,13 +142,30 @@ export function MatchCardView({
               </div>
             </div>
           )}
-          {live?.myStatus && !mine && MY[live.myStatus] && <p className="text-xs font-semibold text-primary">{MY[live.myStatus]}</p>}
+          {!revoked && live?.myStatus && !mine && MY[live.myStatus] && <p className="text-xs font-semibold text-primary">{MY[live.myStatus]}</p>}
+          {(my === "invited" || my === "declined") && (
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" disabled={busy} onClick={() => onAnswer(true)} className={cx("min-h-11 rounded-xl bg-accent px-3 text-sm font-bold text-pitch-950 disabled:opacity-50", my === "declined" && "col-span-2")}>
+                Geliyorum
+              </button>
+              {my === "invited" && (
+                <button type="button" disabled={busy} onClick={() => onAnswer(false)} className="min-h-11 rounded-xl bg-pitch-800 px-3 text-sm font-semibold disabled:opacity-50">
+                  Gelemem
+                </button>
+              )}
+            </div>
+          )}
           {href && !inactive && (
             <Link href={href} className="flex min-h-11 items-center justify-center rounded-xl bg-accent px-4 text-sm font-bold text-pitch-950">
               {label} ›
             </Link>
           )}
-          {note && !inactive && <p className="text-xs text-muted">{note}</p>}
+          {note && <p className="text-xs text-muted">{note}</p>}
+          {mine && !inactive && live?.canWithdraw && (
+            <button type="button" disabled={busy} onClick={onWithdraw} className="block w-full rounded-lg bg-pitch-800 px-3 py-2 text-xs disabled:opacity-50">
+              Daveti geri çek
+            </button>
+          )}
           {href && inactive && (
             <Link href={href} className="block text-center text-xs text-accent">
               Yine de sayfayı aç ›

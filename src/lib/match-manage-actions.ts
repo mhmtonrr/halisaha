@@ -66,7 +66,7 @@ function done(back: string, flash: string): never {
 }
 
 /**
- * Kadro panosu: yöneten kişiyi kadro / yedek / gelmeyenler arasında taşır ("delete": misafiri bu maçtan siler).
+ * Kadro panosu: yöneten kişiyi kadro / yedek / kadro dışı arasında taşır (misafir ve takım dışından biri "out" ile maçtan çıkar).
  * Yönlendirmeden döner; hata metni sonuçta.
  */
 export async function moveRoster(input: {
@@ -74,32 +74,31 @@ export async function moveRoster(input: {
   matchId: string;
   userId: string | null;
   playerId: string | null;
-  to: "in" | "reserve" | "out" | "delete";
+  to: "in" | "reserve" | "out";
 }): Promise<{ error?: string }> {
   const { supabase, user } = await requireUser();
   const { groupId, matchId, userId, playerId, to } = input;
   if (!UUID_RE.test(matchId) || !UUID_RE.test(userId ?? playerId ?? "")) return { error: "Geçersiz işlem" };
-  const { data: from, error } =
-    to === "delete"
-      ? await supabase.rpc("remove_match_guest", { p_match: matchId, p_player: playerId })
-      : await supabase.rpc("move_roster", { p_match: matchId, p_user: userId, p_player: playerId, p_to: to });
+  const { data: from, error } = await supabase.rpc("move_roster", { p_match: matchId, p_user: userId, p_player: playerId, p_to: to });
   revalidatePath(matchPath(groupId, matchId));
   if (error) return { error: rpcMessage(error, "Kadro güncellenemedi") };
   // Taşınan üyeye haber; gelmeyenler içinde kalan (kadroda/yedekte olmayan) için bildirim yok
   const wasActive = from === "in" || from === "reserve";
-  if (userId && to !== "delete" && from !== to && (to !== "out" || wasActive)) {
+  if (userId && from !== to && (to !== "out" || wasActive)) {
     later(async () => {
       const admin = createAdminClient();
       const m = await matchInfo(admin, matchId);
       if (!m) return;
       const name = await groupName(admin, m.group_id);
       const when = matchWhen(m.played_at, m.time_tbd);
+      // Takım dışından çıkarılan maçı göremez: bildirim sohbete götürür
+      const outsider = to === "out" && !(await groupMemberIds(admin, m.group_id)).includes(userId);
       const content =
         to === "in"
           ? text.addedToRoster(await displayName(admin, user.id), name, m.group_id, matchId, when)
           : to === "reserve"
             ? text.movedToReserve(name, m.group_id, matchId, when)
-            : text.removedFromMatch(name, m.group_id, matchId, when);
+            : text.removedFromMatch(name, m.group_id, matchId, when, outsider);
       await notify([userId], "match", content, { excludeUserId: user.id });
     });
   }
@@ -133,6 +132,23 @@ export async function decideApplication(fd: FormData) {
     await notify([target], "match", text.applicationDecided(await groupName(admin, m.group_id), m.group_id, matchId, r, matchWhen(m.played_at, m.time_tbd)));
   });
   done(back, `basvuru-${result as string}`);
+}
+
+/** Davetliler listesinden daveti geri çek */
+export async function cancelInvite(fd: FormData) {
+  const { supabase } = await requireUser();
+  const { matchId, back } = ids(fd);
+  const { error } = await supabase.rpc("cancel_match_invite", { p_match: matchId, p_user: str(fd, "userId") });
+  if (error) fail(back, rpcMessage(error, "Davet geri çekilemedi"));
+  done(back, "davet-iptal");
+}
+
+/** Sohbetteki davet kartından geri çekme (yöneten veya onay bekleyen daveti gönderen) */
+export async function withdrawMatchInvite(matchId: string, userId: string): Promise<{ error?: string }> {
+  const { supabase } = await requireUser();
+  if (!UUID_RE.test(matchId) || !UUID_RE.test(userId)) return { error: "Geçersiz istek" };
+  const { error } = await supabase.rpc("cancel_match_invite", { p_match: matchId, p_user: userId });
+  return error ? { error: rpcMessage(error, "Davet geri çekilemedi") } : {};
 }
 
 /** İlan veya bağlantıyla başvuru (maçı yönetenin onayına düşer) */

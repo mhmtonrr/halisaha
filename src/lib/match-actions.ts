@@ -118,20 +118,14 @@ export async function setupMatch(fd: FormData) {
   redirect(dest);
 }
 
-/** Maç ekranında "Geliyorum / Gelemem": yer varsa kadro, doluysa yedek; kadro dolunca yönetenlere haber */
-export async function respondMatch(fd: FormData) {
+/** Yanıtı kaydeder ve yönetenlere haber verir (davet reddi, boşalan yer, dolan kadro) */
+async function submitAnswer(matchId: string, answer: "yes" | "no", position: Position | null, note: string | null) {
   const { supabase, user } = await requireUser();
-  const groupId = str(fd, "groupId");
-  const matchId = str(fd, "matchId");
-  const back = matchPath(groupId, matchId);
-  const answer = str(fd, "answer") === "no" ? "no" : "yes";
-  const { data: result, error } = await supabase.rpc("respond_match", {
-    p_match: matchId,
-    p_answer: answer,
-    p_position: asPosition(str(fd, "position")),
-    p_note: str(fd, "note").slice(0, 200) || null,
-  });
-  if (error) fail(back, rpcMessage(error, "Yanıt kaydedilemedi"));
+  const { data: before } = await supabase.from("match_entries").select("status").eq("match_id", matchId).eq("user_id", user.id).maybeSingle();
+  const { data, error } = await supabase.rpc("respond_match", { p_match: matchId, p_answer: answer, p_position: position, p_note: note });
+  if (error) return { result: "", error: rpcMessage(error, "Yanıt kaydedilemedi"), lostAccess: false };
+  const result = data as string;
+  const declinedInvite = result === "declined" && before?.status === "invited";
   later(async () => {
     const admin = createAdminClient();
     const { data: m } = await admin
@@ -139,21 +133,48 @@ export async function respondMatch(fd: FormData) {
       .select("group_id, created_by, roster_count, reserve_count, capacity, status")
       .eq("id", matchId)
       .maybeSingle();
-    if (!m || m.status !== "gathering") return;
-    if (result === "declined") {
-      const { data: me } = await admin.from("profiles").select("display_name").eq("id", user.id).maybeSingle();
-      await notifySpotOpened(admin, matchId, (me?.display_name as string | undefined) ?? "Bir oyuncu", user.id);
+    if (!m || (!declinedInvite && m.status !== "gathering")) return;
+    const myName = async () => ((await admin.from("profiles").select("display_name").eq("id", user.id).maybeSingle()).data?.display_name as string | undefined) ?? "Bir oyuncu";
+    if (result === "declined" && !declinedInvite) {
+      await notifySpotOpened(admin, matchId, await myName(), user.id);
       return;
     }
     const managers = [...new Set([...(await groupMemberIds(admin, m.group_id, { adminsOnly: true })), ...(m.created_by ? [m.created_by] : [])])];
-    if (result === "in" && m.capacity && m.roster_count >= m.capacity) {
+    if (declinedInvite) {
+      await notify(managers, "match", text.inviteDeclined(await myName(), await groupName(admin, m.group_id), m.group_id, matchId), { excludeUserId: user.id });
+    } else if (result === "in" && m.capacity && m.roster_count >= m.capacity) {
       await notify(managers, "match", text.rosterFull(await groupName(admin, m.group_id), m.group_id, matchId, m.roster_count), { excludeUserId: user.id });
     }
   });
+  const { data: visible } = await supabase.from("matches").select("id").eq("id", matchId).maybeSingle();
+  return { result, error: undefined, lostAccess: !visible };
+}
+
+/** Maç ekranında "Geliyorum / Gelemem": yer varsa kadro, doluysa yedek */
+export async function respondMatch(fd: FormData) {
+  const groupId = str(fd, "groupId");
+  const matchId = str(fd, "matchId");
+  const back = matchPath(groupId, matchId);
+  const answer = str(fd, "answer") === "no" ? "no" : "yes";
+  const { result, error, lostAccess } = await submitAnswer(matchId, answer, asPosition(str(fd, "position")), str(fd, "note").slice(0, 200) || null);
+  if (error) fail(back, error);
   revalidatePath(back);
+  // Takım dışından kadrodan çıkan maçı artık göremez
+  if (lostAccess) {
+    revalidatePath("/");
+    redirect("/");
+  }
   if (str(fd, "returnTo") === "/") {
     revalidatePath("/");
     redirect("/");
   }
-  redirect(`${back}?yanit=${result as string}`);
+  redirect(`${back}?yanit=${result}`);
+}
+
+/** Sohbetteki davet kartından yanıt: sayfadan ayrılmadan sonuç döner */
+export async function answerMatchInvite(matchId: string, accept: boolean): Promise<{ error?: string }> {
+  if (!UUID_RE.test(matchId)) return { error: "Geçersiz istek" };
+  const { error } = await submitAnswer(matchId, accept ? "yes" : "no", null, null);
+  revalidatePath("/");
+  return error ? { error } : {};
 }

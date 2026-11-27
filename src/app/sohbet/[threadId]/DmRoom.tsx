@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { cancelGroupInvite, notifyDm, respondDmRequest, respondGroupInvite } from "@/lib/actions";
+import { answerMatchInvite } from "@/lib/match-actions";
+import { withdrawMatchInvite } from "@/lib/match-manage-actions";
 import { Avatar } from "@/components/Avatar";
 import { BackLink } from "@/components/NavHistory";
 import { cx } from "@/components/ui";
@@ -19,6 +21,8 @@ export interface DmMessage {
   invite_id: string | null;
   card?: MatchCard | null;
   match_id?: string | null;
+  /** Maç daveti iptal edildi (0056) */
+  revoked_at?: string | null;
   deleted_at: string | null;
   created_at: string;
   pending?: boolean;
@@ -36,7 +40,7 @@ export interface InviteInfo {
 
 const MAX = 1000;
 const TZ = "Europe/Istanbul";
-const COLS = "id, author_id, kind, body, invite_id, card, match_id, deleted_at, created_at";
+const COLS = "id, author_id, kind, body, invite_id, card, match_id, revoked_at, deleted_at, created_at";
 const dayKey = (iso: string) => new Date(iso).toLocaleDateString("tr-TR", { timeZone: TZ });
 const time = (iso: string) => new Date(iso).toLocaleTimeString("tr-TR", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
 
@@ -82,7 +86,6 @@ export function DmRoom({
   invites,
   refStatus,
   live: liveCards = {},
-  memberGroupIds,
 }: {
   threadId: string;
   meId: string;
@@ -95,7 +98,6 @@ export function DmRoom({
   refStatus: Record<string, string>;
   /** Maç kartlarının canlı özeti (maç id → sayaç/durum) */
   live?: Record<string, LiveMatch>;
-  memberGroupIds: string[];
 }) {
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
@@ -127,6 +129,13 @@ export function DmRoom({
       return [...prev, msg].sort((a, b) => (a.id < 0 ? 1 : b.id < 0 ? -1 : a.id - b.id));
     });
   }, []);
+
+  // Bağlantı koptuğunda kaçan iptaller sayfa yenilenince işlensin
+  useEffect(() => {
+    const revoked = new Map(initial.filter((m) => m.revoked_at).map((m) => [m.id, m.revoked_at]));
+    if (!revoked.size) return;
+    setMessages((prev) => prev.map((m) => (!m.revoked_at && revoked.has(m.id) ? { ...m, revoked_at: revoked.get(m.id) } : m)));
+  }, [initial]);
 
   const markRead = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduleRead = useCallback(() => {
@@ -257,6 +266,22 @@ export function DmRoom({
     router.refresh();
   }
 
+  async function matchAction(run: () => Promise<{ error?: string }>) {
+    setBusy(true);
+    setError("");
+    const r = await run();
+    setBusy(false);
+    if (r.error) return setError(r.error);
+    router.refresh();
+    void catchUpRevoked();
+  }
+
+  /** Geri çekmeden sonra kartın iptal işareti (canlı bağlantı yoksa da) */
+  async function catchUpRevoked() {
+    const { data } = await supabase.from("dm_messages").select(COLS).eq("thread_id", threadId).not("revoked_at", "is", null).order("id", { ascending: false }).limit(20);
+    for (const m of (data ?? []) as DmMessage[]) if (messages.some((x) => x.id === m.id)) upsert(m);
+  }
+
   async function respond(accept: boolean) {
     setBusy(true);
     const r = await respondDmRequest(threadId, accept);
@@ -337,10 +362,13 @@ export function DmRoom({
                   card={m.card}
                   refId={m.match_id ?? null}
                   status={m.match_id ? refStatus[`match:${m.match_id}`] : undefined}
-                  isMember={memberGroupIds.includes(m.card.group_id)}
                   live={m.match_id ? liveCards[m.match_id] : undefined}
                   mine={mine}
                   time={time(m.created_at)}
+                  revoked={!!m.revoked_at}
+                  busy={busy}
+                  onAnswer={(accept) => matchAction(() => answerMatchInvite(m.match_id!, accept))}
+                  onWithdraw={() => matchAction(() => withdrawMatchInvite(m.match_id!, other.id))}
                 />
               ) : m.kind === "invite" ? (
                 <div className={cx("my-2 flex", mine ? "justify-end" : "justify-start")}>

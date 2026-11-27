@@ -24,6 +24,8 @@ export interface BoardPerson {
   tag?: string;
   /** Yetkim varsa bu kişiyi taşıyabilir miyim */
   movable: boolean;
+  /** Misafir veya takım dışından: kadro dışına alınınca maçtan tamamen çıkar */
+  leaves: boolean;
 }
 
 const ZONES: { id: Zone; title: string; icon: string; empty: string; accent: string }[] = [
@@ -55,10 +57,10 @@ export function RosterBoard({
   onlyRoster?: boolean;
   outOnly?: boolean;
 }) {
-  const [shown, applyMove] = useOptimistic(people, (cur, m: { key: string; to: Zone | "delete" }) => {
+  const [shown, applyMove] = useOptimistic(people, (cur, m: { key: string; to: Zone }) => {
     const rest = cur.filter((p) => p.key !== m.key);
     const to = m.to;
-    if (to === "delete") return rest;
+    if (to === "out" && cur.some((p) => p.key === m.key && p.leaves)) return rest;
     // Taşınan kişi yeni bölümün sonuna yazılır
     return [...rest, ...cur.filter((p) => p.key === m.key).map((p) => ({ ...p, zone: to, tag: undefined }))];
   });
@@ -70,7 +72,7 @@ export function RosterBoard({
 
   const full = !!capacity && shown.filter((p) => p.zone === "in").length >= capacity;
 
-  function move(key: string, to: Zone | "delete") {
+  function move(key: string, to: Zone) {
     const p = shown.find((x) => x.key === key);
     setSelected(null);
     if (!p || p.zone === to) return;
@@ -78,6 +80,7 @@ export function RosterBoard({
       setError(outOnly ? "Kadro dolu; önce sahadan birini kadro dışı bırak." : "Kadro dolu; önce birini yedeklere veya kadro dışına al.");
       return;
     }
+    if (to === "out" && p.leaves && !window.confirm(`${p.name} maçtan çıkarılsın mı?`)) return;
     setError(null);
     startTransition(async () => {
       applyMove({ key, to });
@@ -199,18 +202,13 @@ export function RosterBoard({
                                   onClick={() => move(p.key, t.id)}
                                   className="min-h-9 rounded-lg border border-line px-3 text-sm font-semibold disabled:opacity-40"
                                 >
-                                  {t.id === "in" ? (full ? "Kadro dolu" : "Kadroya") : t.id === "reserve" ? (outOnly ? "Yedek kulübesine" : "Yedeğe") : "Kadro dışına"}
+                                  {t.id === "in" ? (full ? "Kadro dolu" : "Kadroya") : t.id === "reserve" ? (outOnly ? "Yedek kulübesine" : "Yedeğe") : p.leaves ? "Maçtan çıkar" : "Kadro dışına"}
                                 </button>
                               ))}
                             {p.playerId && (
                               <Link href={`/g/${groupId}/p/${p.playerId}`} className="flex min-h-9 items-center rounded-lg px-3 text-sm text-accent">
                                 Kartı gör
                               </Link>
-                            )}
-                            {editable && !p.userId && z.id === "out" && (
-                              <button type="button" onClick={() => move(p.key, "delete")} className="min-h-9 rounded-lg px-3 text-sm text-red-300">
-                                Misafiri sil
-                              </button>
                             )}
                           </div>
                         )}
@@ -240,7 +238,7 @@ export function RosterBoard({
                 )}
               >
                 <Icon name={z.icon} className="text-[24px]" />
-                {z.title}
+                {z.id === "out" && dragged.leaves ? "Maçtan çıkar" : z.title}
               </div>
             ))}
           </div>

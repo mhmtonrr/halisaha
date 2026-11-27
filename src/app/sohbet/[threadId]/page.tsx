@@ -1,7 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
 import { LiveRefresh } from "@/components/LiveRefresh";
-import { getMemberships } from "@/lib/teams-data";
 import { DmRoom, type DmMessage, type InviteInfo } from "./DmRoom";
 import type { LiveMatch } from "./MatchCardView";
 import { matchExtras, matchOverview } from "@/lib/listings-data";
@@ -30,7 +29,7 @@ export default async function DmPage({ params }: { params: Promise<{ threadId: s
     supabase.from("profiles").select("id, display_name, photo_url").eq("id", otherId).maybeSingle(),
     supabase
       .from("dm_messages")
-      .select("id, author_id, kind, body, invite_id, card, match_id, deleted_at, created_at")
+      .select("id, author_id, kind, body, invite_id, card, match_id, revoked_at, deleted_at, created_at")
       .eq("thread_id", threadId)
       .order("id", { ascending: false })
       .limit(PAGE_SIZE),
@@ -41,20 +40,28 @@ export default async function DmPage({ params }: { params: Promise<{ threadId: s
     ? await supabase.from("group_invites").select("id, group_id, group_name, group_kind, status, inviter_id").in("id", inviteIds)
     : { data: [] as InviteInfo[] };
 
-  // Kartlar: güncel durum (açık/kapalı) ve görüntüleyenin üye olduğu gruplar
+  // Kartlar: güncel durum (açık/kapalı)
   const msgs = (messages ?? []) as DmMessage[];
   const ids = (k: "match_id") => [...new Set(msgs.map((m) => m[k]).filter(Boolean))] as string[];
-  const [over, memberships, extras] = await Promise.all([
+  const [over, extras, theirs] = await Promise.all([
     // Maç kartı canlı: sayaç, durum, benim durumum (0043 match_overview; davetli görebilir)
     matchOverview(supabase, ids("match_id")),
-    msgs.some((m) => m.kind === "match") ? getMemberships(supabase, user.id) : Promise.resolve([]),
     matchExtras(supabase, ids("match_id")),
+    // Karşı tarafın kaydı (RLS: üye / maçı yöneten görür): gönderen kartta "Daveti geri çek" için
+    ids("match_id").length
+      ? supabase.from("match_entries").select("match_id, status, added_by").eq("user_id", otherId).in("match_id", ids("match_id")).then((r) => r.data ?? [])
+      : Promise.resolve([]),
   ]);
+  const theirEntry = new Map(theirs.map((e) => [e.match_id as string, e]));
   const refStatus: Record<string, string> = {};
   const live: Record<string, LiveMatch> = {};
   for (const o of over.values()) {
     refStatus[`match:${o.match_id}`] = o.status;
     live[o.match_id] = { status: o.status, roster: o.roster_count, capacity: o.capacity, myStatus: o.my_status, playedAt: o.played_at, timeTbd: o.time_tbd, opponent: o.opponent_name, color: o.group_color, logo: o.group_logo, ...extras.get(o.match_id) };
+    const e = theirEntry.get(o.match_id);
+    const status = e?.status as string | undefined;
+    live[o.match_id].canWithdraw =
+      (o.can_manage && ["invited", "declined", "pending"].includes(status ?? "")) || (status === "pending" && e?.added_by === user.id);
   }
 
   await supabase.rpc("mark_dm_read", { p_thread_id: threadId });
@@ -65,7 +72,12 @@ export default async function DmPage({ params }: { params: Promise<{ threadId: s
         watches={[
           { table: "dm_threads", filter: `id=eq.${threadId}` },
           { table: "group_invites", filter: `invitee_id=eq.${user.id}` },
-          ...(ids("match_id").length ? [{ table: "matches", filter: inList("id", ids("match_id")) }] : []),
+          ...(ids("match_id").length
+            ? [
+                { table: "matches", filter: inList("id", ids("match_id")) },
+                { table: "match_entries", filter: inList("match_id", ids("match_id")) },
+              ]
+            : []),
         ]}
       />
       <DmRoom
@@ -79,7 +91,6 @@ export default async function DmPage({ params }: { params: Promise<{ threadId: s
         invites={(invites ?? []) as InviteInfo[]}
         refStatus={refStatus}
         live={live}
-        memberGroupIds={memberships.map((m) => m.group.id)}
       />
     </>
   );

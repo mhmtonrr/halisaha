@@ -3,6 +3,7 @@ import { GatheringPanel, type EntryStatus } from "./GatheringPanel";
 import { matchWhen, feeText } from "@/lib/match-rules";
 import { Icon } from "@/components/Icon";
 import { notFound } from "next/navigation";
+import { NoMatchAccess } from "@/components/NoMatchAccess";
 import { requireUser } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { finalizeExpired } from "@/lib/finalize";
@@ -15,7 +16,7 @@ import type { PitchPlayer } from "@/components/LineupPitch";
 import { LineupStage, type StageSide } from "./LineupStage";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { AddPlayer, type Person } from "./AddPlayer";
-import { Applications, ListingManage, RivalMissing, ScheduleManage, type EntryRow } from "./ManageSections";
+import { Applications, Invitees, ListingManage, RivalMissing, ScheduleManage, type EntryRow } from "./ManageSections";
 import { RosterBoard, type BoardPerson } from "./RosterBoard";
 import { AutoOpenDetails } from "@/components/AutoOpenDetails";
 import { applyMatch, cancelApplication } from "@/lib/match-manage-actions";
@@ -50,6 +51,7 @@ const OK_TEXT: Record<string, string> = {
   ertelendi: "Maçın tarihi değişti; kadroya bildirim gitti.",
   kesin: "Maç kesinleşti; kadroya bildirim gitti.",
   iptal: "Maç iptal edildi; herkese bildirim gitti.",
+  "davet-iptal": "Davet geri çekildi.",
 };
 const TEAM = {
   A: { label: "Sarı", text: "text-team-a", bg: "bg-team-a" },
@@ -217,7 +219,8 @@ export default async function MatchPage({
     .eq("id", matchId)
     .eq("group_id", groupId)
     .maybeSingle();
-  if (!first) notFound();
+  // Çıkarılan / daveti iptal edilen kişiye satır dönmez (0056)
+  if (!first) return <NoMatchAccess title="Maç" />;
   if (first.status === "voting") await finalizeExpired(groupId);
 
   const [{ data: match }, roster, players, { data: canManage }, { data: myTeam }, { data: isAdmin }, { data: myEntry }, { data: isMember }] = await Promise.all([
@@ -257,7 +260,7 @@ export default async function MatchPage({
       ? supabase.from("match_challenges").select("id, to_group_id, awaiting_group_id, proposed_at, proposed_tbd, venue").eq("from_match_id", matchId).eq("status", "pending").maybeSingle().then((r) => r.data)
       : Promise.resolve(null),
     // Üye olmayan, kaydı olmayan ama maçı bir ilandan görüyor: "Başvur"
-    open && !isMember && !myEntry
+    open && !isMember && (!myEntry || myEntry.status === "left")
       ? supabase.from("match_listings").select("id").eq("match_id", matchId).eq("status", "active").limit(1).maybeSingle().then((r) => r.data?.id as string | undefined)
       : Promise.resolve(undefined),
   ]);
@@ -301,6 +304,11 @@ export default async function MatchPage({
   const friends = manage ? await loadFriends(supabase, user.id) : [];
   const statuses = Object.fromEntries(entries.filter((e) => e.userId && busy.has(e.userId)).map((e) => [e.userId as string, e.status]));
   const full = !!match.capacity && match.roster_count >= match.capacity;
+  // Takımın/grubun kendi üyeleri; bunların dışındakiler çıkarılınca maçtan tamamen düşer
+  const teamUsers = new Set(players.filter((p) => p.user_id && !p.is_loan).map((p) => p.user_id as string));
+  const invitees = entries.filter((e) => e.userId && !teamUsers.has(e.userId) && (e.status === "invited" || e.status === "declined"));
+  // Takım dışından, kendisi çıkmış / engellenmiş kayıt yanıt veremez
+  const lapsed = !isMember && ["left", "removed", "rejected"].includes(myEntry?.status ?? "");
   const myTeamColor = myTeam?.color ?? null;
   const opp = match.challenge_id
     ? await loadOpponent(supabase, match.challenge_id, matchId, match.opponent_group_id)
@@ -382,11 +390,11 @@ export default async function MatchPage({
     size: size ?? inferSize(list.length),
     formationId,
     rating: teamRating(list.map((p) => p.overall)),
-    players: list.map((r) => ({ ...toPitch(r), slot: r.slot, userId: r.userId, movable: !!r.userId || !!isAdmin })),
+    players: list.map((r) => ({ ...toPitch(r), slot: r.slot, userId: r.userId, movable: !!r.userId || !!isAdmin, leaves: !r.userId || !teamUsers.has(r.userId) })),
     // Yedek sırası takıma bağlı değil: kendi aramızda iki tarafın kulübesinde de görünür
     reserves:
       planned && key !== "opp"
-        ? board.filter((p) => p.zone === "reserve").map((p) => ({ key: p.key, userId: p.userId, playerId: p.playerId, name: p.name, overall: p.overall, photoUrl: p.photoUrl ?? null, movable: p.movable }))
+        ? board.filter((p) => p.zone === "reserve").map((p) => ({ key: p.key, userId: p.userId, playerId: p.playerId, name: p.name, overall: p.overall, photoUrl: p.photoUrl ?? null, movable: p.movable, leaves: p.leaves }))
         : [],
     editable,
   });
@@ -439,6 +447,8 @@ export default async function MatchPage({
         watches={[
           { table: "matches", filter: `id=eq.${matchId}` },
           { table: "match_players", filter: `match_id=eq.${matchId}` },
+          // Davet/yanıt değişimi; erişimi iptal edilenin açık sayfası da bununla kapanır
+          { table: "match_entries", filter: `match_id=eq.${matchId}` },
           { table: "match_results", filter: `match_id=eq.${matchId}` },
           { table: "match_withdrawals", filter: `match_id=eq.${matchId}` },
           ...(open && external && !match.challenge_id ? [{ table: "match_challenges", filter: `from_match_id=eq.${matchId}` }] : []),
@@ -512,7 +522,7 @@ export default async function MatchPage({
           reserve={match.reserve_count}
           capacity={match.capacity ?? match.roster_count}
           myStatus={(myEntry?.status as EntryStatus) ?? null}
-          canRespond={!!myEntry || (!!isMember && match.open_to_members)}
+          canRespond={!lapsed && (!!myEntry || (!!isMember && match.open_to_members))}
           flash={yanit}
         />
       )}
@@ -612,6 +622,7 @@ export default async function MatchPage({
         />
       )}
       {manage && <Applications groupId={groupId} matchId={matchId} entries={entries} full={full} />}
+      {manage && <Invitees groupId={groupId} matchId={matchId} entries={invitees} />}
 
       {!planned && stage}
 
@@ -746,12 +757,11 @@ const OUT_TAG: Record<string, string> = {
   declined: "Gelemem dedi",
   left: "Kadrodan çıktı",
   invited: "Davetli, yanıt bekleniyor",
-  rejected: "Başvurusu reddedildi",
   none: "Yanıt vermedi",
 };
 const OUT_ORDER = Object.keys(OUT_TAG);
 
-/** Kadro panosunun kişileri: kadro (maç kadrosu), yedek (sıra ile), kadro dışı (kalan herkes) */
+/** Kadro panosunun kişileri: kadro (maç kadrosu), yedek (sıra ile), kadro dışı (takımın kalan üyeleri) */
 function buildBoard({
   roster,
   entries,
@@ -778,6 +788,7 @@ function buildBoard({
     position: r.position,
     zone: "in",
     movable: !!r.userId || isAdmin,
+    leaves: !r.userId || !byUser.has(r.userId),
   }));
   const seen = new Set(inRoster.map((p) => p.key));
   const reserve: BoardPerson[] = [];
@@ -789,11 +800,13 @@ function buildBoard({
     else out.push({ ...p, key, zone: "out", tag: OUT_TAG[status], order: OUT_ORDER.indexOf(status) });
   };
   for (const e of [...entries].sort((a, b) => (a.queued_at ?? a.created_at).localeCompare(b.queued_at ?? b.created_at))) {
-    // Onay bekleyen başvurular ayrı kartlarda
-    if (e.status === "pending" || e.status === "in") continue;
+    // Onay bekleyen başvurular ayrı kartlarda; reddedilen/çıkarılan üye "Yanıt vermedi" olarak aşağıda
+    if (["pending", "in", "rejected", "removed"].includes(e.status)) continue;
     const key = e.user_id ?? e.player_id;
     if (!key || (e.user_id && former.has(e.user_id))) continue;
     const member = e.user_id ? byUser.get(e.user_id) : undefined;
+    // Takım dışından biri panoda yalnızca yedekse görünür (davetliler ayrı listede)
+    if (!member && e.status !== "reserve") continue;
     const guest = one(e.group_players);
     add(key, e.status, {
       userId: e.user_id,
@@ -802,14 +815,14 @@ function buildBoard({
       overall: member?.overall ?? (e.user_id ? ratings.get(e.user_id) : undefined) ?? 65,
       photoUrl: member?.photo_url ?? null,
       position: e.position ?? member?.position ?? guest?.position ?? null,
-      // Takım dışından davetli / gelemem diyen elle kadroya yazılamaz
-      movable: e.user_id ? !!member || e.status === "reserve" || e.status === "left" : isAdmin,
+      movable: e.user_id ? true : isAdmin,
+      leaves: !member,
     });
   }
   // Başvurusu bekleyen üye "yanıt vermedi" sayılmaz
   for (const e of entries) if (e.status === "pending" && e.user_id) seen.add(e.user_id);
   for (const m of team) {
-    add(m.user_id as string, "none", { userId: m.user_id, playerId: m.id, name: m.display_name, overall: m.overall, position: m.position, movable: true });
+    add(m.user_id as string, "none", { userId: m.user_id, playerId: m.id, name: m.display_name, overall: m.overall, position: m.position, movable: true, leaves: false });
   }
   out.sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, "tr"));
   return [...inRoster, ...reserve, ...out];

@@ -6,6 +6,7 @@ import { POSITION_NAME, POSITIONS, type Position } from "@/lib/data";
 import { Icon } from "@/components/Icon";
 import { TeamBadge } from "@/components/TeamBadge";
 import { SubmitButton } from "@/components/SubmitButton";
+import { NoMatchAccess } from "@/components/NoMatchAccess";
 import { OvrBadge, PositionChip } from "@/components/PlayerCard";
 import { Card, ErrorNote, Header, Input, LinkButton, SectionTitle, cx } from "@/components/ui";
 
@@ -51,6 +52,7 @@ export default async function MatchInvitePage({
   const { error, ok } = await searchParams;
   const { supabase } = await requireUser();
   const { data } = await supabase.rpc("match_by_code", { p_code: code });
+  if ((data as { blocked?: boolean } | null)?.blocked) return <NoMatchAccess title="Maç daveti" />;
   const m = data as ByCode | null;
   const back = `/davet/m/${encodeURIComponent(code)}`;
 
@@ -71,7 +73,7 @@ export default async function MatchInvitePage({
   const capacity = m.capacity ?? m.roster_count;
   const missing = Math.max(0, capacity - m.roster_count);
   const matchUrl = `/g/${m.group_id}/m/${m.match_id}`;
-  const inside = m.is_member || ["in", "reserve", "invited"].includes(m.my_status ?? "");
+  const inside = m.is_member || ["in", "reserve", "invited", "declined"].includes(m.my_status ?? "");
 
   return (
     <main>
@@ -139,8 +141,6 @@ export default async function MatchInvitePage({
             <button className="text-xs text-muted underline">Başvurumu geri çek</button>
           </form>
         </Card>
-      ) : m.my_status === "rejected" ? (
-        <Card className="mb-4 text-center text-sm text-muted">Bu maça başvurun kabul edilmedi.</Card>
       ) : (
         <Card className="mb-4 space-y-2">
           <div className="font-semibold">Maça katılmak ister misin?</div>

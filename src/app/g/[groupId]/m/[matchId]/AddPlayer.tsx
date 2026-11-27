@@ -50,6 +50,14 @@ export function AddPlayer({
   const [busy, setBusy] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const { q, city, district } = search;
+  // Sunucudaki kayıt düşünce (davet geri çekildi) "Davet edildi" etiketi de kalkar
+  const statusKey = Object.keys(statuses).sort().join();
+  const [seenKey, setSeenKey] = useState(statusKey);
+  if (seenKey !== statusKey) {
+    const before = seenKey.split(",");
+    setSeenKey(statusKey);
+    setSent((s) => s.filter((id) => statuses[id] || !before.includes(id)));
+  }
   const searching = tab === "app";
 
   useEffect(() => {

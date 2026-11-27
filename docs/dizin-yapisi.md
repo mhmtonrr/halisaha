@@ -16,6 +16,7 @@ src/app/g/[groupId]/m/[matchId]/ManageSections.tsx  Maç ekranı yönetim bölü
 src/app/g/[groupId]/m/[matchId]/LineupStage.tsx  Diziliş sahnesi (sürükle-bırak, kulübe, karşılaşma görünümü); StageField.tsx perspektifli saha zemini
 src/app/g/[groupId]/m/[matchId]/MatchSummary.tsx  Maç özeti (oylamada ve sonrasında): skor + gol/asist/kurtarış
 src/app/g/[groupId]/m/[matchId]/ResultsView.tsx  Maç sonuçları (maçın adamı, senin sonucun, performans sıralaması); ResultTabs.tsx sekmeler
+src/components/NoMatchAccess.tsx  "Bu maça erişimin yok" ekranı (maç sayfası ve /davet/m)
 src/components/team/TeamTable.tsx  Takım puan tablosu verisi (sonuç ekranı + takım istatistikleri); LeagueTable.tsx tablo görünümü
 src/app/g/[groupId]/m/[matchId]/RosterBoard.tsx  Kadro panosu: toplanırken Kadromuz / Yedekler / Kadro dışı (sürükle-bırak); planlanmış maçta yalnızca Kadro dışı
 src/app/g/[groupId]/m/[matchId]/AddPlayer.tsx  Oyuncu ekle: arkadaşlardan / uygulamada arayarak davet, misafir (GuestForm)
