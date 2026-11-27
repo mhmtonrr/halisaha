@@ -107,7 +107,7 @@ export function MatchSetupForm({
   const [venue, setVenue] = useState("");
   const [fee, setFee] = useState("");
   const [rivalSource, setRivalSource] = useState<"app" | "name">("app");
-  const [rivalTeam, setRivalTeam] = useState<RivalTeam | null>(rival);
+  const [rivalTeam, setRivalTeam] = useState<RivalTeam | null>(isAdmin ? rival : null);
   const [rivalName, setRivalName] = useState("");
   const [rivalSearch, setRivalSearch] = useState<RivalSearch>({ q: "", city: homeCity, district: "" });
   const [selected, setSelected] = useState<Set<string>>(new Set([meId]));
@@ -364,6 +364,7 @@ export function MatchSetupForm({
             onName={setRivalName}
             search={rivalSearch}
             onSearch={setRivalSearch}
+            canOffer={isAdmin}
           />
         )}
 

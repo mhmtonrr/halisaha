@@ -171,13 +171,58 @@ try {
   for (let i = 0; i < 40 && (await admin.from("match_challenges").select("awaiting_group_id").eq("from_match_id", M3).single()).data.awaiting_group_id !== T; i++) await new Promise((r) => setTimeout(r, 500));
   check("rakip karşı teklif yaptı, sıra gönderende", (await admin.from("match_challenges").select("awaiting_group_id").eq("from_match_id", M3).single()).data.awaiting_group_id === T);
   await go(PO, `${BASE}/g/${T}/m/${M3}`);
-  check("gönderen maç ekranında karşı teklif uyarısını görür", (await PO.locator("text=karşı teklif yaptı; yanıtın bekleniyor").count()) === 1);
-  await PO.click('a:has-text("karşı teklif yaptı")'); await PO.waitForURL(/teklifler/); await PO.waitForLoadState("networkidle");
+  check("gönderen maç ekranında karşı teklif uyarısını görür", (await PO.locator("text=Karşı teklif geldi; yanıtın bekleniyor").count()) === 1);
+  await PO.click('a:has-text("Karşı teklif geldi")'); await PO.waitForURL(/teklifler/); await PO.waitForLoadState("networkidle");
   await PO.click('button:has-text("Kabul et")');
   await until(async () => (await admin.from("match_challenges").select("status").eq("from_match_id", M3).single()).data.status === "accepted");
   const lm = (await admin.from("matches").select("opponent_group_id, time_tbd, challenge_id").eq("id", M3).single()).data;
   const rm = (await admin.from("matches").select("status").eq("challenge_id", lm.challenge_id).eq("group_id", RT).maybeSingle()).data;
   check("maç rakiple bağlandı, saat karşı tekliften, rakibe toplanan maç açıldı", lm.opponent_group_id === RT && lm.time_tbd === false && rm?.status === "gathering");
+  await go(PO, `${BASE}/g/${T}/m/${M3}`);
+  check("toplanma ekranında 'Rakip · Onaylandı'", (await PO.getByText("Onaylandı", { exact: true }).count()) === 1);
+
+  // --- Teklifler sayfasından iptal: maçlar silinmez (0059)
+  await go(PO, `${BASE}/g/${T}/teklifler`);
+  await PO.click('button:has-text("Maçı iptal et")');
+  const linkedStatuses = async () => (await admin.from("matches").select("status").eq("challenge_id", lm.challenge_id)).data.map((x) => x.status);
+  await until(async () => (await linkedStatuses()).every((s) => s === "cancelled"));
+  const ls = await linkedStatuses();
+  check("teklifler sayfasından iptal: iki maç da duruyor ve iptal", ls.length === 2 && ls.every((s) => s === "cancelled"));
+
+  // --- Red → yeni teklif → geri çekme
+  const M4 = await mk(5);
+  const url4 = `${BASE}/g/${T}/m/${M4}`;
+  const offer = async () => {
+    await PO.selectOption('select[aria-label="İl"] >> nth=-1', "");
+    await PO.fill('input[aria-label="Takım ara"]', "Rakip Aslanlar");
+    await PO.locator('#rakip button:has-text("Rakip Aslanlar")').first().click();
+    await PO.click('button:has-text("Teklif gönder")'); await PO.waitForSelector('#rakip button:has-text("Teklifi geri çek")', { timeout: 20000 }); await PO.waitForLoadState("networkidle");
+  };
+  const offers = async () => must(await admin.from("match_challenges").select("status").eq("from_match_id", M4).order("created_at"));
+  await go(PO, url4);
+  await offer();
+  check("Rakip bölümünde 'Onay bekliyor' ve 'Teklifi geri çek'", (await PO.locator('#rakip :text-is("Onay bekliyor")').count()) === 1);
+  await PO.screenshot({ path: `${SHOTS}/manage-rival-pending.png`, fullPage: true });
+  await go(PR, `${BASE}/g/${RT}/teklifler`);
+  await PR.click('button:has-text("Reddet")');
+  await until(async () => (await offers())[0].status === "declined");
+  await go(PO, url4);
+  check("reddedilince 'Reddedildi' ve yeni rakip araması", (await PO.locator('#rakip :text-is("Reddedildi")').count()) === 1 && (await PO.locator('#rakip input[aria-label="Takım ara"]').count()) === 1);
+  await PO.screenshot({ path: `${SHOTS}/manage-rival-declined.png`, fullPage: true });
+  await offer();
+  await PO.click('#rakip button:has-text("Teklifi geri çek")'); await PO.waitForURL(/ok=teklif-geri/); await PO.waitForLoadState("networkidle"); await PO.locator("main").waitFor();
+  const o = await offers();
+  check("yeniden teklif ve geri çekme", o.length === 2 && o[1].status === "cancelled" && (await PO.locator('#rakip input[aria-label="Takım ara"]').count()) === 1);
+
+  // --- Organizatör (kaptan/yetkili değil) kendi maçında teklif gönderemez: not görür, rakip adını yazabilir
+  must(await admin.from("group_players").update({ role: "organizer" }).eq("group_id", T).eq("user_id", B.id).select("id"));
+  const bc = await asUser(B);
+  const M5 = must(await bc.rpc("create_match_v2", { p_group: T, p_day: day, p_time: null, p_team_size: 5, p_kind: "external", p_capacity: 5, p_with_me: true }));
+  await go(PB, `${BASE}/g/${T}/m/${M5}`);
+  check("organizatöre arama/teklif düğmesi yerine not", (await PB.locator("text=teklifi takımın kaptanı veya yetkilisi gönderir").count()) === 1 && (await PB.locator('#rakip input[aria-label="Takım ara"]').count()) === 0 && (await PB.locator('button:has-text("Teklif gönder")').count()) === 0);
+  await PB.screenshot({ path: `${SHOTS}/manage-rival-organizer.png`, fullPage: true });
+  await PB.click('button:text-is("Uygulamada yok")'); await PB.fill('input[aria-label="Rakip adı"]', "Mahalle Spor"); await PB.click('form:has(input[name="opponent"]) button:text-is("Kaydet")'); await PB.waitForURL(/ok=rakip/); await PB.waitForLoadState("networkidle");
+  check("organizatör rakip adını kaydeder", (await admin.from("matches").select("opponent_name").eq("id", M5).single()).data.opponent_name === "Mahalle Spor");
 } catch (e) {
   console.log("  ✗ ÇÖKTÜ:", e.message.split("\n")[0]);
   failed++;

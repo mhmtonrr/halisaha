@@ -6,7 +6,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { sendChallenge, setOpponent } from "@/lib/match-manage-actions";
 
 /** Maç ekranında rakip seçimi (Maç ayarla ile aynı seçici): uygulamadaki takıma teklif veya rakip adını kaydetme */
-export function RivalChooser({ groupId, matchId, opponentName, homeCity }: { groupId: string; matchId: string; opponentName: string | null; homeCity: string }) {
+export function RivalChooser({ groupId, matchId, opponentName, homeCity, canOffer }: { groupId: string; matchId: string; opponentName: string | null; homeCity: string; canOffer: boolean }) {
   const [source, setSource] = useState<"app" | "name">(opponentName ? "name" : "app");
   const [team, setTeam] = useState<RivalTeam | null>(null);
   const [name, setName] = useState(opponentName ?? "");
@@ -26,6 +26,7 @@ export function RivalChooser({ groupId, matchId, opponentName, homeCity }: { gro
         search={search}
         onSearch={setSearch}
         teamHint="Teklif gönderince onayına düşer"
+        canOffer={canOffer}
       />
       {(source === "name" || team) && (
         <form action={source === "name" ? setOpponent : sendChallenge}>

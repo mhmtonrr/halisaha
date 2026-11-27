@@ -36,6 +36,7 @@ export function RivalPicker({
   search,
   onSearch,
   teamHint = "Maç açılınca teklif gider",
+  canOffer,
 }: {
   groupId: string;
   source: "app" | "name";
@@ -48,11 +49,13 @@ export function RivalPicker({
   onSearch: (v: RivalSearch) => void;
   /** Seçilen takımın konumu yoksa altında yazan */
   teamHint?: string;
+  /** Teklifi sadece kaptan/yetkili gönderir (create_challenge_v2); diğerlerine arama yerine not */
+  canOffer: boolean;
 }) {
   const [results, setResults] = useState<RivalTeam[] | null>(null);
   const [failed, setFailed] = useState(false);
   const { q, city, district } = search;
-  const searching = source === "app" && !team;
+  const searching = canOffer && source === "app" && !team;
 
   useEffect(() => {
     if (!searching) return;
@@ -102,6 +105,10 @@ export function RivalPicker({
           <Input value={name} onChange={(e) => onName(e.target.value)} maxLength={60} placeholder="Örn. Yıldızspor" aria-label="Rakip adı" />
           <p className="px-1 text-xs text-muted">Uygulamayı kullanmayan takımın adını yaz.</p>
         </div>
+      ) : !canOffer ? (
+        <p className="rounded-xl bg-amber-400/10 p-3 text-sm">
+          Uygulamadaki takıma teklifi takımın kaptanı veya yetkilisi gönderir. Sen &quot;Uygulamada yok&quot; ile rakip adını yazabilirsin.
+        </p>
       ) : team ? (
         <Card className="flex items-center gap-3 border-primary bg-primary/10">
           <TeamBadge id={team.id} name={team.name} color={team.color ?? null} logo={team.logo ?? null} />

@@ -1020,35 +1020,30 @@ export async function closeVoting(fd: FormData) {
 type Notice = { ids: string[]; type: NotificationType; content: Content };
 
 /**
- * Maç silme/teklif iptali bildirimleri. Alıcılar silmeden ÖNCE toplanır (silinince kadro da gider), işlem başarılı olunca
- * `sendNotices` ile gönderilir. Bekleyen teklif → karşı takımın yetkililerine "geri çekildi"; kabul edilmiş teklif/maç →
- * her maçın kadrosuna (bağlı maçta iki takımın kadrosu ve yetkilileri) "iptal edildi".
+ * Teklif iptali bildirimleri. Alıcılar iptalden ÖNCE toplanır, işlem başarılı olunca `sendNotices` ile gönderilir.
+ * Bekleyen teklif → karşı takımın yetkililerine "geri çekildi"; kabul edilmiş teklif → iki maçın kadro, yedek,
+ * davetli, başvuran ve yetkililerine "iptal edildi".
  */
-async function prepareCancelNotices(opts: { matchId?: string; challengeId?: string }): Promise<Notice[]> {
+async function prepareCancelNotices(challengeId: string): Promise<Notice[]> {
   try {
     const admin = createAdminClient();
-    let matchIds = opts.matchId ? [opts.matchId] : [];
-    if (opts.challengeId) {
-      const { data: c } = await admin.from("match_challenges").select("status, from_group_id, to_group_id").eq("id", opts.challengeId).maybeSingle();
-      if (!c) return [];
-      if (c.status === "pending") {
-        const ids = await groupMemberIds(admin, c.to_group_id as string, { adminsOnly: true });
-        return [{ ids, type: "offer", content: text.challengeWithdrawn(await groupName(admin, c.from_group_id as string), c.to_group_id as string) }];
-      }
-      const { data: ms } = await admin.from("matches").select("id").eq("challenge_id", opts.challengeId);
-      matchIds = (ms ?? []).map((m) => m.id as string);
+    const { data: c } = await admin.from("match_challenges").select("status, from_group_id, to_group_id").eq("id", challengeId).maybeSingle();
+    if (!c) return [];
+    if (c.status === "pending") {
+      const ids = await groupMemberIds(admin, c.to_group_id as string, { adminsOnly: true });
+      return [{ ids, type: "offer", content: text.challengeWithdrawn(await groupName(admin, c.from_group_id as string), c.to_group_id as string) }];
     }
-    if (!matchIds.length) return [];
-    const { data: ms } = await admin.from("matches").select("id, group_id, played_at, opponent_name, challenge_id").in("id", matchIds);
+    const { data: ms } = await admin.from("matches").select("id, group_id, played_at, opponent_name").eq("challenge_id", challengeId);
     return await Promise.all(
       (ms ?? []).map(async (m) => {
-        const [roster, admins, name] = await Promise.all([
+        const [roster, entries, admins, name] = await Promise.all([
           matchAccountIds(admin, [m.id as string]),
-          m.challenge_id ? groupMemberIds(admin, m.group_id as string, { adminsOnly: true }) : Promise.resolve([] as string[]),
+          admin.from("match_entries").select("user_id").eq("match_id", m.id).in("status", ["in", "reserve", "invited", "pending"]).not("user_id", "is", null),
+          groupMemberIds(admin, m.group_id as string, { adminsOnly: true }),
           groupName(admin, m.group_id as string),
         ]);
         return {
-          ids: [...roster, ...admins],
+          ids: [...new Set([...roster, ...(entries.data ?? []).map((e) => e.user_id as string), ...admins])],
           type: "match" as const,
           content: text.matchCancelled(name, m.group_id as string, m.id as string, formatDate(m.played_at as string), m.opponent_name as string | null),
         };
@@ -1132,11 +1127,12 @@ export async function cancelChallenge(fd: FormData) {
   const groupId = str(fd, "groupId");
   const challengeId = str(fd, "challengeId");
   const back = `/g/${groupId}/teklifler`;
-  const notices = await prepareCancelNotices({ challengeId });
+  const notices = await prepareCancelNotices(challengeId);
   const { error } = await supabase.rpc("cancel_challenge", { p_challenge_id: challengeId });
   if (error) fail(back, rpcMessage(error, "Teklif iptal edilemedi"));
   sendNotices(notices, user.id);
-  revalidatePath(back);
+  revalidatePath(`/g/${groupId}`, "layout");
+  revalidatePath("/");
   redirect(back);
 }
 

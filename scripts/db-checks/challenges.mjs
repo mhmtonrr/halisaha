@@ -112,7 +112,7 @@ ok("gönderen bekleyen teklifi geri çekti", (await q(`select status from match_
 const ch4 = (await q(`select create_challenge($1,$2,${future},null,null,null) id`, [A, B]))[0].id;
 await as(4); await db.query(`select respond_challenge($1,true)`, [ch4]);
 await as(1); await db.query(`select cancel_challenge($1)`, [ch4]);
-ok("kabul edilmiş planlı maç iptali iki maçı da siler", (await q(`select count(*)::int c from matches where challenge_id=$1`, [ch4]))[0].c === 0
+ok("kabul edilmiş teklif iptali iki maçı da silmeden iptal eder (0059)", (await q(`select count(*)::int c from matches where challenge_id=$1 and status='cancelled'`, [ch4]))[0].c === 2
   && (await q(`select status from match_challenges where id=$1`, [ch4]))[0].status === "cancelled");
 
 // --- spam sınırı

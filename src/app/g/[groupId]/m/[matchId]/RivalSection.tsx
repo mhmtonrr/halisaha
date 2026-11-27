@@ -37,12 +37,12 @@ export function RivalSection({
   opponentName: string | null;
   offer: RivalOffer | null;
   canManage: boolean;
-  /** Teklifi sadece kaptan/yetkili geri çekebilir (cancel_challenge) */
+  /** Kaptan/yetkili: teklifi gönderir, yanıtlar ve geri çeker */
   canOffer: boolean;
 }) {
   const pending = offer?.status === "pending" ? offer : null;
   const declined = !opponentName && offer?.status === "declined" ? offer : null;
-  const chooser = <RivalChooser groupId={groupId} matchId={matchId} opponentName={opponentName} homeCity={homeCity} />;
+  const chooser = <RivalChooser groupId={groupId} matchId={matchId} opponentName={opponentName} homeCity={homeCity} canOffer={canOffer} />;
 
   return (
     <section id="rakip" className="mb-4 space-y-2">
@@ -53,14 +53,18 @@ export function RivalSection({
           <TeamRow team={pending.team} sub={pending.at ? `Teklif: ${matchWhen(pending.at, pending.tbd)}` : "Teklif gönderildi"}>
             <Badge tone="warn">Onay bekliyor</Badge>
           </TeamRow>
-          {canManage && pending.ours ? (
+          {canOffer && pending.ours ? (
             <Link href={`/g/${groupId}/teklifler`} className="flex min-h-11 items-center gap-2 rounded-xl bg-amber-400/10 px-3 text-sm">
               <span className="min-w-0 flex-1">Karşı teklif geldi; yanıtın bekleniyor.</span>
               <span className="shrink-0 font-semibold text-primary">Yanıtla</span>
               <Icon name="chevron_right" className="text-[20px] text-muted" />
             </Link>
           ) : (
-            canManage && <p className="text-xs text-muted">Yanıt gelince haber veririz. Başka takım aramak için teklifi geri çek.</p>
+            canManage && (
+              <p className="text-xs text-muted">
+                {canOffer ? "Yanıt gelince haber veririz. Başka takım aramak için teklifi geri çek." : "Teklifi takımın kaptanı veya yetkilisi yönetir."}
+              </p>
+            )
           )}
           {canOffer && (
             <form action={withdrawChallenge}>

@@ -74,7 +74,7 @@ Tuzak: editördeki token'ın `click`'i yukarı çıkarsa slot/yedek alanının "
 Karşı takımın kaptan/yetkilisi `respond_challenge` ile kabul/ret eder; kabulde **iki takımda da** birer `external` maç
 açılır (`matches.challenge_id` ortak, `opponent_group_id` rakip takım) ve kadroları her takım kendi maçında seçer.
 Teklifi sadece iki takımın üyeleri görür; yazma sadece RPC (`cancel_challenge`: gönderen bekleyeni geri çeker, kabul
-edilmiş planlı maçı iki taraf da iptal eder — iki maç birlikte silinir). Bağlı maçta "Maçı iptal et" = `cancel_challenge`.
+edilmiş maçı iki taraf da iptal eder — iki maç silinmez, `cancelled` olur, 0059). Maç ekranındaki "Maçı iptal et" (`cancel_match`) ile aynı sonuç. Uygulamadaki takıma teklifi yalnızca kaptan/yetkili gönderir; diğer maç yöneticisine `RivalPicker` arama yerine not gösterir.
 **Skor eşleşmesi**: bağlı maçta skoru iki takım ayrı girer; `submitResult` maçı `played` (skor onayı bekliyor) yapar ve
 `settle_linked_match` RPC'si çağrılır: skorlar birbirinin aynası değilse `mismatch` (oylama açılmaz, taraflar düzeltir),
 rakip girmediyse `waiting`, eşleşirse `settled` ve iki maç da `voting` (24 saat) olur. Maç ekranı ortak karşılaşma ekranıdır:
