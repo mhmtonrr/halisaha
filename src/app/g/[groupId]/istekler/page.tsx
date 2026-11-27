@@ -10,13 +10,14 @@ import { Avatar } from "@/components/Avatar";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { Icon } from "@/components/Icon";
 import { SubmitButton } from "@/components/SubmitButton";
-import { Card, ErrorNote, Header, cx } from "@/components/ui";
+import { Card, ErrorNote, Header, LinkButton, cx } from "@/components/ui";
 import { ProposalDecisions, type PendingProposal } from "../GroupExtras";
 
 // Bekleyen istekler (0044 pending_requests): her bölüm sadece karar verebilene dolu döner; boş sekme gösterilmez
 
 interface JoinReq {
   id: string;
+  user_id: string;
   name: string;
   photo_url: string | null;
   city: string | null;
@@ -129,13 +130,15 @@ export default async function PendingPage({
             <div className="space-y-2">
               {pending.joins.map((r) => (
                 <Card key={r.id} className="space-y-2 p-3">
-                  <div className="flex items-center gap-3">
+                  <Link href={`/oyuncu/${r.user_id}`} className="flex items-center gap-3">
                     <Avatar name={r.name} photoUrl={r.photo_url} className="h-10 w-10 bg-surface-highest text-xs" />
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-semibold">{r.name}</div>
                       <div className="text-xs text-on-surface-variant">{formatRegion(r.city, r.district) || "Bölge yok"}</div>
                     </div>
-                  </div>
+                    <span className="shrink-0 text-xs font-semibold text-primary">Profili gör</span>
+                    <Icon name="chevron_right" className="shrink-0 text-[18px] text-on-surface-variant" />
+                  </Link>
                   {r.message && <p className="rounded-lg bg-surface-low p-2 text-xs text-on-surface-variant">“{r.message}”</p>}
                   <div className="grid grid-cols-2 gap-2">
                     {(["1", "0"] as const).map((a) => (
@@ -190,24 +193,25 @@ export default async function PendingPage({
           {active === "basvuru" && (
             <div className="space-y-2">
               {pending.applications.map((a) => (
-                <Link
-                  key={`${a.match_id}:${a.user_id}`}
-                  href={`/g/${groupId}/m/${a.match_id}`}
-                  className="flex items-center gap-3 rounded-xl border border-line bg-surface-container p-3 transition hover:border-primary/50"
-                >
-                  <Avatar name={a.name} photoUrl={a.photo_url} className="h-10 w-10 bg-surface-highest text-xs" />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-semibold">{a.name}</div>
-                    <div className="truncate text-xs text-on-surface-variant">
-                      {matchWhen(a.played_at, a.time_tbd)}
-                      {SOURCE[a.source] ? ` · ${SOURCE[a.source]}` : ""}
-                      {a.position ? ` · ${POSITION_NAME[a.position as Position] ?? a.position}` : ""}
+                <Card key={`${a.match_id}:${a.user_id}`} className="space-y-2 p-3">
+                  <Link href={`/oyuncu/${a.user_id}`} className="flex items-center gap-3">
+                    <Avatar name={a.name} photoUrl={a.photo_url} className="h-10 w-10 bg-surface-highest text-xs" />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold">{a.name}</div>
+                      <div className="truncate text-xs text-on-surface-variant">
+                        {matchWhen(a.played_at, a.time_tbd)}
+                        {SOURCE[a.source] ? ` · ${SOURCE[a.source]}` : ""}
+                        {a.position ? ` · ${POSITION_NAME[a.position as Position] ?? a.position}` : ""}
+                      </div>
+                      {a.note && <div className="truncate text-xs text-on-surface-variant">“{a.note}”</div>}
                     </div>
-                    {a.note && <div className="truncate text-xs text-on-surface-variant">“{a.note}”</div>}
-                  </div>
-                  <span className="shrink-0 text-xs font-semibold text-primary">Maçta karar ver</span>
-                  <Icon name="chevron_right" className="shrink-0 text-[18px] text-on-surface-variant" />
-                </Link>
+                    <span className="shrink-0 text-xs font-semibold text-primary">Profili gör</span>
+                    <Icon name="chevron_right" className="shrink-0 text-[18px] text-on-surface-variant" />
+                  </Link>
+                  <LinkButton href={`/g/${groupId}/m/${a.match_id}`} variant="secondary" className="min-h-10 w-full text-sm">
+                    Maçta karar ver
+                  </LinkButton>
+                </Card>
               ))}
             </div>
           )}

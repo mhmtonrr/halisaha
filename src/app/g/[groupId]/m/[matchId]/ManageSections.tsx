@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Card, Input, SectionTitle, cx } from "@/components/ui";
@@ -65,7 +66,8 @@ export function Applications({ groupId, matchId, entries, full }: { groupId: str
           <SectionTitle>Başvurular · {pending.length}</SectionTitle>
           {pending.map((e) => (
             <Card key={e.userId} className="space-y-2">
-              <div className="flex items-center gap-3">
+              {/* Başvurular hep hesaplıdır; karar vermeden önce profil incelenir */}
+              <Link href={`/oyuncu/${e.userId}`} className="flex items-center gap-3">
                 <OvrBadge overall={e.overall} />
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-semibold">{e.name}</div>
@@ -74,7 +76,9 @@ export function Applications({ groupId, matchId, entries, full }: { groupId: str
                     {e.position ? ` · ${POSITION_NAME[e.position]}` : ""}
                   </div>
                 </div>
-              </div>
+                <span className="shrink-0 text-xs font-semibold text-primary">Profili gör</span>
+                <Icon name="chevron_right" className="shrink-0 text-[18px] text-muted" />
+              </Link>
               {e.note && <p className="rounded-lg bg-pitch-900 px-3 py-1.5 text-sm text-on-surface-variant">“{e.note}”</p>}
               <div className="grid grid-cols-2 gap-2">
                 {(["1", "0"] as const).map((a) => (
