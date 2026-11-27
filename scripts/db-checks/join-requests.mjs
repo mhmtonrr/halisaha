@@ -1,4 +1,4 @@
-// 0044: katılma isteği + Keşfet grup listesi + bekleyen istekler + maçtan teklif / karşı teklif / tarih değişikliği.
+// 0044 + 0055 (başvuranı inceleme): katılma isteği + Keşfet grup listesi + bekleyen istekler + maçtan teklif / karşı teklif / tarih değişikliği.
 import { setupDb } from "./migrations.mjs";
 const db = await setupDb();
 const U = (n) => `0000000${n}-0000-0000-0000-000000000000`;
@@ -8,6 +8,8 @@ const ok = (l, c) => console.log((c ? "✓ " : "✗ HATA: ") + l);
 const fails = async (sql, args) => { try { await db.query(sql, args); return false; } catch { return true; } };
 const q = async (sql, args) => (await db.query(sql, args)).rows;
 const one = async (sql, args) => (await q(sql, args))[0];
+// 0055: n numaralı kişi, m numaralı başvuranı inceleyebiliyor mu
+const sees = async (n, m) => { await as(n); return (await one(`select is_my_applicant($1) v`, [U(m)])).v; };
 const role = async (g, n, r) => db.query(`select set_member_role((select id from group_players where group_id=$1 and user_id=$2), $3)`, [g, U(n), r]);
 
 // Topluluk C (u1 kurucu, u2 organizatör), takım T (u3 kaptan, u4 üye), takım R (u5 kaptan); u6, u7 yabancı
@@ -47,6 +49,20 @@ ok("ikinci bekleyen istek gönderilemez", await fails(`select request_join($1)`,
 ok("istek sahibi isteğini görür", (await q(`select 1 from group_join_requests where id=$1`, [RQ])).length === 1);
 await as(7);
 ok("başkası isteği görmez", (await q(`select 1 from group_join_requests where id=$1`, [RQ])).length === 0);
+await db.exec(`reset role`);
+await db.query(`update profiles set preferred_position='GK' where id=$1`, [U(6)]);
+await db.query(`insert into user_ratings (user_id, overall, raw, confidence, matches_played) values ($1, 72, 72, 0.5, 3)
+  on conflict (user_id) do update set overall = 72`, [U(6)]);
+ok("kurucu katılma isteği göndereni inceleyebilir", (await sees(1, 6)) === true);
+ok("organizatör katılma isteği göndereni inceleyemez", (await sees(2, 6)) === false);
+ok("yabancı inceleyemez", (await sees(7, 6)) === false);
+ok("başka takımın kaptanı inceleyemez", (await sees(5, 6)) === false);
+ok("erişim tek yönlü: başvuran karar vereni inceleyemez", (await sees(6, 1)) === false);
+await as(1);
+const jr = (await one(`select pending_requests($1) j`, [C])).j.joins[0];
+ok("katılma kartında puan ve mevki gelir", jr.overall === 72 && jr.position === "GK" && jr.user_id === U(6));
+await db.exec(`reset role; set role anon`);
+ok("girişsiz kullanıcı fonksiyonu çağıramaz", await fails(`select is_my_applicant($1)`, [U(6)]));
 await as(2);
 ok("organizatör katılma isteğine karar veremez", await fails(`select decide_join_request($1, true)`, [RQ]));
 ok("organizatör bekleyenlerde katılma isteğini görmez", (await one(`select pending_requests($1) j`, [C])).j.joins.length === 0);
@@ -54,13 +70,16 @@ await as(1);
 ok("kurucu bekleyenlerde isteği görür", (await one(`select pending_requests($1) j`, [C])).j.joins[0].message.startsWith("Merhaba"));
 ok("ana sayfa sayacı 1", (await one(`select joins from my_pending_counts() where group_id=$1`, [C])).joins === 1);
 await db.query(`select decide_join_request($1, true)`, [RQ]);
+ok("kabulden sonra inceleme erişimi kapanır", (await sees(1, 6)) === false);
 await as(6);
 ok("kabul → üye", (await one(`select is_group_member($1) m`, [C])).m === true);
 ok("üye olunca tekrar istek gönderilemez", await fails(`select request_join($1)`, [C]));
 await as(7);
 const RQ2 = (await one(`select request_join($1) id`, [C])).id;
 await as(1);
+ok("puanı olmayanda puan boş gelir", (await one(`select pending_requests($1) j`, [C])).j.joins[0].overall === null);
 await db.query(`select decide_join_request($1, false)`, [RQ2]);
+ok("retten sonra inceleme erişimi kapanır", (await sees(1, 7)) === false);
 await as(7);
 ok("reddedilen bir hafta tekrar gönderemez", await fails(`select request_join($1)`, [C]));
 ok("doğrudan yazma yok", await fails(`insert into group_join_requests (group_id, user_id) values ($1, $2)`, [C, U(7)]));
@@ -68,7 +87,11 @@ await as(3);
 await db.query(`select set_group_discovery($1, null, true)`, [T]);
 await as(7);
 const RQ3 = (await one(`select request_join($1) id`, [T])).id;
+ok("takım kaptanı istek göndereni inceleyebilir", (await sees(3, 7)) === true);
+await as(7);
 await db.query(`select cancel_join_request($1)`, [RQ3]);
+ok("geri çekilen istekte erişim kapanır", (await sees(3, 7)) === false);
+await as(7);
 ok("istek geri çekilir", (await one(`select status from group_join_requests where id=$1`, [RQ3])).status === "cancelled");
 
 // --- Bekleyen istekler: ilan onayı + başvurular
@@ -91,6 +114,30 @@ await db.query(`select apply_match($1, $2)`, [M, L]);
 await as(2);
 ok("maçı kuran organizatör başvuruyu bekleyenlerde görür", (await one(`select pending_requests($1) j`, [C])).j.applications.length === 1);
 ok("organizatörün sayacında başvuru 1", (await one(`select applications from my_pending_counts() where group_id=$1`, [C])).applications === 1);
+ok("maçı kuran organizatör başvuranı inceleyebilir", (await sees(2, 6)) === true);
+ok("grup kurucusu da başvuranı inceleyebilir", (await sees(1, 6)) === true);
+ok("maçla ilgisi olmayan takım üyesi inceleyemez", (await sees(4, 6)) === false);
+ok("başka takımın kaptanı başvuranı inceleyemez", (await sees(5, 6)) === false);
+await db.exec(`reset role`);
+await db.query(`update matches set status='cancelled' where id=$1`, [M]);
+ok("maç iptal olunca erişim kapanır", (await sees(2, 6)) === false);
+await db.exec(`reset role`);
+await db.query(`update matches set status='gathering' where id=$1`, [M]);
+// iptal tetikleyicisi ilanı kapattı; yeniden başvuru için geri aç
+await db.query(`update match_listings set status='active' where id=$1`, [L]);
+await as(6);
+await db.query(`select cancel_application($1)`, [M]);
+ok("geri çekilen başvuruda erişim kapanır", (await sees(2, 6)) === false);
+await as(6);
+await db.query(`select apply_match($1, $2)`, [M, L]);
+ok("yeniden başvurunca erişim açılır", (await sees(2, 6)) === true);
+await db.query(`select decide_application($1, $2, false)`, [M, U(6)]);
+ok("reddedilen başvuruda erişim kapanır", (await sees(2, 6)) === false);
+await db.exec(`reset role`);
+await db.query(`update match_entries set status='pending' where match_id=$1 and user_id=$2`, [M, U(6)]);
+await as(2);
+await db.query(`select decide_application($1, $2, true)`, [M, U(6)]);
+ok("kabul edilen başvuruda erişim kapanır", (await sees(2, 6)) === false);
 await as(4);
 ok("sıradan üye bekleyenleri göremez", await fails(`select pending_requests($1)`, [T]));
 
