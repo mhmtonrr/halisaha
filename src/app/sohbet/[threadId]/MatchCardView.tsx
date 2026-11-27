@@ -156,7 +156,8 @@ export function MatchCardView({
             </div>
           )}
           {href && !inactive && (
-            <Link href={href} className="flex min-h-11 items-center justify-center rounded-xl bg-accent px-4 text-sm font-bold text-pitch-950">
+            // Yanıt beklerken asıl eylem "Geliyorum"; maç bağlantısı ikincil
+            <Link href={href} className={cx("flex min-h-11 items-center justify-center rounded-xl px-4 text-sm", my === "invited" || my === "declined" ? "border border-line font-semibold text-accent" : "bg-accent font-bold text-pitch-950")}>
               {label} ›
             </Link>
           )}
