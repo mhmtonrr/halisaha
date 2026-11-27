@@ -61,15 +61,18 @@ try {
   check("karşılama bitmeden başka sayfaya gidilemez, dönüş adresi saklanır", new URL(A.url()).searchParams.get("next")?.startsWith("/g/"));
   await A.goto(BASE + "/hosgeldin");
   check("isim önceden dolu", (await A.inputValue('input[name="name"]')) === "Kemal Arslan");
+  await A.fill('input[name="birthDate"]', "1994-05-17");
+  await A.click('button:has-text("Devam et")'); // 1 → bölge
   await A.click('button:has-text("Devam et")');
   check("il seçmeden devam edilemez", (await A.locator('select[name="city"]:invalid').count()) === 1);
   await A.selectOption('select[name="city"]', "İstanbul");
   await A.selectOption('select[name="district"]', "Kadıköy");
+  await A.click('button:has-text("Devam et")'); // 2 → saha
   await A.locator('input[name="position"][value="MID"]').check({ force: true });
   await A.locator('input[name="foot"][value="R"]').check({ force: true });
-  await A.fill('input[name="birthYear"]', "1994");
   await shot(A, "12-hosgeldin");
-  await A.click('button:has-text("Devam et")'); await A.waitForURL(BASE + "/", { timeout: 20000 });
+  await A.click('button:has-text("Devam et")'); // 3 → fotoğraf
+  await A.click('button:has-text("Bitir")'); await A.waitForURL(BASE + "/", { timeout: 20000 });
   check("karşılama tamamlanınca ana sayfa", new URL(A.url()).pathname === "/");
 
   // Grup kur (davet testi için)
@@ -83,9 +86,12 @@ try {
   await B.goto(`${BASE}/join/${g.invite_code}`); await B.waitForURL(/\/login/);
   await login(B, users[1]); await settle(B, /\/hosgeldin/);
   check("davetli karşılamada, dönüş adresi davet linki", new URL(B.url()).searchParams.get("next")?.includes(g.invite_code));
+  await B.click('button:has-text("Devam et")');
   await B.selectOption('select[name="city"]', "İzmir");
+  await B.click('button:has-text("Devam et")');
   await B.locator('input[name="position"][value="GK"]').check({ force: true });
-  await B.click('button:has-text("Devam et")'); await settle(B, /\/g\//);
+  await B.click('button:has-text("Devam et")');
+  await B.click('button:has-text("Bitir")'); await settle(B, /\/g\//);
   check("karşılama sonrası doğrudan gruba katıldı", B.url().includes(groupId));
 
   // 4) Profil ve oyuncu sayfasında bölge

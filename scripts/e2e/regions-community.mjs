@@ -31,6 +31,7 @@ try {
   const P = await login(users[0]); await settle(P, /hosgeldin/);
 
   // Karşılama: il seçilmeden ilçe kapalı; il değişince ilçe listesi değişir
+  await P.click('button:has-text("Devam et")'); // ad adımı → bölge
   const district = P.locator('select[name="district"]');
   log("il seçilmeden ilçe kapalı:", await district.isDisabled() ? "✓" : "HATA");
   await P.selectOption('select[name="city"]', "Ankara");
@@ -39,10 +40,12 @@ try {
   const ist = await district.locator("option").allTextContents();
   log(`Ankara ${ankara} ilçe, İstanbul ${ist.length - 1} ilçe; İstanbul listesinde Çankaya yok:`, !ist.includes("Çankaya") ? "✓" : "HATA");
   await P.selectOption('select[name="district"]', "Kadıköy");
-  await P.locator('input[name="position"][value="MID"]').check({ force: true });
   await shot(P, "30-hosgeldin-ilce");
-  // Dev sunucusunda karşılamadan sonraki istemci geçişi boş sayfada kalabiliyor (docs/test.md) → bir kez yenile
   await P.click('button:has-text("Devam et")');
+  await P.locator('input[name="position"][value="MID"]').check({ force: true });
+  await P.click('button:has-text("Devam et")');
+  // Dev sunucusunda karşılamadan sonraki istemci geçişi boş sayfada kalabiliyor (docs/test.md) → bir kez yenile
+  await P.click('button:has-text("Bitir")');
   await settle(P, BASE + "/");
 
   // Sunucu doğrulaması: tarayıcı atlatılıp İstanbul'a Çankaya gönderilirse kabul edilmemeli (il/ilçe Ayarlar > Kişisel bilgiler'de, 0028)
@@ -66,8 +69,9 @@ try {
   const { data: g } = await admin.from("groups").select("kind, city, district, invite_code").eq("id", gid).single();
   log("grup kaydı:", g.kind, g.city, g.district);
   const B = await login(users[1]); await settle(B, /hosgeldin/);
-  await B.selectOption('select[name="city"]', "İstanbul"); await B.locator('input[name="position"][value="GK"]').check({ force: true });
-  await B.click('button:has-text("Devam et")'); await settle(B, BASE + "/");
+  await B.click('button:has-text("Devam et")'); await B.selectOption('select[name="city"]', "İstanbul");
+  await B.click('button:has-text("Devam et")'); await B.locator('input[name="position"][value="GK"]').check({ force: true });
+  await B.click('button:has-text("Devam et")'); await B.click('button:has-text("Bitir")'); await settle(B, BASE + "/");
   await B.goto(`${BASE}/join/${g.invite_code}`); await B.waitForURL(/\/g\//);
   await P.goto(`${BASE}/g/${gid}`); await shot(P, "33-topluluk-sayfasi");
   log("topluluk sayfası:", (await P.locator("text=👥 Topluluk").count()) ? "✓ Topluluk etiketi" : "HATA", "|", (await P.locator("text=2 üye").count()) ? "✓ üye şeridi" : "HATA");

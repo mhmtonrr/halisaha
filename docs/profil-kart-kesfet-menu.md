@@ -47,6 +47,9 @@ her sorgu/kimlik çağrısı okyanus aşıyordu. Yapılanlar: `vercel.json` `reg
 
 **Karşılama**: `profiles.onboarded_at` boşsa `requireUser()` kullanıcıyı `/hosgeldin?next=...` sayfasına yollar
 (middleware `x-pathname` başlığı ile). Karşılama sayfası `requireUser({ allowIncomplete: true })` kullanır.
+**Sihirbaz** (`WelcomeWizard`, kullanıcı kararı 2026-11-27): 4 adım (ad/kart adı/doğum tarihi → il/ilçe → mevki, ayak, forma no, boy, kilo, hakkımda → kart fotoğrafı); üstteki kart
+yazdıkça güncellenir ve başlangıç ratingini (65) gösterir. Tüm adımlar tek formda gizlenip gösterilir; `completeOnboarding` son adımda tek seferde kaydeder ve hatayı yönlendirmeden döndürür
+(zorunlu: ad, il, ana mevki). Fotoğraf yükleyici formun dışındadır, kendi "Kaydet"iyle yazar.
 
 **Bölge**: il `PROVINCES` listesinden, ilçe `canonicalDistrict(il, ilçe)` ile sunucuda doğrulanır.
 Formlarda `RegionSelect` (il seçilince ilçeler) kullan.
