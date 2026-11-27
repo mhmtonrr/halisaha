@@ -3,6 +3,7 @@
 (Şimdilik Vercel'de çalışıyoruz; aşağıdakiler kullanıcı kararıyla ertelendi. Yeni bir madde çıkarsa buraya ekle.)
 
 ## Gerçek hosting'e geçince
+- **Erişim engeli**: bazı internet sağlayıcılarında `vercel.app` açılmıyor (VPN veya başka ağla açılıyor). Geçici çözüm: https://halisaha.mhmtonr01.workers.dev (`cloudflare/worker.js`; Supabase Redirect URLs'te bu adres de olmalı). Bu adres de engellenirse kalıcı çözüm kendi alan adı.
 - **E-posta onayı**: şu an kapalı (kullanıcı kapattı). Resend/SMTP kurulunca (alan adı gerekir; vercel.app doğrulanamaz) Supabase'de "Confirm email" tekrar açılacak. Risk: şimdilik başkasının e-postasıyla kayıt olunabilir.
 - **Kart fotoğrafı arka plan modeli**: `@imgly/background-removal` modeli (~80 MB) varsayılan olarak üçüncü taraf CDN'den iniyor. Hosting'e geçince dosyaları kendi depolamamıza koyup (`publicPath` ile) oradan sun. Repoya koyma (boyut: GitHub 100 MB/dosya, Vercel dağıtımı şişer); Supabase Storage'da genel klasör düşünülüyor ama ücretsiz planda tek dosya sınırı 50 MB → önce parça boyutlarına bak. Bu konteynerde `card-photo` e2e'nin düşmesi büyük ihtimalle bu adrese erişilememesinden (doğrulanmadı).
 - **Maç Başlama Hatırlatıcıları** (tasarımda var, yok): kadrodaki oyunculara maçtan 2 saat önce bildirim. Yeni bildirim kategorisi (Ayarlar'da anahtar), sık çalışan cron (en az saatlik; Vercel ücretsiz planda cron günde bir) ve "gönderildi" kaydı gerekir. Oylama hatırlatmasındaki cron (`src/lib/reminders.ts`) uyarlanabilir.

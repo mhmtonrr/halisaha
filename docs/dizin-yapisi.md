@@ -37,6 +37,7 @@ src/lib/recipients.ts    Alıcı bulma: grup üyeleri/yetkilileri, maç kadrosu,
 src/lib/cron-tick.ts     Zamanlanmış işler (/api/cron/tick, 15 dk): yedekten otomatik kadro, toplanan maç iptal, sonuçsuz, bugün maç var, skor/oylama hatırlatması
 src/lib/reminders.ts     Oylama hatırlatması (cron): kapanmasına <6 saat (eski günlük yol 24) kalan maçlarda oy vermeyenlere, kişi başı 1
 src/lib/push-client.ts   Tarayıcı tarafı abonelik yardımcıları; components/PushControls.tsx (izin kartı + profil ayarı)
+cloudflare/worker.js     Cloudflare Worker: siteyi workers.dev üzerinden Vercel'e aktarır (vercel.app engelli ağlar için; panelden elle Deploy edilir)
 public/sw.js             Service worker: push'u gösterir, tıklayınca aynı site içi adresi açar (önbellek yok)
 src/lib/skills.ts        Yetenek itibarı: 12 kategori (saha HIZ/ŞUT/PAS/DRİ/DEF/FİZ, kaleci REF/ATL/HAV/YER/DAĞ/İLT), 1-10 puanlardan 40-99 değer (saf, testli)
 src/lib/skills-data.ts   Değerlendirmelerden kişinin yeteneklerini hesaplayıp player_skills'e yazar (service role; recomputeSkills / recomputeSkillsForVoter)
