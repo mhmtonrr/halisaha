@@ -248,6 +248,13 @@ export const text = {
     url: `/g/${groupId}/m/${matchId}`,
     tag: `application-result:${matchId}`,
   }),
+  /** Kadrodaki oyuncunun daveti onaylanmadı: davet edilene (maçı göremeyebilir, sohbete gider) */
+  inviteRejected: (groupName: string, matchId: string, when: string): Content => ({
+    title: "Maç daveti onaylanmadı",
+    body: truncate(join(groupName, when), 300),
+    url: "/sohbet",
+    tag: `application-result:${matchId}`,
+  }),
   /** Gruba onay bekleyen ilan: o grubun kaptan/yetkililerine */
   listingNeedsApproval: (who: string, fromName: string, targetGroupId: string, when: string): Content => ({
     title: "📋 Onay bekleyen ilan",

@@ -52,6 +52,7 @@ const OK_TEXT: Record<string, string> = {
   kesin: "Maç kesinleşti; kadroya bildirim gitti.",
   iptal: "Maç iptal edildi; herkese bildirim gitti.",
   "davet-iptal": "Davet geri çekildi.",
+  "davet-onaylanmadi": "Davet onaylanmadı.",
 };
 const TEAM = {
   A: { label: "Sarı", text: "text-team-a", bg: "bg-team-a" },

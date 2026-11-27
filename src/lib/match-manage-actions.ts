@@ -122,6 +122,9 @@ export async function decideApplication(fd: FormData) {
   const { supabase } = await requireUser();
   const { matchId, back } = ids(fd);
   const target = str(fd, "userId");
+  // Kadrodaki oyuncunun daveti reddedilince davet edilen engellenmez, yalnızca davet düşer (0057)
+  const { data: entry } = await supabase.from("match_entries").select("source").eq("match_id", matchId).eq("user_id", target).maybeSingle();
+  const wasInvite = entry?.source === "invite";
   const { data: result, error } = await supabase.rpc("decide_application", { p_match: matchId, p_user: target, p_accept: str(fd, "accept") === "1" });
   if (error) fail(back, rpcMessage(error, "Karar kaydedilemedi"));
   later(async () => {
@@ -129,9 +132,12 @@ export async function decideApplication(fd: FormData) {
     const m = await matchInfo(admin, matchId);
     if (!m) return;
     const r = result as "in" | "reserve" | "rejected";
-    await notify([target], "match", text.applicationDecided(await groupName(admin, m.group_id), m.group_id, matchId, r, matchWhen(m.played_at, m.time_tbd)));
+    const name = await groupName(admin, m.group_id);
+    const when = matchWhen(m.played_at, m.time_tbd);
+    const content = wasInvite && r === "rejected" ? text.inviteRejected(name, matchId, when) : text.applicationDecided(name, m.group_id, matchId, r, when);
+    await notify([target], "match", content);
   });
-  done(back, `basvuru-${result as string}`);
+  done(back, wasInvite && result === "rejected" ? "davet-onaylanmadi" : `basvuru-${result as string}`);
 }
 
 /** Davetliler listesinden daveti geri çek */

@@ -124,9 +124,11 @@ try {
     await PO.locator('section[aria-busy="true"]').waitFor({ state: "detached", timeout: 20000 });
     await PO.waitForLoadState("networkidle");
   };
-  await boardMove(D.name, "Kadro dışına", async () => (await entry(D)) !== "in");
+  // Takım dışından oyuncu: maçtan tamamen çıkar (onay sorusu)
+  PO.once("dialog", (d) => d.accept());
+  await boardMove(D.name, "Maçtan çıkar", async () => (await entry(D)) !== "in");
   await boardMove(B.name, "Kadroya", async () => (await entry(B)) === "in");
-  check("yer açılınca yedek kadroya alındı", (await entry(B)) === "in" && (await entry(D)) === "left");
+  check("yer açılınca yedek kadroya alındı", (await entry(B)) === "in" && (await entry(D)) === "removed");
 
   // --- Rakip adı, kesinleştir, ertele
   await PO.click('button:text-is("Uygulamada yok")'); await PO.fill('input[aria-label="Rakip adı"]', "Yıldızspor"); await PO.click('form:has(input[name="opponent"]) button:text-is("Kaydet")'); await PO.waitForURL(/ok=rakip/); await PO.waitForLoadState("networkidle"); await PO.locator("main").waitFor();

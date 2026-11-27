@@ -52,6 +52,7 @@ try {
 
   // --- Oyuncu ekle: arkadaş + aramayla yabancı; gizli profil aramada yok
   await PK.goto(`${BASE}/g/${T}/m/${M}`, { waitUntil: "networkidle" });
+  await PK.locator("summary", { hasText: "Oyuncu mu eksik?" }).click();
   await PK.click('button:text-is("Davet et")');
   check("arkadaşa davet gönderildi", !!(await PK.waitForSelector("text=✓ Davet edildi", { timeout: 15000 }).catch(() => null)));
   check("arkadaş 'davetli' kaydı aldı (onaysız davet)", (await admin.from("match_entries").select("status").eq("match_id", M).eq("user_id", F.id).single()).data?.status === "invited");
@@ -71,7 +72,7 @@ try {
   await PF.goto(`${BASE}/sohbet/${th.thread_id}`, { waitUntil: "networkidle" });
   check("kart başlığı 'Maça davet', canlı sayaç 1/5 ve 'Davetlisin'", (await PF.locator("text=Maça davet").count()) === 1 && (await PF.locator("text=1/5").count()) === 1 && (await PF.locator("text=Davetlisin").count()) === 1);
   await PF.screenshot({ path: `${SHOTS}/card-thread.png`, fullPage: true });
-  await PF.click('a:has-text("Maça bak ve yanıtla")'); await PF.waitForURL(/\/m\//); await PF.waitForLoadState("networkidle");
+  await PF.click('a:has-text("Maça bak")'); await PF.waitForURL(/\/m\//); await PF.waitForLoadState("networkidle");
   check("üye olmayan davetli maç ekranını görür", (await PF.locator("text=Bu maça çağrıldın").count()) === 1);
   await PF.click('form button:has-text("Geliyorum")'); await PF.waitForURL(/yanit=in/);
   check("davetli kadroya girdi (ödünç)", (await admin.from("group_players").select("is_loan").eq("group_id", T).eq("user_id", F.id).single()).data?.is_loan === true);
